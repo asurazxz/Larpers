@@ -218,11 +218,12 @@ export default function ScenarioPlannerPage() {
                 {filteredIds.length === 0 && <div className="p-4 text-sm text-muted">No site matches.</div>}
                 {filteredIds.map((id) => {
                     const s = siteById(id);
+                    const place = [s?.label, s?.province].filter(Boolean).join(', ');
+                    const full = !place ? id : place.includes(id) ? place : `${id}, ${place}`;
                     return (
-                        <label key={id} className="flex cursor-pointer items-center gap-3 border-b border-line px-3 py-1.5 text-sm last:border-0 hover:bg-app">
-                            <input type="checkbox" checked={form.excluded.includes(id)} onChange={() => toggleExcluded(id)} />
-                            <span className="num w-24 font-medium text-deep">{id}</span>
-                            <span className="flex-1 truncate text-muted">{s?.label}{s?.province ? `, ${s.province}` : ''}</span>
+                        <label key={id} title={full} className="flex cursor-pointer items-center gap-3 border-b border-line px-3 py-1.5 text-sm last:border-0 hover:bg-app">
+                            <input type="checkbox" aria-label={full} checked={form.excluded.includes(id)} onChange={() => toggleExcluded(id)} />
+                            <span className="num font-medium text-deep">{id}</span>
                         </label>
                     );
                 })}
