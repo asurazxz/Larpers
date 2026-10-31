@@ -7,6 +7,7 @@ import type { Solution } from '../lib/contract';
 import { BASE_SLUG, getSolution } from '../lib/bundle';
 import { runIndex, sweepSlug } from '../lib/robustness';
 import { baseView, gridView, yieldLabel, type View } from '../lib/view';
+import InfoTip, { INPUT_HELP } from './InfoTip';
 
 export interface SweepPickerProps {
     view: View;
@@ -65,9 +66,12 @@ export default function SweepPicker({ view, onSelect }: SweepPickerProps) {
         onSelect(slug === BASE_SLUG ? baseView() : gridView(c.y, c.r, c.h, slug), sol);
     };
 
-    const group = (g: Group, title: string, values: number[], fmt: (v: number) => string) => (
+    const group = (g: Group, title: string, values: number[], fmt: (v: number) => string, help: string) => (
         <div className="mt-2.5" role="radiogroup" aria-label={title} data-group={g}>
-            <div className="mb-1 text-base text-ink2">{title}</div>
+            <div className="mb-1 text-base text-ink2">
+                {title}
+                <InfoTip label={title}>{help}</InfoTip>
+            </div>
             <div className="seg">
                 {values.map((v) => {
                     const c: Combo | null = anchor ? { ...anchor, [g]: v } : null;
@@ -108,9 +112,9 @@ export default function SweepPicker({ view, onSelect }: SweepPickerProps) {
                     {nStored} of {nTotal} combinations pre-run
                 </span>
             </div>
-            {group('y', 'Yield', opts.yield, yieldLabel)}
-            {group('r', 'Road factor', opts.road, (v) => String(v))}
-            {opts.horizon.length > 1 && group('h', 'Horizon (yr)', opts.horizon, (v) => String(v))}
+            {group('y', 'Yield', opts.yield, yieldLabel, INPUT_HELP.yield)}
+            {group('r', 'Road factor', opts.road, (v) => String(v), INPUT_HELP.road)}
+            {opts.horizon.length > 1 && group('h', 'Horizon (yr)', opts.horizon, (v) => String(v), INPUT_HELP.horizon)}
             <p className="mt-2.5 text-sm text-ink2">
                 Each button is a solved run; values in between were not solved. Dashed: not pre-run.
                 {view.kind === 'disrupt' && ' A disruption is showing: picking a stored run clears it.'}

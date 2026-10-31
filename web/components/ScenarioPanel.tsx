@@ -18,6 +18,7 @@ import {
 } from '../lib/contract';
 import { runIndex } from '../lib/robustness';
 import { MISSING, orMissing, statusLabel } from '../lib/format';
+import InfoTip, { INPUT_HELP } from './InfoTip';
 import {
     asScenarioForm,
     buildScenarioFromForm,
@@ -348,7 +349,10 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                     {showing}
                     <fieldset disabled={running} className="space-y-2.5">
                         <div>
-                            <span className={labelClass}>Demand, kt/yr (blank = full-production preset)</span>
+                            <span className={labelClass}>
+                                Demand, kt/yr (blank = solver default)
+                                <InfoTip label="Airport demand">{INPUT_HELP.demand}</InfoTip>
+                            </span>
                             <div className="grid grid-cols-4 gap-1.5">
                                 {AIRPORTS.map((a) => (
                                     <label key={a} className="text-base text-ink2">
@@ -369,7 +373,10 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
 
                         <div className="grid grid-cols-3 gap-2">
                             <label>
-                                <span className={labelClass}>Yield</span>
+                                <span className={labelClass}>
+                                    Yield
+                                    <InfoTip label="Yield">{INPUT_HELP.yield}</InfoTip>
+                                </span>
                                 <select className={fieldClass} name="yield" value={form.yieldValue} onChange={(e) => setForm((f) => ({ ...f, yieldValue: e.target.value }))}>
                                     {withCurrent(yieldOptions, form.yieldValue).map((v) => (
                                         <option key={v} value={String(v)}>
@@ -379,7 +386,10 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                 </select>
                             </label>
                             <label>
-                                <span className={labelClass}>Road factor</span>
+                                <span className={labelClass}>
+                                    Road factor
+                                    <InfoTip label="Road factor">{INPUT_HELP.road}</InfoTip>
+                                </span>
                                 <select className={fieldClass} name="road_factor" value={form.roadFactor} onChange={(e) => setForm((f) => ({ ...f, roadFactor: e.target.value }))}>
                                     {withCurrent(ROAD_OPTIONS, form.roadFactor).map((v) => (
                                         <option key={v} value={String(v)}>
@@ -389,7 +399,10 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                 </select>
                             </label>
                             <label>
-                                <span className={labelClass}>Horizon (yr)</span>
+                                <span className={labelClass}>
+                                    Horizon (yr)
+                                    <InfoTip label="Horizon">{INPUT_HELP.horizon}</InfoTip>
+                                </span>
                                 <select className={fieldClass} name="horizon" value={form.horizon} onChange={(e) => setForm((f) => ({ ...f, horizon: e.target.value }))}>
                                     {withCurrent(HORIZON_OPTIONS, form.horizon).map((v) => (
                                         <option key={v} value={String(v)}>
@@ -408,7 +421,10 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
 
                         <div className="grid grid-cols-2 gap-2">
                             <label>
-                                <span className={labelClass}>Collection</span>
+                                <span className={labelClass}>
+                                    Collection
+                                    <InfoTip label="Collection">{INPUT_HELP.collection}</InfoTip>
+                                </span>
                                 <select
                                     className={fieldClass}
                                     name="collection"
@@ -420,7 +436,10 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                 </select>
                             </label>
                             <label>
-                                <span className={labelClass}>Capacity basis</span>
+                                <span className={labelClass}>
+                                    Capacity basis
+                                    <InfoTip label="Capacity basis">{INPUT_HELP.capacity}</InfoTip>
+                                </span>
                                 <select
                                     className={fieldClass}
                                     name="capacity_basis"
@@ -434,7 +453,10 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                         </div>
 
                         <div>
-                            <span className={labelClass}>Excluded facility sites (unavailable at design stage)</span>
+                            <span className={labelClass}>
+                                Excluded facility sites (unavailable at design stage)
+                                <InfoTip label="Excluded sites">{INPUT_HELP.excluded}</InfoTip>
+                            </span>
                             <div className="flex flex-wrap gap-1.5" data-testid="excluded-list">
                                 {form.excluded.length === 0 && <span className="text-base text-ink2">none</span>}
                                 {form.excluded.map((id) => (
