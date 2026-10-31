@@ -3,11 +3,11 @@
 // App-wide state shared by every workspace page. One route only (static export with a relative
 // asset prefix), so pages switch on the URL hash (#overview, #network, ...) inside one React tree:
 // the selected run, live run, map selection and scenario form survive page switches for free.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Flow, Solution } from './contract';
-import { baseEntry, solutionOf } from './bundle';
+import { baseEntry, getEntry, solutionOf } from './bundle';
 import { DEFAULT_VIEW, flowKey, type View } from './view';
-import { isLiveDisplayed, useSolverHealth, type LiveRun, type SolverHealth } from './useLive';
+import { isLiveDisplayed, storedSlugOf, useSolverHealth, viewForEntry, type LiveRun, type SolverHealth } from './useLive';
 import { baseSolution, disruptHighlight, robustness, siteBandFn, type RobustKind } from './robustness';
 import { storedBaselineFor } from '../components/CostPanel';
 import { createSolveFeed, type SolveFeed } from './solveProgress';
@@ -36,8 +36,11 @@ export interface AppState {
     liveRun: LiveRun | null;
     onLiveRun: (run: LiveRun) => void;
     isLive: boolean;
-    /** Greedy baseline for the displayed run: live baseline or the stored baseline run, else null. */
+    /** Slug of the displayed stored run; null for live runs and unsaved views. */
+    runSlug: string | null;
+    /** Comparison run for the displayed run: the greedy baseline, or the base run when viewing anything else. */
     baseline: Solution | null;
+    baselineKind: 'greedy' | 'base' | null;
     selectedFlow: SelectedFlow | null;
     selectFlow: (f: SelectedFlow | null) => void;
     selectedNode: string | null;
@@ -53,6 +56,24 @@ export interface AppState {
     setDirty: (d: boolean) => void;
     /** Live solve progress: the map draws what the solver has found so far during a run. */
     feed: SolveFeed;
+}
+
+const RUN_KEY = 'saf.runSlug';
+
+function readStored(key: string): string | null {
+    try {
+        return window.localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+function writeStored(key: string, value: string) {
+    try {
+        window.localStorage.setItem(key, value);
+    } catch {
+        // Storage can be blocked; the app works without it.
+    }
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -92,7 +113,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [liveRun, setLiveRun] = useState<LiveRun | null>(null);
     const isLive = isLiveDisplayed(solution, liveRun) || (view.kind === 'disrupt' && !!view.live);
     const liveBaseline = isLiveDisplayed(solution, liveRun) ? (liveRun?.baseline ?? null) : null;
-    const baseline = view.kind === 'disrupt' ? null : (liveBaseline ?? storedBaselineFor(solution));
+    const runSlug = isLive ? null : (storedSlugOf(solution) ?? null);
+    const { baseline, baselineKind } = useMemo<{ baseline: Solution | null; baselineKind: 'greedy' | 'base' | null }>(() => {
+        const greedy = liveBaseline ?? storedBaselineFor(solution);
+        if (isLive || runSlug === 'base' || runSlug === null) return { baseline: greedy, baselineKind: greedy ? 'greedy' : null };
+        const base = solutionOf(baseEntry()) ?? null;
+        return base && base !== solution ? { baseline: base, baselineKind: 'base' } : { baseline: null, baselineKind: null };
+    }, [isLive, runSlug, liveBaseline, solution]);
 
     const [selectedFlow, setSelectedFlow] = useState<SelectedFlow | null>(null);
     const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -100,6 +127,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [robustKind, setRobustKind] = useState<RobustKind>('off');
     const [dirty, setDirty] = useState(false);
     const feed = useMemo(createSolveFeed, []);
+
+    // Map selection is only meaningful on the page and run it was made on.
+    useEffect(() => {
+        setSelectedFlow(null);
+        setSelectedNode(null);
+    }, [page, solution]);
+
+    // Restore the last selected stored run once, then keep it saved.
+    const restored = useRef(false);
+    const pendingSlug = useRef<string | null>(null);
+    useEffect(() => {
+        if (restored.current) return;
+        restored.current = true;
+        const saved = readStored(RUN_KEY);
+        const entry = saved ? getEntry(saved) : undefined;
+        if (saved && entry && solutionOf(entry)) {
+            pendingSlug.current = saved;
+            setView(viewForEntry(entry));
+            setSolution(solutionOf(entry) ?? null);
+        }
+    }, []);
+    useEffect(() => {
+        if (!runSlug) return;
+        // Hold off until a pending restore has landed, so the default run does not overwrite it.
+        if (pendingSlug.current && pendingSlug.current !== runSlug) return;
+        pendingSlug.current = null;
+        writeStored(RUN_KEY, runSlug);
+    }, [runSlug]);
 
     const selectFlow = useCallback((f: SelectedFlow | null) => {
         setSelectedFlow(f);
@@ -157,7 +212,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         liveRun,
         onLiveRun,
         isLive,
+        runSlug,
         baseline,
+        baselineKind,
         selectedFlow,
         selectFlow,
         selectedNode,

@@ -11,7 +11,6 @@ Larpers' entry for Airbus Challenge #3 (Kalimantan SAF supply chain network desi
 - `resource/CHALLENGE3_ORCHESTRATOR_PROMPT.md`: the original brief, background only.
 - `resource/Autonomous SG 2026_Summary of Updates.pdf`: the organisers' 12:45 update ("Read this first" and the Airbus Challenge #3 section). The judging rubrics are unchanged.
 - `resource/Autonomous SG 2026_Airbus Track.pdf`: the official problem (Challenge #3, pp. 3-4) and judging rubric (pp. 7-8).
-- `resource/Autonomous SG 2026_NUS Hackers.pdf`: a different track. Not used.
 
 ## Source of truth
 

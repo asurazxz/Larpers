@@ -7,11 +7,10 @@ import ScenarioPanel from '../ScenarioPanel';
 import SolvePanel from '../SolvePanel';
 import RunExplain from '../RunExplain';
 import Trace from '../Trace';
+import { badgeFor } from '../Header';
 import { Card, MetricCard, PageHeader } from '../common/ui';
 import { IconBolt, IconCheck, IconDollar, IconShield } from '../common/icons';
 import { useApp } from '../../lib/store';
-import { storedRunCount } from '../../lib/bundle';
-import type { SolverHealth } from '../../lib/useLive';
 import { useFeedActive } from '../../lib/solveProgress';
 import { annualCost } from '../../lib/annual';
 import { isProvenOptimal, MISSING, pct, seconds, statusLabel, usd } from '../../lib/format';
@@ -22,25 +21,6 @@ const BADGE_CLS = {
     stored: 'bg-slate-100 text-deep ring-1 ring-line',
     checking: 'bg-slate-100 text-muted ring-1 ring-line',
 } as const;
-
-// Same rules as the planner header's badge: /api/health decides it, and a stored run is always labelled stored.
-function badgeFor(health: SolverHealth, isLive: boolean): { text: string; kind: keyof typeof BADGE_CLS; title: string } {
-    if (health.state === 'down') {
-        return {
-            text: isLive ? 'SOLVER OFFLINE: last live result shown' : 'SOLVER OFFLINE: showing stored runs',
-            kind: 'offline',
-            title: health.error ?? 'GET /api/health failed',
-        };
-    }
-    if (isLive && health.state === 'up') return { text: 'LIVE SOLVE', kind: 'live', title: 'Solved live by the MILP for this scenario' };
-    if (isLive) return { text: 'LIVE RESULT: checking solver…', kind: 'checking', title: '' };
-    const n = storedRunCount();
-    return {
-        text: `STORED RUN: ${n} stored run${n === 1 ? '' : 's'}`,
-        kind: 'stored',
-        title: health.state === 'disabled' ? 'No solver on this URL' : 'Stored runs are always labelled stored',
-    };
-}
 
 function HonestyBadge() {
     const { solverHealth, isLive } = useApp();

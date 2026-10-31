@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { liveEnabled } from '../../lib/api';
 import { savePendingInputs, signInWithGoogle, useSession } from '../../lib/auth';
 import { bundle, siteById, slugs } from '../../lib/bundle';
-import { AIRPORTS, DEFAULT_SCENARIO } from '../../lib/contract';
+import { AIRPORTS } from '../../lib/contract';
 import { useApp } from '../../lib/store';
 import {
     buildScenarioFromForm,
@@ -23,8 +23,8 @@ import { Card } from '../common/ui';
 import DemandSupplyStep, { Tag } from '../planner/DemandSupplyStep';
 import { listSaved, saveScenario, type SavedScenario } from '../planner/saved';
 
-const STEPS = ['Demand & Supply', 'Conversion & Logistics', 'Facilities', 'Planning Settings', 'Review & Run'] as const;
-const SUBTITLES = ['Airport demand, biomass supply', 'Yields, costs, road factors', 'Include / exclude sites', 'Horizon, options, solver', 'Check inputs and run'] as const;
+const STEPS = ['Demand & Supply', 'Conversion & Logistics', 'Facilities', 'Review & Run'] as const;
+const SUBTITLES = ['Airport demand, biomass supply', 'Yield, road factor, capacity', 'Include / exclude sites', 'Check inputs and run'] as const;
 const OFFICIAL = { yield: 0.2, road: 1.3, horizon: 1 };
 
 const sameNum = (s: string, n: number) => s.trim() !== '' && Math.abs(Number(s) - n) < 1e-9;
@@ -67,6 +67,14 @@ export default function ScenarioPlannerPage() {
 
     const { scenario, errors } = useMemo(() => buildScenarioFromForm(form), [form]);
     const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(displayed), [form, displayed]);
+    // Inputs that differ from the displayed run: each airport and each site counts once.
+    const changeCount = useMemo(() => {
+        const ne = (a: unknown, b: unknown) => JSON.stringify(a) !== JSON.stringify(b);
+        const airports = AIRPORTS.filter((a) => form.demand[a] !== displayed.demand[a]).length;
+        const sites = form.excluded.filter((x) => !displayed.excluded.includes(x)).length + displayed.excluded.filter((x) => !form.excluded.includes(x)).length;
+        const rest = (Object.keys(form) as (keyof ScenarioForm)[]).filter((k) => k !== 'demand' && k !== 'excluded' && ne(form[k], displayed[k])).length;
+        return airports + sites + rest;
+    }, [form, displayed]);
 
     useEffect(() => {
         setCurrentForm(form);
@@ -98,23 +106,23 @@ export default function ScenarioPlannerPage() {
             runner.clear();
         }
     };
-    const stepErrors = [!!errors.demand, !!(errors.yield || errors.road || errors.horizon), !!errors.excluded, false, false];
+    const stepErrors = [!!errors.demand, !!(errors.yield || errors.road || errors.horizon), !!errors.excluded, false];
 
     const upd = (patch: Partial<ScenarioForm>) => setForm((f) => ({ ...f, ...patch }));
     const toggleExcluded = (id: string) =>
         setForm((f) => ({ ...f, excluded: f.excluded.includes(id) ? f.excluded.filter((x) => x !== id) : [...f.excluded, id] }));
 
-    const chip = running
-        ? { t: 'Solving', c: 'bg-blue-50 text-primary' }
+    const chip: { t: string; c: string; dot?: boolean } = running
+        ? { t: 'Solving', c: 'bg-blue-50 text-primary', dot: true }
         : st.phase === 'error' || st.phase === 'auth'
           ? { t: 'Failed', c: 'bg-red-50 text-danger' }
           : st.phase === 'infeasible'
             ? { t: 'Infeasible', c: 'bg-amber-50 text-warning' }
             : dirty
-              ? { t: 'Unsaved changes', c: 'bg-amber-50 text-warning' }
+              ? { t: `Edited · ${changeCount} ${changeCount === 1 ? 'change' : 'changes'}`, c: 'bg-amber-50 text-warning', dot: true }
               : st.phase === 'done'
                 ? { t: 'Completed', c: 'bg-green-50 text-success' }
-                : { t: 'Saved', c: 'bg-green-50 text-success' };
+                : { t: 'Matches displayed run', c: 'bg-green-50 text-success' };
 
     const onRun = () => {
         if (!scenario) return;
@@ -157,8 +165,8 @@ export default function ScenarioPlannerPage() {
         { k: 'Road factor', v: form.roadFactor, step: 1 },
         { k: 'Horizon', v: `${form.horizon} yr`, step: 1 },
         { k: 'Excluded sites', v: form.excluded.length ? form.excluded.join(', ') : 'none', step: 2 },
-        { k: 'Capacity basis', v: form.capacityBasis, step: 3 },
-        { k: 'Solver time limit', v: `${TIME_LIMIT_S} s`, step: 3 },
+        { k: 'Capacity basis', v: form.capacityBasis, step: 1 },
+        { k: 'Solver time limit', v: `${TIME_LIMIT_S} s`, step: 1 },
     ];
 
     const pickStored = (slug: string) => {
@@ -172,11 +180,15 @@ export default function ScenarioPlannerPage() {
     };
     const currentSlug = isLive ? undefined : storedSlugOf(solution);
 
+    // Plain words for the viewer; the technical cause goes in the tooltip.
     const solverNote = !liveEnabled
-        ? 'No solver is configured on this URL (NEXT_PUBLIC_SOLVER_API_URL is unset), so inputs cannot be run live.'
+        ? "Live solving runs on the presenter's laptop. This site shows pre-solved runs instead."
         : solverHealth.state === 'checking'
-          ? 'Checking the solver. Run is unavailable until it responds.'
-          : 'The solver is offline. Run is unavailable; start it with uvicorn api.main:app --port 8000.';
+          ? 'Checking the solver. Run becomes available once it responds.'
+          : 'The solver is not reachable right now. Run becomes available once it is back.';
+    const solverDetail = !liveEnabled
+        ? 'NEXT_PUBLIC_SOLVER_API_URL is unset on this deployment.'
+        : 'Start it with: uvicorn api.main:app --port 8000';
 
     // ---------- step content ----------
     const content = [
@@ -193,7 +205,19 @@ export default function ScenarioPlannerPage() {
             <Field label="Planning horizon (years)" tag={sameNum(form.horizon, OFFICIAL.horizon)} hint="Official basis is one year; CapEx straight-line over 20 years." error={errors.horizon}>
                 <input className="input num w-full sm:w-64" inputMode="numeric" value={form.horizon} onChange={(e) => upd({ horizon: e.target.value })} />
             </Field>
-            <p className="text-xs text-muted">Default solver contract values: yield {DEFAULT_SCENARIO.yield}, road factor {DEFAULT_SCENARIO.road_factor}. Depots lose no mass (retention fixed at 1).</p>
+            <Field label="Capacity basis" hint="Official: capacity is biomass intake for depots and refineries. SAF output is our earlier interpretation.">
+                <select className="input w-full sm:w-64" value={form.capacityBasis} onChange={(e) => upd({ capacityBasis: e.target.value as ScenarioForm['capacityBasis'] })}>
+                    <option value="biomass_input">Biomass input</option>
+                    <option value="saf_output">SAF output</option>
+                </select>
+            </Field>
+            <details className="rounded-xl border border-line p-4">
+                <summary className="cursor-pointer text-sm font-medium text-deep">Advanced (fixed by the app)</summary>
+                <dl className="mt-3 space-y-1 text-sm text-muted">
+                    <div className="flex justify-between"><dt>Solver time limit</dt><dd className="num">{TIME_LIMIT_S} s</dd></div>
+                    <div className="flex justify-between"><dt>Depot retention (depots lose no mass)</dt><dd className="num">1</dd></div>
+                </dl>
+            </details>
         </div>,
         // 3
         <div key="s3" className="space-y-4">
@@ -218,34 +242,19 @@ export default function ScenarioPlannerPage() {
                 {filteredIds.length === 0 && <div className="p-4 text-sm text-muted">No site matches.</div>}
                 {filteredIds.map((id) => {
                     const s = siteById(id);
+                    const place = [s?.label, s?.province].filter(Boolean).join(', ');
+                    const full = !place ? id : place.includes(id) ? place : `${id}, ${place}`;
                     return (
-                        <label key={id} className="flex cursor-pointer items-center gap-3 border-b border-line px-3 py-1.5 text-sm last:border-0 hover:bg-app">
-                            <input type="checkbox" checked={form.excluded.includes(id)} onChange={() => toggleExcluded(id)} />
-                            <span className="num w-24 font-medium text-deep">{id}</span>
-                            <span className="flex-1 truncate text-muted">{s?.label}{s?.province ? `, ${s.province}` : ''}</span>
+                        <label key={id} title={full} className="flex cursor-pointer items-center gap-3 border-b border-line px-3 py-1.5 text-sm last:border-0 hover:bg-app">
+                            <input type="checkbox" aria-label={full} checked={form.excluded.includes(id)} onChange={() => toggleExcluded(id)} />
+                            <span className="num font-medium text-deep">{id}</span>
                         </label>
                     );
                 })}
             </div>
         </div>,
         // 4
-        <div key="s4" className="space-y-5">
-            <Field label="Capacity basis" hint="Official: capacity is biomass intake for depots and refineries. SAF output is our earlier interpretation.">
-                <select className="input w-full sm:w-64" value={form.capacityBasis} onChange={(e) => upd({ capacityBasis: e.target.value as ScenarioForm['capacityBasis'] })}>
-                    <option value="biomass_input">Biomass input</option>
-                    <option value="saf_output">SAF output</option>
-                </select>
-            </Field>
-            <details className="rounded-xl border border-line p-4">
-                <summary className="cursor-pointer text-sm font-medium text-deep">Advanced (fixed by the app)</summary>
-                <dl className="mt-3 space-y-1 text-sm text-muted">
-                    <div className="flex justify-between"><dt>Solver time limit</dt><dd className="num">{TIME_LIMIT_S} s</dd></div>
-                    <div className="flex justify-between"><dt>Depot retention</dt><dd className="num">1</dd></div>
-                </dl>
-            </details>
-        </div>,
-        // 5
-        <div key="s5" className="space-y-4">
+        <div key="s4" className="space-y-4">
             <table className="tbl w-full text-sm">
                 <thead><tr><th className="text-left">Input</th><th className="text-left">Value</th><th /></tr></thead>
                 <tbody>
@@ -282,7 +291,9 @@ export default function ScenarioPlannerPage() {
             {liveMode ? (
                 <div className="flex flex-wrap items-center gap-3">
                     {!running ? (
-                        <button type="button" className="btn-primary" disabled={!scenario} onClick={onRun}>Run solver</button>
+                        <button type="button" className="btn-primary" disabled={!scenario} onClick={onRun}>
+                            {session.status === 'signed_out' ? 'Sign in to run' : 'Run solver'}
+                        </button>
                     ) : (
                         <button type="button" className="btn-secondary" onClick={runner.cancel}>Cancel</button>
                     )}
@@ -291,8 +302,11 @@ export default function ScenarioPlannerPage() {
                 </div>
             ) : (
                 <div className="space-y-3 rounded-xl border border-line p-4">
-                    <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-deep">{solverNote} You can still view the stored runs below.</div>
-                    <div className="text-sm font-medium text-deep">Stored runs</div>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <button type="button" className="btn-primary" disabled title={solverDetail}>Run solver</button>
+                        <span className="text-sm text-muted" title={solverDetail}>{solverNote}</span>
+                    </div>
+                    <div className="text-sm font-medium text-deep">Or view a stored run</div>
                     <div className="max-h-[240px] space-y-1 overflow-auto">
                         {slugs().map((slug) => {
                             const e = bundle[slug];
@@ -311,7 +325,7 @@ export default function ScenarioPlannerPage() {
         </div>,
     ];
 
-    const cardTitle = ['', 'Conversion & logistics', 'Facility candidates', 'Planning settings', 'Review and run'][step];
+    const cardTitle = ['', 'Conversion & logistics', 'Facility candidates', 'Review and run'][step];
     const nextTitle = STEPS[step + 1];
 
     return (
@@ -333,7 +347,7 @@ export default function ScenarioPlannerPage() {
                         {saved.map((x) => <option key={x.name} value={x.name}>{x.name}</option>)}
                     </select>
                     <span className={`chip ${chip.c}`} data-testid="planner-status">
-                        {(chip.t === 'Unsaved changes' || chip.t === 'Solving') && <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />}
+                        {chip.dot && <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />}
                         {chip.t}
                     </span>
                 </div>
