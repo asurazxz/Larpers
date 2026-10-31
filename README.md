@@ -31,12 +31,14 @@ Activate the environment (`source .venv/bin/activate`, or `source .venv/Scripts/
 | Tests | `python -m pytest tests/` |
 | Base case solve | `python -m solver.model` |
 | Greedy baseline | `python -m solver.baseline` |
-| Stored runs into `web/data/bundle.json` | `python -m solver.scenarios` (`--tiers T1` for the first tier only) |
+| Stored runs into `web/data/bundle.json` | `python -m solver.scenarios` (`--tiers T1` for the first tier only; `--fresh` ignores runs already stored) |
 | Robustness by district | `python -m solver.sensitivity` |
 | Solver API | `uvicorn api.main:app --port 8000` |
 | Web | `cd web && npm install && npm run dev` |
 
 `python -m solver.scenarios --stub --out /tmp/stub.json` checks the pipeline without a solver. It refuses to write inside `web/`, so stub output never looks like a stored run.
+
+A rerun reuses a stored run only when its data hash, its full scenario and the solver version (a hash of the `solver/` sources) all match. Anything else is solved again.
 
 Google sign-in is needed only for live solves through the API. Stored runs open without logging in. Auth setup is in [docs/AUTH.md](docs/AUTH.md).
 
