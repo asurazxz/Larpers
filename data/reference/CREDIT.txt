@@ -1,1 +1,5 @@
 © OpenStreetMap contributors
+Road data (c) OpenStreetMap contributors.
+Routes from the public OSRM demo server (router.project-osrm.org), car profile, not a truck network.
+Routes are for display only; costs never use them.
+Coastline: Natural Earth 1:10m land via world-atlas 2.0.2 (public domain).

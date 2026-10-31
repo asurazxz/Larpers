@@ -12,6 +12,7 @@
         "data:sites": "node scripts/make-sites.mjs",
         "data:site-images": "node scripts/make-site-images.mjs",
         "data:land": "node scripts/make-borneo.mjs",
+        "data:routes": "node scripts/make-routes.mjs",
         "data:fixture": "node scripts/make-fixture.mjs"
     },
     "dependencies": {
