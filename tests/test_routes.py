@@ -75,3 +75,15 @@ def test_source_distances_match_the_reference_table(source):
         a, b = key.split("|")
         assert route["distance_m"] == pytest.approx(distances[at[a]][at[b]], rel=0.05, abs=500), key
 
+
+
+def test_every_stored_run_flow_has_a_road(web):
+    """A flow without a stored route is drawn as a straight dashed line. Refetch with data/fetch_osrm_routes.py."""
+    bundle = json.loads((ROOT / "web" / "data" / "bundle.json").read_text(encoding="utf-8"))
+    missing = set()
+    for run in bundle["runs"].values():
+        for flow in (run.get("solution") or {}).get("flows", []):
+            a, b = sorted((flow["from"], flow["to"]))
+            if a != b and "TRK" not in (a, b) and f"{a}|{b}" not in web:
+                missing.add(f"{a}|{b}")
+    assert not missing, f"{len(missing)} flows have no road: {sorted(missing)[:5]}"
