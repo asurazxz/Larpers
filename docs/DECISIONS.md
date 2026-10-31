@@ -18,3 +18,13 @@ One line per call, with the reason. Newest at the bottom.
 | 12:24 | Each member installs a short skill set from `docs/prompts/`, sourced from the lead's Notion library and official repos | Lead's instruction; each skill's SKILL.md was read-only checked on GitHub, and no installer was run |
 | 12:24 | `nk_excluded`, `nk_local_refinery` and `road_matrix` move to `docs/NEXT.md` | The approved `Scenario` has no field for them |
 | 12:24 | 20 random scenarios plus one infeasible case are required evidence | The Judge's off-script test had no owner |
+| 14:18 | The organisers' 12:45 update is the base case; it overrides the settings approved at 12:14 | The update says to follow it wherever it differs from the original |
+| 14:18 | MILP splits throughput by size | Variable OpEx differs by size, so a large depot is no longer two small ones |
+| 14:18 | Capacity basis is biomass intake; collection is optional; demand is 300 kt SAF per airport | Update and `challenge3_parameters.xlsx`: 1,200 kt SAF needs 6,000 kt of the 6,800 kt |
+| 14:18 | TRK removed as a refinery candidate | Trucks cannot reach Tarakan |
+| 14:18 | 214 km haul limit kept as a stated assumption | Removing it saved about $0.9M a year (indicative) and more than triples the arcs |
+| 14:18 | One facility of each type per site kept as a stated assumption | Depots otherwise add no transport benefit under the official rates; indicative effect about $3M a year |
+| 14:18 | Mix floor replaces raw CapEx in the skip test | Raw CapEx would have skipped mixes that can win and produced a false "Optimal" |
+| 14:18 | Timeout without an incumbent is no longer reported as infeasible | A time limit proves nothing about feasibility: "could not find", not "does not exist" |
+| 14:22 | Shortlist rebuilt for official parameters: 20 sites, excluding TRK. `resolve()` proves 6 large refineries at $894.46M a year, gap 0, 79.8 s, optimal among those 20 | The earlier shortlist was built on pre-update settings. $1,393.5M and $2,554.3M used a different objective and are not comparable |
+| 14:18 | Lead approved changing `solver/contract.py` and `solver/audit.py` in the solver PR | Official solves could not pass audit otherwise. `solver/audit.py` keeps the old total for rows without `total_annual_usd` until the baseline is rewritten |

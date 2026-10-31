@@ -4,29 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Larpers' entry for Airbus Challenge #3 (Kalimantan SAF supply chain network design) at Autonomous SG 2026: a two-echelon capacitated facility location MILP behind a map UI. Scope freezes at 14:00 SGT on 31 Oct 2026, submission target is 15:30, hard deadline is 16:00.
+Larpers' entry for Airbus Challenge #3 (Kalimantan SAF supply chain network design) at Autonomous SG 2026: a two-echelon capacitated facility location MILP behind a map UI. Scope freezes at 14:00 SGT on 31 Oct 2026, team submission target is 15:30, submissions close at 16:15. Time discipline is scored on the first valid submission.
 
 - `docs/COMBINED_PROPOSAL.md`: the approved plan. It overrides the brief wherever they differ.
 - `docs/prompts/`: each member's task list, file ownership and gates.
 - `resource/CHALLENGE3_ORCHESTRATOR_PROMPT.md`: the original brief, background only.
+- `resource/Autonomous SG 2026_Summary of Updates.pdf`: the organisers' 12:45 update ("Read this first" and the Airbus Challenge #3 section). The judging rubrics are unchanged.
 - `resource/Autonomous SG 2026_Airbus Track.pdf`: the official problem (Challenge #3, pp. 3-4) and judging rubric (pp. 7-8).
 - `resource/Autonomous SG 2026_NUS Hackers.pdf`: a different track. Not used.
 
 ## Source of truth
 
-The Airbus PDF outranks `data/raw/`, which outranks the brief. The brief has errors, verified against the PDF and raw data. Do not reuse these brief values:
+Order of authority: the organisers' 12:45 update (`resource/Autonomous SG 2026_Summary of Updates.pdf` and its two official data files, `data/raw/challenge3_parameters.xlsx` and `data/raw/challenge3_airports_4.csv`), then the Airbus PDF, then the rest of `data/raw/`, then the brief. Nothing outranks the update, and it also overrides `docs/COMBINED_PROPOSAL.md`. The brief has errors, verified against these sources. Do not reuse these brief values:
 
 | Item | Brief says | Correct |
 |---|---|---|
 | Refinery→airport cost | 0.15 USD/t/km | **0.08** USD/t/km (PDF p. 3). Other legs are right: 0.10, 0.12 |
-| Truck sizes (small/large) | 10, 20, 40 t | 3/9 t, 18/30 t, 16/32 t per leg. Affects trip counts only |
-| Airport demand split | PNK 56%, BPN 31%, TRK 8%, PKN 5% | PNK and BPN are transposed. The brief's own pax figures give BPN 44.5, PNK 39.8, TRK 9.5, PKN 6.2 (BPN at 4.7M) or BPN 55.8, PNK 31.7, TRK 7.5, PKN 5.0 (BPN at 7.4M) |
+| Truck sizes (small/large) | 10, 20, 40 t | 3/9 t, 18/30 t, 16/32 t per leg. Cost per tonne-km is the same for both sizes (update), so this affects trip counts only |
+| Airport demand | PNK 56%, BPN 31%, TRK 8%, PKN 5% | **300 kt** SAF per airport per year, 1,200 kt total (update). Passenger-share splits no longer apply |
 | North Kalimantan sites | "760 km from everything" | KAL_SUP_18 and KAL_SUP_70 are 681 and 706 km from the centroid, 88 and 57 km from TRK airport, and 304+ km from any other supply site |
-| One large refinery at 16% yield | 6,800 × 0.16 "≈ 1,087" fits | 1,088 kt exceeds 1,087 kt. Break-even yield is 0.15985. Default yield is 15%, with 16% stored to show the step |
-| Road factor | 1.4 | 1.9, measured on 1,954 pairs. Sweep 1.4, 1.9 and 2.3 |
-| Facility candidates | All 80 sites | 69 onshore sites. 11 Ketapang sites plot in the sea and are supply only |
+| Capacity and yield | One large refinery fits: 6,800 × 0.16 "≈ 1,087" | Capacity is **biomass intake** for depots and refineries, so that sum no longer applies. Yield is **0.20** and depots lose no mass (update). Demand needs 6,000 kt of biomass, not all 6,800 kt, and at least 6 refineries |
+| Cost basis | OpEx not modelled | One-year basis. CapEx straight-line over 20 years, no interest. Fixed OpEx 5% of CapEx per year. Variable OpEx per tonne in: depot $5/$4, refinery $60/$55, small/large (update) |
+| Road factor | 1.4 | **1.3** × great-circle distance (update). 1.9 was our own measurement on 1,954 pairs, kept only as a sensitivity |
+| Tarakan access | Not covered | Island: last leg is a barge at 0.08 USD/t/km, no extra fixed cost. Trucks cannot reach it (update) |
+| Facility candidates | All 80 sites | Anywhere on land in Kalimantan (update). Depot candidates are the 69 onshore sites. 11 Ketapang sites plot in the sea and are supply only |
 
 The evidence pack in brief Section 4 is unverified; check a source before citing it in a judged claim.
+
+The solver keeps a 214 km straight-line supply-leg haul limit and one facility of each type per site as our stated assumptions; neither is official. Judges accept reasonable assumptions stated clearly in the demo.
 
 ## Commands
 
@@ -69,7 +74,7 @@ data/raw → data/prepare.py → data/processed/ → solver/ → solver/audit.py
 ## Rules
 
 - `data/raw/` is read-only.
-- Select airports by IATA code (PNK, PKN, BPN, TRK), never by name or city. "Iskandar" also matches Banda Aceh, "Sepinggan" is absent from the file, and Tarakan's city is misspelled "Taraken".
+- Select airports by IATA code (PNK, PKN, BPN, TRK), never by name or city. In `airports.dat`, "Iskandar" also matches Banda Aceh and "Sepinggan" is absent. Tarakan's city is misspelled "Taraken" in `airports.dat` and in `challenge3_airports_4.csv`.
 - A solver decides everything. Any LLM layer only explains a finished solution.
 - Every displayed number must trace to the cost table and a recomputable distance. Say "optimal" only when the MIP gap is 0, and "could not find" rather than "does not exist".
 - Use 4-space indentation in Python and TypeScript.

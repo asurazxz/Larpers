@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from solver.contract import AuditReport, Facility, Flow, Scenario, Solution
+from solver.contract import AuditReport, Facility, Flow, Solution
+from legacy_scenario import LegacyScenario as Scenario
 from solver.inputs import Inputs
 
 

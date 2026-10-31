@@ -52,7 +52,8 @@ def signer(request, monkeypatch):
 @pytest.mark.parametrize("endpoint", ["solve", "baseline"])
 def test_auth_valid_asymmetric_token(api_client, signer, endpoint):
     client, _ = api_client
-    response = client.post(f"/api/{endpoint}", json={}, headers={"Authorization": "Bearer "+signer()})
+    fits_tiny_supply = {"demand_kt": {"BPN": 5, "PNK": 3, "TRK": 2, "PKN": 1}}
+    response = client.post(f"/api/{endpoint}", json=fits_tiny_supply, headers={"Authorization": "Bearer "+signer()})
     assert response.status_code == 200, response.text
     assert response.json()["validation"]["passed"]
     assert response.json()["run_id"] == response.headers["X-Run-ID"]
@@ -109,9 +110,11 @@ def test_public_endpoints(api_client):
     assert data.json()["data_hash"] == "tiny-data"
     assert len(data.json()["sites"]) == 3
     assert len(data.json()["airports"]) == 4
-    assert data.json()["defaults"]["yield"] == .15
+    assert data.json()["defaults"]["yield"] == .20
     assert data.json()["run_id"]
-    _, scenario, solution = tiny_case()
+    _, legacy, solution = tiny_case()
+    scenario = Scenario.model_validate({**legacy.model_dump(by_alias=True), "demand_kt": legacy.airport_demand(120.)})
+    solution.scenario_hash = scenario.scenario_hash()
     validation = client.post("/api/validate", json={"scenario": scenario.model_dump(by_alias=True), "solution": solution.model_dump(by_alias=True)})
     assert validation.status_code == 200
     assert validation.json()["passed"]

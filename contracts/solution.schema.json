@@ -441,7 +441,8 @@
         "optimal",
         "best_found",
         "infeasible",
-        "heuristic"
+        "heuristic",
+        "no_solution"
       ],
       "title": "Status",
       "type": "string"
@@ -538,10 +539,61 @@
       "type": "number"
     },
     "opex": {
-      "const": "not_provided",
       "default": "not_provided",
+      "enum": [
+        "not_provided",
+        "included"
+      ],
       "title": "Opex",
       "type": "string"
+    },
+    "annualised_capex_usd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Annualised Capex Usd"
+    },
+    "fixed_opex_usd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fixed Opex Usd"
+    },
+    "variable_opex_usd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Variable Opex Usd"
+    },
+    "total_annual_usd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Total Annual Usd"
     },
     "total_horizon_usd": {
       "title": "Total Horizon Usd",
