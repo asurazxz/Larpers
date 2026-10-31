@@ -102,10 +102,17 @@ export default function Trace({ solution, selected, onClose }: TraceProps) {
                         (R = {EARTH_RADIUS_KM}, stored {n(t.storedHavKm, 3)})
                     </span>
                 </div>
-                <div>
-                    km = {n(t.havKm, 3)} × {t.roadFactor} = {n(t.km, 3)} km
-                    {t.roadFactorSource === 'flow' && <span className="text-orange-800"> (flow&apos;s road factor: run has none)</span>}
-                </div>
+                {t.roadKm !== null ? (
+                    <div>
+                        km = max(OSRM road {n(t.roadKm, 3)}, hav {n(t.havKm, 3)}) = {n(t.km, 3)} km{' '}
+                        <span className="text-ink2">(car profile, not the official 1.3 factor)</span>
+                    </div>
+                ) : (
+                    <div>
+                        km = {n(t.havKm, 3)} × {t.roadFactor} = {n(t.km, 3)} km
+                        {t.roadFactorSource === 'flow' && <span className="text-orange-800"> (flow&apos;s road factor: run has none)</span>}
+                    </div>
+                )}
                 <div>
                     stored {n(t.storedKm, 3)} km, Δ {n(t.dKm, 3)} (tol {KM_TOL}) <Verdict ok={t.kmOk} />
                 </div>

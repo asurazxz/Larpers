@@ -392,3 +392,9 @@ details[open] > :not(summary) {
         font-size: 14px;
     }
 }
+
+/* Tile attribution: required by Esri, kept small so it does not cover the map. */
+.leaflet-container .leaflet-control-attribution {
+    font-size: 11px;
+    line-height: 1.4;
+}

@@ -41,10 +41,17 @@ export function runRoadFactor(solution: Solution | null | undefined, flow?: Flow
     return null;
 }
 
+/** True when this flow was costed on OSRM road km. The Tarakan barge always stays on the factor. */
+export function isOsrmLeg(flow: Flow): boolean {
+    return flow.distance_basis === 'osrm' && flow.from !== 'TRK' && flow.to !== 'TRK';
+}
+
 export interface FlowTrace {
     leg: Leg;
     kt: number;
     havKm: number;
+    /** Set when km comes from the flow's OSRM road km (checked against the table by solver/audit.py). */
+    roadKm: number | null;
     roadFactor: number;
     roadFactorSource: RoadFactor['source'];
     km: number;
@@ -65,10 +72,11 @@ export interface FlowTrace {
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
-/** Recompute one flow: haversine × road factor → km; kt × 1000 × km × PDF rate → cost. */
+/** Recompute one flow: haversine × road factor (or max(OSRM road, haversine)) → km; kt × 1000 × km × PDF rate → cost. */
 export function traceFlow(flow: Flow, roadFactor: RoadFactor): FlowTrace {
     const havKm = haversineKm(flow.from_lat, flow.from_lon, flow.to_lat, flow.to_lon);
-    const km = havKm * roadFactor.value;
+    const roadKm = isOsrmLeg(flow) && finite(flow.road_km) ? flow.road_km : null;
+    const km = roadKm !== null ? Math.max(roadKm, havKm) : havKm * roadFactor.value;
     const rate = PDF_RATE[flow.leg];
     const cost = flow.kt * 1000 * km * rate;
     const storedKm = flow.km;
@@ -85,6 +93,7 @@ export function traceFlow(flow: Flow, roadFactor: RoadFactor): FlowTrace {
         leg: flow.leg,
         kt: flow.kt,
         havKm,
+        roadKm,
         roadFactor: roadFactor.value,
         roadFactorSource: roadFactor.source,
         km,

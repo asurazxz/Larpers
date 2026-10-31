@@ -13,6 +13,8 @@ export type DemandKt = Record<AirportCode, number>;
 export type CollectionPolicy = 'all' | 'optional';
 export type CapacityBasis = 'saf_output' | 'biomass_input';
 
+export type DistanceBasis = 'factor' | 'osrm';
+
 /** The solve request. Not part of the Solution: the solver does not echo it. */
 export interface Scenario {
     /** null = full-production preset (split BPN 55.8, PNK 31.7, TRK 7.5, PKN 5.0). */
@@ -23,6 +25,8 @@ export interface Scenario {
     depot_retention: number;
     /** >= 1 */
     road_factor: number;
+    /** 'factor' (official): hav × road_factor. 'osrm': OSRM car road km, never below hav; TRK barge stays on factor. */
+    distance_basis?: DistanceBasis;
     /** >= 1 */
     horizon_years: number;
     collection_policy: CollectionPolicy;
@@ -86,14 +90,17 @@ export interface Flow {
     kt: number;
     hav_km: number;
     road_factor: number;
-    /** hav_km × road_factor */
+    /** hav_km × road_factor, or max(road_km, hav_km) when distance_basis is 'osrm' */
     km: number;
     rate_usd_per_t_km: number;
     /** kt × 1000 × km × rate */
     cost_usd: number;
     truck_t: 9 | 30 | 32;
     trips: number;
+    /** OSRM car road km from the 84×84 table, offshore snap included. Costed only when distance_basis is 'osrm'. */
     road_km?: number | null;
+    /** Absent on runs stored before the field existed: read as 'factor'. */
+    distance_basis?: DistanceBasis;
 }
 
 export interface Stranded {

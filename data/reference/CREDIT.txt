@@ -1,1 +1,14 @@
 © OpenStreetMap contributors
+
+osrm_table_84.json and osrm_routes.json: road distances and route geometry from OSRM
+(https://project-osrm.org) on OpenStreetMap data, (c) OpenStreetMap contributors, ODbL
+(https://www.openstreetmap.org/copyright). Public demo server, car profile, fetched once.
+
+To refetch from a self-hosted server instead of the public demo:
+    curl -LO https://download.geofabrik.de/asia/indonesia/kalimantan-latest.osm.pbf
+    docker run -t -v "$PWD:/data" ghcr.io/project-osrm/osrm-backend osrm-extract -p /opt/car.lua /data/kalimantan-latest.osm.pbf
+    docker run -t -v "$PWD:/data" ghcr.io/project-osrm/osrm-backend osrm-partition /data/kalimantan-latest.osrm
+    docker run -t -v "$PWD:/data" ghcr.io/project-osrm/osrm-backend osrm-customize /data/kalimantan-latest.osrm
+    docker run -t -p 5000:5000 -v "$PWD:/data" ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/kalimantan-latest.osrm
+    OSRM_URL=http://localhost:5000 python data/fetch_osrm_routes.py
+Swap /opt/car.lua for a truck profile to model trucks. Geofabrik's Kalimantan extract omits Sabah, Sarawak and Brunei.
