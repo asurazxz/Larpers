@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "run_id": "fixture-illustrative-only",
+  "source": "fixture",
+  "data_hash": "illustrative-not-a-solved-run",
+  "scenario_hash": "illustrative-not-a-solved-run",
+  "status": "heuristic",
+  "primal": 774060557.3264,
+  "bound": null,
+  "gap": null,
+  "n_candidates": 69,
+  "solve_seconds": 0,
+  "facilities": [
+    {
+      "site_id": "KAL_SUP_02",
+      "label": "KAL_SUP_02, Kotawaringin Barat",
+      "type": "depot",
+      "size": "small",
+      "lat": -2.1083,
+      "lon": 111.5801,
+      "capacity_kt": 150,
+      "capacity_basis": "biomass_in",
+      "throughput_kt": 90.12,
+      "utilisation": 0.6008,
+      "capex_usd": 2250000
+    },
+    {
+      "site_id": "KAL_SUP_45",
+      "label": "KAL_SUP_45, Kotawaringin Timur",
+      "type": "refinery",
+      "size": "large",
+      "lat": -2.0425,
+      "lon": 113.0427,
+      "capacity_kt": 1087,
+      "capacity_basis": "saf_out",
+      "throughput_kt": 13.518,
+      "utilisation": 0.0124360625574977,
+      "capex_usd": 765000000
+    }
+  ],
+  "flows": [
+    {
+      "leg": "supply_depot",
+      "commodity": "biomass",
+      "from": "KAL_SUP_01",
+      "to": "KAL_SUP_02",
+      "from_lat": -1.9635,
+      "from_lon": 110.1136,
+      "to_lat": -2.1083,
+      "to_lon": 111.5801,
+      "from_label": "KAL_SUP_01, Ketapang",
+      "to_label": "KAL_SUP_02, Kotawaringin Barat",
+      "kt": 90.12,
+      "hav_km": 163.76,
+      "road_factor": 1.9,
+      "km": 311.14399999999995,
+      "rate_usd_per_t_km": 0.1,
+      "cost_usd": 2804029.7279999997,
+      "truck_t": 9,
+      "trips": 10014,
+      "road_km": null
+    },
+    {
+      "leg": "depot_refinery",
+      "commodity": "biomass",
+      "from": "KAL_SUP_02",
+      "to": "KAL_SUP_45",
+      "from_lat": -2.1083,
+      "from_lon": 111.5801,
+      "to_lat": -2.0425,
+      "to_lon": 113.0427,
+      "from_label": "KAL_SUP_02, Kotawaringin Barat",
+      "to_label": "KAL_SUP_45, Kotawaringin Timur",
+      "kt": 90.12,
+      "hav_km": 162.69,
+      "road_factor": 1.9,
+      "km": 309.111,
+      "rate_usd_per_t_km": 0.12,
+      "cost_usd": 3342849.9983999995,
+      "truck_t": 30,
+      "trips": 3004,
+      "road_km": null
+    },
+    {
+      "leg": "refinery_airport",
+      "commodity": "saf",
+      "from": "KAL_SUP_45",
+      "to": "BPN",
+      "from_lat": -2.0425,
+      "from_lon": 113.0427,
+      "to_lat": -1.2683,
+      "to_lon": 116.894,
+      "from_label": "KAL_SUP_45, Kotawaringin Timur",
+      "to_label": "Sultan Aji Muhamad Sulaiman Airport",
+      "kt": 10,
+      "hav_km": 436.63,
+      "road_factor": 1.9,
+      "km": 829.597,
+      "rate_usd_per_t_km": 0.08,
+      "cost_usd": 663677.6,
+      "truck_t": 32,
+      "trips": 313,
+      "road_km": null
+    }
+  ],
+  "stranded": [
+    {
+      "site_id": "KAL_SUP_03",
+      "label": "KAL_SUP_03, Ketapang",
+      "lat": -2.0515,
+      "lon": 109.9553,
+      "kt": 96.44,
+      "reason": "Illustrative stranded marker; this fixture is not a complete solved network"
+    }
+  ],
+  "surplus": [
+    {
+      "site_id": "KAL_SUP_45",
+      "kt": 3.5180000000000007
+    }
+  ],
+  "capex_usd": 767250000,
+  "logistics_annual_usd": 6810557.326399999,
+  "opex": "not_provided",
+  "total_horizon_usd": 774060557.3264,
+  "validation": {
+    "passed": false,
+    "max_residuals": {},
+    "failures": [
+      "Illustrative partial network for integration; not audited or a Kalimantan result"
+    ]
+  },
+  "portfolios": []
+}

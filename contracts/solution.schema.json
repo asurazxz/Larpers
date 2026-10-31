@@ -1,0 +1,559 @@
+{
+  "$defs": {
+    "AuditReport": {
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "default": false,
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "max_residuals": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Max Residuals",
+          "type": "object"
+        },
+        "failures": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Failures",
+          "type": "array"
+        }
+      },
+      "title": "AuditReport",
+      "type": "object"
+    },
+    "Facility": {
+      "additionalProperties": false,
+      "properties": {
+        "site_id": {
+          "pattern": "^(KAL_SUP_(0[1-9]|[1-7][0-9]|80)|BPN|PNK|TRK|PKN)$",
+          "title": "Site Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "depot",
+            "refinery"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "size": {
+          "enum": [
+            "small",
+            "large"
+          ],
+          "title": "Size",
+          "type": "string"
+        },
+        "lat": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Lat",
+          "type": "number"
+        },
+        "lon": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Lon",
+          "type": "number"
+        },
+        "capacity_kt": {
+          "title": "Capacity Kt",
+          "type": "number"
+        },
+        "capacity_basis": {
+          "enum": [
+            "biomass_in",
+            "saf_out"
+          ],
+          "title": "Capacity Basis",
+          "type": "string"
+        },
+        "throughput_kt": {
+          "title": "Throughput Kt",
+          "type": "number"
+        },
+        "utilisation": {
+          "title": "Utilisation",
+          "type": "number"
+        },
+        "capex_usd": {
+          "title": "Capex Usd",
+          "type": "number"
+        }
+      },
+      "required": [
+        "site_id",
+        "label",
+        "type",
+        "size",
+        "lat",
+        "lon",
+        "capacity_kt",
+        "capacity_basis",
+        "throughput_kt",
+        "utilisation",
+        "capex_usd"
+      ],
+      "title": "Facility",
+      "type": "object"
+    },
+    "Flow": {
+      "additionalProperties": false,
+      "properties": {
+        "leg": {
+          "enum": [
+            "supply_depot",
+            "depot_refinery",
+            "refinery_airport"
+          ],
+          "title": "Leg",
+          "type": "string"
+        },
+        "commodity": {
+          "enum": [
+            "biomass",
+            "saf"
+          ],
+          "title": "Commodity",
+          "type": "string"
+        },
+        "from": {
+          "pattern": "^(KAL_SUP_(0[1-9]|[1-7][0-9]|80)|BPN|PNK|TRK|PKN)$",
+          "title": "From",
+          "type": "string"
+        },
+        "to": {
+          "pattern": "^(KAL_SUP_(0[1-9]|[1-7][0-9]|80)|BPN|PNK|TRK|PKN)$",
+          "title": "To",
+          "type": "string"
+        },
+        "from_lat": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "From Lat",
+          "type": "number"
+        },
+        "from_lon": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "From Lon",
+          "type": "number"
+        },
+        "to_lat": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "To Lat",
+          "type": "number"
+        },
+        "to_lon": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "To Lon",
+          "type": "number"
+        },
+        "from_label": {
+          "title": "From Label",
+          "type": "string"
+        },
+        "to_label": {
+          "title": "To Label",
+          "type": "string"
+        },
+        "kt": {
+          "title": "Kt",
+          "type": "number"
+        },
+        "hav_km": {
+          "title": "Hav Km",
+          "type": "number"
+        },
+        "road_factor": {
+          "title": "Road Factor",
+          "type": "number"
+        },
+        "km": {
+          "title": "Km",
+          "type": "number"
+        },
+        "rate_usd_per_t_km": {
+          "title": "Rate Usd Per T Km",
+          "type": "number"
+        },
+        "cost_usd": {
+          "title": "Cost Usd",
+          "type": "number"
+        },
+        "truck_t": {
+          "enum": [
+            9,
+            30,
+            32
+          ],
+          "title": "Truck T",
+          "type": "integer"
+        },
+        "trips": {
+          "title": "Trips",
+          "type": "integer"
+        },
+        "road_km": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Road Km"
+        }
+      },
+      "required": [
+        "leg",
+        "commodity",
+        "from",
+        "to",
+        "from_lat",
+        "from_lon",
+        "to_lat",
+        "to_lon",
+        "from_label",
+        "to_label",
+        "kt",
+        "hav_km",
+        "road_factor",
+        "km",
+        "rate_usd_per_t_km",
+        "cost_usd",
+        "truck_t",
+        "trips"
+      ],
+      "title": "Flow",
+      "type": "object"
+    },
+    "Portfolio": {
+      "additionalProperties": false,
+      "properties": {
+        "n_large": {
+          "minimum": 0,
+          "title": "N Large",
+          "type": "integer"
+        },
+        "n_small": {
+          "minimum": 0,
+          "title": "N Small",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "optimal",
+            "best_found",
+            "infeasible",
+            "heuristic",
+            "skipped"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "primal": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Primal"
+        },
+        "bound": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bound"
+        },
+        "gap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gap"
+        },
+        "solve_seconds": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Solve Seconds",
+          "type": "number"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "n_large",
+        "n_small",
+        "status"
+      ],
+      "title": "Portfolio",
+      "type": "object"
+    },
+    "Stranded": {
+      "additionalProperties": false,
+      "properties": {
+        "site_id": {
+          "pattern": "^(KAL_SUP_(0[1-9]|[1-7][0-9]|80)|BPN|PNK|TRK|PKN)$",
+          "title": "Site Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "lat": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Lat",
+          "type": "number"
+        },
+        "lon": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Lon",
+          "type": "number"
+        },
+        "kt": {
+          "title": "Kt",
+          "type": "number"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "site_id",
+        "label",
+        "lat",
+        "lon",
+        "kt",
+        "reason"
+      ],
+      "title": "Stranded",
+      "type": "object"
+    },
+    "Surplus": {
+      "additionalProperties": false,
+      "properties": {
+        "site_id": {
+          "pattern": "^(KAL_SUP_(0[1-9]|[1-7][0-9]|80)|BPN|PNK|TRK|PKN)$",
+          "title": "Site Id",
+          "type": "string"
+        },
+        "kt": {
+          "title": "Kt",
+          "type": "number"
+        }
+      },
+      "required": [
+        "site_id",
+        "kt"
+      ],
+      "title": "Surplus",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "live",
+        "stored",
+        "fixture",
+        "baseline"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "data_hash": {
+      "title": "Data Hash",
+      "type": "string"
+    },
+    "scenario_hash": {
+      "title": "Scenario Hash",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "optimal",
+        "best_found",
+        "infeasible",
+        "heuristic"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "primal": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Primal"
+    },
+    "bound": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Bound"
+    },
+    "gap": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Gap"
+    },
+    "n_candidates": {
+      "minimum": 0,
+      "title": "N Candidates",
+      "type": "integer"
+    },
+    "solve_seconds": {
+      "minimum": 0,
+      "title": "Solve Seconds",
+      "type": "number"
+    },
+    "facilities": {
+      "items": {
+        "$ref": "#/$defs/Facility"
+      },
+      "title": "Facilities",
+      "type": "array"
+    },
+    "flows": {
+      "items": {
+        "$ref": "#/$defs/Flow"
+      },
+      "title": "Flows",
+      "type": "array"
+    },
+    "stranded": {
+      "items": {
+        "$ref": "#/$defs/Stranded"
+      },
+      "title": "Stranded",
+      "type": "array"
+    },
+    "surplus": {
+      "items": {
+        "$ref": "#/$defs/Surplus"
+      },
+      "title": "Surplus",
+      "type": "array"
+    },
+    "capex_usd": {
+      "title": "Capex Usd",
+      "type": "number"
+    },
+    "logistics_annual_usd": {
+      "title": "Logistics Annual Usd",
+      "type": "number"
+    },
+    "opex": {
+      "const": "not_provided",
+      "default": "not_provided",
+      "title": "Opex",
+      "type": "string"
+    },
+    "total_horizon_usd": {
+      "title": "Total Horizon Usd",
+      "type": "number"
+    },
+    "validation": {
+      "$ref": "#/$defs/AuditReport"
+    },
+    "portfolios": {
+      "items": {
+        "$ref": "#/$defs/Portfolio"
+      },
+      "title": "Portfolios",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "source",
+    "data_hash",
+    "scenario_hash",
+    "status",
+    "primal",
+    "bound",
+    "gap",
+    "n_candidates",
+    "solve_seconds",
+    "facilities",
+    "flows",
+    "stranded",
+    "surplus",
+    "capex_usd",
+    "logistics_annual_usd",
+    "total_horizon_usd",
+    "validation"
+  ],
+  "title": "Solution",
+  "type": "object"
+}
