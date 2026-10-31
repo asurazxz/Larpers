@@ -4,7 +4,7 @@
 // shapes copy app/Map.tsx. Line styles copy lib/routes.ts piece kinds.
 import type { ReactNode } from 'react';
 import { useApp } from '../../lib/store';
-import { LEG_COLOR } from '../../lib/legs';
+import { LEG_COLOR } from '../heroNetwork';
 
 export type GlyphKind = 'airport' | 'refinery' | 'depot' | 'site' | 'stranded';
 
