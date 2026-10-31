@@ -46,10 +46,10 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
             </ul>
             <ul className="flex flex-col gap-1 px-3 pb-4">
                 <li>
-                    <a href="#planner" title="The one-screen planner: streams the live solve and explains a live run" className={item(false)}>
+                    <button type="button" onClick={() => go('live')} aria-current={page === 'live' ? 'page' : undefined} title="Stream a live solve and explain the result" className={item(page === 'live')}>
                         <IconBolt />
                         {!collapsed && 'Live solve view'}
-                    </a>
+                    </button>
                 </li>
                 <li>
                     <button type="button" onClick={() => go('reliability', 'data')} title="Data, assumptions and limitations" className={item(false)}>
