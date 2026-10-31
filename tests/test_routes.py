@@ -17,9 +17,29 @@ def source():
     return json.loads(SOURCE.read_text(encoding="utf-8"))
 
 
+def decode(encoded):
+    """Google encoded polyline at 1e5, as web/scripts/make-routes.mjs writes it."""
+    points, i, lat, lon = [], 0, 0, 0
+    while i < len(encoded):
+        deltas = []
+        for _ in range(2):
+            shift = result = 0
+            while True:
+                b = ord(encoded[i]) - 63
+                i += 1
+                result |= (b & 0x1F) << shift
+                shift += 5
+                if b < 0x20:
+                    break
+            deltas.append(~(result >> 1) if result & 1 else result >> 1)
+        lat, lon = lat + deltas[0], lon + deltas[1]
+        points.append((lat / 1e5, lon / 1e5))
+    return points
+
+
 @pytest.fixture(scope="module")
 def web():
-    return json.loads(WEB.read_text(encoding="utf-8"))
+    return {key: decode(value) for key, value in json.loads(WEB.read_text(encoding="utf-8")).items()}
 
 
 def test_source_records_its_profile_and_server(source):

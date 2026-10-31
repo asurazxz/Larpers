@@ -1,6 +1,7 @@
 // Build-time: writes web/data/routes.json from data/reference/osrm_routes.json. Run: npm run data:routes
 // Display only: the map draws flows along these OSRM car routes; costs never read this file.
 // Keys are "A|B" with A < B, the geometry runs from A to B; the map reverses it for B -> A flows.
+// Values are Google encoded polylines at 1e5 (about 1 m), decoded by web/lib/polyline.ts: a quarter the size of JSON.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +13,10 @@ const BBOX = { minLat: -5, maxLat: 7.5, minLon: 108, maxLon: 120 };
 
 /** Google encoded polyline at 1e6 precision (OSRM geometries=polyline6). */
 export function decodePolyline6(str) {
+    return decode(str, 1e6);
+}
+
+function decode(str, factor) {
     const out = [];
     let i = 0;
     let lat = 0;
@@ -30,12 +35,11 @@ export function decodePolyline6(str) {
     while (i < str.length) {
         lat += next();
         lon += next();
-        out.push([lat / 1e6, lon / 1e6]);
+        out.push([lat / factor, lon / factor]);
     }
     return out;
 }
 
-const round = (v) => Math.round(v * 1e5) / 1e5;
 // Douglas-Peucker in degrees: 0.002 deg is about 220 m, finer than a pixel at the map's max zoom of 11.
 const TOLERANCE_DEG = 0.002;
 
@@ -69,19 +73,47 @@ function simplify(pts, tol = TOLERANCE_DEG) {
     return pts.filter((_, k) => keep[k]);
 }
 
+function encode5(pts) {
+    let out = '';
+    let pLat = 0;
+    let pLon = 0;
+    const put = (v) => {
+        let n = v < 0 ? ~(v << 1) : v << 1;
+        while (n >= 0x20) {
+            out += String.fromCharCode((0x20 | (n & 0x1f)) + 63);
+            n >>= 5;
+        }
+        out += String.fromCharCode(n + 63);
+    };
+    for (const [la, lo] of pts) {
+        const lat = Math.round(la * 1e5);
+        const lon = Math.round(lo * 1e5);
+        put(lat - pLat);
+        put(lon - pLon);
+        pLat = lat;
+        pLon = lon;
+    }
+    return out;
+}
+
 const src = JSON.parse(readFileSync(join(root, 'data', 'reference', 'osrm_routes.json'), 'utf8'));
 const routes = {};
 let points = 0;
 for (const [key, r] of Object.entries(src.routes)) {
     const [a, b] = key.split('|');
     if (!(a < b)) throw new Error(`key ${key} is not ordered A < B`);
-    const pts = simplify(decodePolyline6(r.polyline6)).map(([la, lo]) => [round(la), round(lo)]);
+    const pts = simplify(decodePolyline6(r.polyline6));
     for (const [la, lo] of pts) {
         if (la < BBOX.minLat || la > BBOX.maxLat || lo < BBOX.minLon || lo > BBOX.maxLon) {
             throw new Error(`${key}: point ${la},${lo} outside Borneo`);
         }
     }
-    routes[key] = pts;
+    const encoded = encode5(pts);
+    const back = decode(encoded, 1e5);
+    if (back.length !== pts.length || back.some(([la, lo], k) => Math.abs(la - pts[k][0]) > 1e-5 || Math.abs(lo - pts[k][1]) > 1e-5)) {
+        throw new Error(`${key}: polyline round trip failed`);
+    }
+    routes[key] = encoded;
     points += pts.length;
 }
 

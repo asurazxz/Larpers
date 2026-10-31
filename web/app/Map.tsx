@@ -11,6 +11,7 @@ import borneo from '../data/borneo.json';
 import rawRoutes from '../data/routes.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
 import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
+import { decodePolyline } from '../lib/polyline';
 import { isOsrmLeg } from '../lib/trace';
 import { BAND_COLOR, flowKey, type Band, type Basemap } from '../lib/view';
 
@@ -79,8 +80,15 @@ const EXCLUDED_ICON = L.divIcon({
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
-// OSRM car routes (web/data/routes.json, display only). Keys "A|B" with A < B, geometry from A to B.
-const ROUTES = rawRoutes as unknown as Record<string, [number, number][]>;
+// OSRM car routes (web/data/routes.json, display only). Keys "A|B" with A < B, geometry from A to B, encoded.
+const ROUTES = rawRoutes as Record<string, string>;
+const decoded = new Map<string, [number, number][]>();
+function routeOf(key: string): [number, number][] | undefined {
+    const enc = ROUTES[key];
+    if (enc === undefined) return undefined;
+    if (!decoded.has(key)) decoded.set(key, decodePolyline(enc));
+    return decoded.get(key);
+}
 const SNAP_GAP_M = 1000;
 type LatLon = [number, number];
 
@@ -92,7 +100,7 @@ function flowPaths(f: Flow): { solid: LatLon[] | null; dashed: LatLon[][] } {
     const from: LatLon = [f.from_lat, f.from_lon];
     const to: LatLon = [f.to_lat, f.to_lon];
     const forward = f.from < f.to;
-    const route = f.from === 'TRK' || f.to === 'TRK' ? undefined : ROUTES[forward ? `${f.from}|${f.to}` : `${f.to}|${f.from}`];
+    const route = f.from === 'TRK' || f.to === 'TRK' ? undefined : routeOf(forward ? `${f.from}|${f.to}` : `${f.to}|${f.from}`);
     if (!route || route.length < 2) return { solid: null, dashed: [[from, to]] };
     const road = forward ? route : [...route].reverse();
     const gap = (a: LatLon, b: LatLon) => L.latLng(a).distanceTo(L.latLng(b)) > SNAP_GAP_M;
