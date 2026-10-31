@@ -3,8 +3,9 @@
 Writes data/reference/osrm_routes.json: per node pair, OSRM road distance, a simplified polyline6 and the
 snap distance at each end. Display only: costs use the 84x84 OSRM table (osrm_table_84.json) or the road factor.
 
-Pairs: every flow in web/data/bundle.json, every shortlisted refinery to PNK/PKN/BPN, and every onshore depot
-to a shortlisted refinery, so live solves usually hit too. One route per unordered pair; the map reverses it.
+Pairs: every flow in web/data/bundle.json, every shortlisted refinery to PNK/PKN/BPN, every onshore depot to a
+shortlisted refinery, and every supply site to every onshore depot within the supply haul limit, so any flow a live
+solve can return has a road to draw. One route per unordered pair; the map reverses it.
 TRK legs are skipped: Tarakan is an island and its last leg is a barge, drawn straight.
 
 OSRM_URL defaults to the public demo server (car profile, at most 1 request per second). The output file is
@@ -29,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from solver.candidates import SHORTLIST  # noqa: E402
+from solver.contract import HAUL_HAV_KM  # noqa: E402
 from solver.inputs import load_inputs  # noqa: E402
 
 OUT = ROOT / "data" / "reference" / "osrm_routes.json"
@@ -48,6 +50,12 @@ def pair_key(a, b):
     return f"{a}|{b}" if a < b else f"{b}|{a}"
 
 
+def haversine_km(lat1, lon1, lat2, lon2):
+    p1, p2 = np.radians(lat1), np.radians(lat2)
+    dp, dl = p2 - p1, np.radians(lon2 - lon1)
+    return 2 * 6371.0088 * np.arcsin(np.sqrt(np.sin(dp / 2) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(dl / 2) ** 2))
+
+
 def wanted_pairs(inputs):
     """Pairs in fetch order: stored-run flows first, so a cut-short fetch still covers what the map shows."""
     pairs = []
@@ -63,6 +71,12 @@ def wanted_pairs(inputs):
     for d in onshore:
         for r in refineries:
             pairs.append((d, r))
+    # Supply -> depot: the solver may pair any supply site with any onshore depot inside the haul limit.
+    coords = {row.site_id: (row.lat, row.lon) for row in inputs.sites.itertuples()}
+    for s, (slat, slon) in coords.items():
+        for d in onshore:
+            if haversine_km(slat, slon, *coords[d]) <= HAUL_HAV_KM:
+                pairs.append((s, d))
     unique = {}
     for a, b in pairs:
         if a == b or ISLAND in (a, b):
