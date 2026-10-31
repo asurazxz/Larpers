@@ -4,23 +4,19 @@
 
 /* Designed for 1280x720 in a lit room: light theme, minimum 18px text. System fonts only (file:// offline). */
 html {
-    font-size: 18px;
+    font-size: 16px;
 }
 
 /* Projector (1920x1080): scale the rem-based type up a step. */
-@media (min-width: 1600px) and (min-height: 960px) {
-    html {
-        font-size: 20px;
-    }
-}
+
 
 html,
 body {
     height: 100%;
     margin: 0;
-    background: #f5f5f7;
-    color: #1d1d1f;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI Variable', 'Segoe UI', Inter,
+    background: #f8fafc;
+    color: #0f172a;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI Variable', 'Segoe UI', Inter,
         system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -40,6 +36,30 @@ input[type='checkbox'] {
 }
 
 @layer components {
+    .chip {
+        @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-medium;
+    }
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    }
+    .btn-primary {
+        @apply btn bg-primary text-white hover:bg-blue-700;
+    }
+    .btn-secondary {
+        @apply btn border border-line bg-white text-deep hover:bg-slate-50;
+    }
+    .input {
+        @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-deep focus:border-primary focus:outline-none;
+    }
+    .tbl th {
+        @apply border-b border-line bg-slate-50 px-3 py-2 text-left text-[13px] font-medium text-muted;
+    }
+    .tbl td {
+        @apply border-b border-line px-3 py-2 text-sm text-deep;
+    }
+    .legacy {
+        font-size: 14px;
+    }
     .card {
         @apply rounded-card bg-white shadow-card;
     }
