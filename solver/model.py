@@ -418,16 +418,16 @@ def main() -> None:
     scenario = Scenario.model_validate({"yield": args.yield_, "road_factor": args.road_factor,
                                         "horizon_years": args.horizon, "time_limit_s": args.time_limit})
     solution = resolve(scenario)
-    print(f"status     {solution.status} ({solution.status_reason})")
-    print(f"objective  {solution.primal}")
-    print(f"gap        {solution.gap}")
-    print(f"bound      {solution.bound}")
-    print(f"seconds    {solution.solve_seconds:.1f}")
     for mix in solution.portfolios:
         primal = "-" if mix["primal"] is None else f"${mix['primal'] / 1e6:,.1f}M"
         lower = "-" if mix["bound"] is None else f"${mix['bound'] / 1e6:,.1f}M"
         print(f"  L{mix['n_large']:>2} S{mix['n_small']:>2}  capex ${mix['capex_usd'] / 1e6:>7,.0f}M  "
               f"{mix['state']:<17} primal {primal:>11}  bound {lower:>11}")
+    print(f"status     {solution.status} ({solution.status_reason})")
+    print(f"objective  {solution.primal}")
+    print(f"gap        {solution.gap}")
+    print(f"bound      {solution.bound}")
+    print(f"seconds    {solution.solve_seconds:.1f}")
 
 
 if __name__ == "__main__":
