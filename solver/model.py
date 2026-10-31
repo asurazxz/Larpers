@@ -43,7 +43,7 @@ from dataclasses import dataclass
 import pulp
 
 from solver.candidates import SHORTLIST
-from solver.contract import Scenario, Solution
+from solver.contract import AIRPORT_DEMAND_KT, Scenario, Solution
 from solver.inputs import load_inputs
 
 RATE = (0.10, 0.12, 0.08)
@@ -54,7 +54,6 @@ REFINERY_KT, REFINERY_USD = {"S": 500, "L": 1087}, {"S": 480e6, "L": 765e6}
 CAPEX_YEARS, FIXED_OPEX_SHARE = 20, 0.05
 ANNUAL_FIXED_SHARE = 1 / CAPEX_YEARS + FIXED_OPEX_SHARE
 DEPOT_VAR_USD_T, REFINERY_VAR_USD_T = {"S": 5, "L": 4}, {"S": 60, "L": 55}
-AIRPORT_DEMAND_KT = 300
 NO_TRUCK_ACCESS = {"TRK"}
 SIZE_NAME = {"S": "small", "L": "large"}
 MAX_SOLVE_S = 90
@@ -98,7 +97,7 @@ def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem
     refineries = tuple(k for k in dict.fromkeys(candidates) if k in allowed and k not in excluded)
     y, r = s["yield"], s["depot_retention"]
     if s["demand_kt"] is None:
-        demand = {a: float(AIRPORT_DEMAND_KT) for a in airports}
+        demand = {a: AIRPORT_DEMAND_KT for a in airports}
     else:
         demand = {a: float(s["demand_kt"][a]) for a in airports}
     km = lambda a, b: float(hav[at[a], at[b]]) * road_factor
