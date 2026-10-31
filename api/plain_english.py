@@ -53,6 +53,7 @@ ALLOWED = {
     "trace": {*REQUIRED["trace"], *CLOSING["trace"], "cargo", "transport_mode", "route_role",
               "straight_line_distance", "road_factor", "rate_per_tonne_km", "stored_cost", "allowed_difference"},
 }
+MAX_FACTS = max(len(names) for names in ALLOWED.values())
 
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 NUMBER_WORDS = re.compile(
@@ -114,14 +115,14 @@ class GeminiUnavailable(Exception):
 
 class ExplainRequest(ContractModel):
     kind: Kind
-    facts: dict[FactName, FactText]
+    facts: dict[FactName, FactText] = Field(max_length=MAX_FACTS)
 
     @model_validator(mode="after")
     def has_required_facts(self):
         if missing := [name for name in (*REQUIRED[self.kind], *CLOSING[self.kind]) if name not in self.facts]:
             raise ValueError("facts must include " + ", ".join(missing))
-        if unknown := sorted(self.facts.keys() - ALLOWED[self.kind]):
-            raise ValueError("unknown facts: " + ", ".join(unknown))
+        if self.facts.keys() - ALLOWED[self.kind]:
+            raise ValueError("facts include a name this kind does not accept")
         return self
 
 
@@ -136,7 +137,7 @@ calls_lock = Lock()
 
 
 def allow_call() -> bool:
-    """A cap shared by all users, so no signed-in client can spend the key without limit."""
+    """A cap on Gemini calls, shared by all users, so no signed-in client can spend the key without limit."""
     now = monotonic()
     with calls_lock:
         while recent_calls and now - recent_calls[0] > 60:
@@ -226,7 +227,7 @@ def plain_english(kind, facts, ask=None) -> tuple[str | None, str | None]:
     for model in MODELS:
         rejected = None
         for _ in range(ATTEMPTS):
-            if monotonic() >= deadline:
+            if monotonic() >= deadline or not allow_call():
                 return None, None
             try:
                 template = ask(model, SYSTEM, prompt(facts, kind, rejected))

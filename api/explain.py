@@ -18,6 +18,7 @@ from google.genai import errors, types
 from pydantic import BaseModel, ValidationError
 
 from api.auth import require_user
+from solver.context import PROJECT_CONTEXT
 from solver.contract import CAPEX_YEARS, FIXED_OPEX_SHARE, VARIABLE_OPEX_USD_T, ContractModel, Scenario, Solution
 
 DEFAULT_MODEL = "gemini-flash-lite-latest"
@@ -33,7 +34,9 @@ AIRPORTS = ("BPN", "PNK", "TRK", "PKN")
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", dependencies=[Depends(require_user)])
 
-SYSTEM_PROMPT = """You explain a finished optimisation result to a SAF supply planner.
+SYSTEM_PROMPT = PROJECT_CONTEXT + """
+
+You explain a finished optimisation result to a SAF supply planner.
 A MILP solver (or, for a heuristic baseline, a greedy heuristic) made every decision; you only explain what it found.
 Rules:
 - Use ONLY the facts provided. Copy every number verbatim from a fact value, including its units and format. Do not compute, round, add or convert numbers.
