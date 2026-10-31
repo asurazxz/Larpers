@@ -29,7 +29,7 @@ enabled.
 | `POST /api/solve/stream` | Signed in | Scenario JSON → NDJSON of the run as it happens, ending in the same audited Solution |
 | `POST /api/baseline` | Signed in | Scenario JSON → audited greedy Solution |
 | `POST /api/validate` | Public | `{ "scenario": ..., "solution": ... }` → flat AuditReport |
-| `POST /api/plain-english` | Signed in | `{ "kind": ..., "facts": ... }` → `{ "text", "model" }`, both null when Gemini gives no clean draft in time |
+| `POST /api/plain-english` | Signed in | `{ "kind": ..., "facts": ... }` → `{ "text", "model" }`, both null when Gemini gives no clean draft in time or past 30 calls a minute |
 
 All JSON results and errors include `run_id`; every HTTP response also has an
 `X-Run-ID` header, including CORS preflight responses. Infeasible solve results

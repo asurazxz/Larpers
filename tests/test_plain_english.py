@@ -250,6 +250,20 @@ def test_route_answers_200_with_no_text_when_gemini_is_down(api_client, signer, 
     assert response.json()["model"] is None
 
 
+def test_route_stops_calling_gemini_past_the_shared_cap(api_client, signer, monkeypatch):
+    client, _ = api_client
+    monkeypatch.setattr(explain, "MAX_CALLS_PER_MINUTE", 1)
+    monkeypatch.setattr(explain, "recent_calls", explain.deque())
+    ask = scripted(GOOD)
+    monkeypatch.setattr(explain, "ask_gemini", ask)
+    headers = {"Authorization": "Bearer "+signer()}
+    bodies = [client.post("/api/plain-english", json={"kind": "network", "facts": FACTS}, headers=headers) for _ in range(2)]
+    assert [b.status_code for b in bodies] == [200, 200]
+    assert bodies[0].json()["text"] is not None
+    assert bodies[1].json()["text"] is None
+    assert len(ask.calls) == 1
+
+
 @pytest.mark.parametrize("body", [
     {"kind": "network", "facts": {"status": "x", "audit_note": "y"}},
     {"kind": "network", "facts": {"total_annual_cost": "x", "audit_note": "y"}},
@@ -257,10 +271,11 @@ def test_route_answers_200_with_no_text_when_gemini_is_down(api_client, signer, 
     {"kind": "trace", "facts": {k: v for k, v in TRACE_FACTS.items() if k != "check_result"}},
     {"kind": "other", "facts": FACTS},
     {"kind": "network", "facts": {**FACTS, "Bad-Name": "x"}},
-    {"kind": "network", "facts": {**FACTS, "long": "x" * 401}},
-    {"kind": "network", "facts": {**FACTS, **{f"extra_{chr(97 + i)}": "x" for i in range(26)},
-                                  **{f"more_{chr(97 + i)}": "x" for i in range(26)}}},
-], ids=["no-total", "no-status", "no-reason", "no-check", "bad-kind", "bad-name", "long-value", "too-many"])
+    {"kind": "network", "facts": {**FACTS, "ignore_your_rules": "x"}},
+    {"kind": "no_network", "facts": {"reason": "x", "status": "y", "total_annual_cost": "z"}},
+    {"kind": "network", "facts": {**FACTS, "transport_cost_per_year": "x" * 401}},
+], ids=["no-total", "no-status", "no-reason", "no-check", "bad-kind", "bad-name", "unknown-name", "wrong-kind-name",
+        "long-value"])
 def test_route_refuses_malformed_facts(api_client, signer, monkeypatch, body):
     client, _ = api_client
     monkeypatch.setattr(explain, "ask_gemini", scripted())

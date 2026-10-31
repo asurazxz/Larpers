@@ -259,6 +259,7 @@ export function CostSummary({ solution, baseline, hold = false }: { solution: So
                     </span>
                 </div>
             </div>
+            {explanation && <ExplainButton key={s.run_id} id="explain" input={explanation} fixedText={fixedText(explanation)} />}
             {!noNetwork && (
             <div className="mt-1.5 px-1 leading-tight text-ink2" id="objective-note">
                 {preUpdate ? (
@@ -286,7 +287,6 @@ export function CostSummary({ solution, baseline, hold = false }: { solution: So
                     ))}
                 </ul>
             )}
-            {explanation && <ExplainButton key={s.run_id} id="explain" input={explanation} fixedText={fixedText(explanation)} />}
         </div>
     );
 }

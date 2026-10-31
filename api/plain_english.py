@@ -11,7 +11,9 @@ import json
 import logging
 import os
 import re
+from collections import deque
 from pathlib import Path
+from threading import Lock
 from time import monotonic
 from typing import Annotated, Literal
 
@@ -31,7 +33,7 @@ ATTEMPTS = 2
 TIMEOUT_S = 8.0
 BUDGET_S = 15.0
 MAX_WORDS = 100
-MAX_FACTS = 30
+MAX_CALLS_PER_MINUTE = 30
 
 Kind = Literal["network", "no_network", "trace"]
 REQUIRED = {
@@ -42,6 +44,15 @@ REQUIRED = {
 }
 CLOSING = {"network": ("status", "audit_note"), "no_network": ("status",), "trace": ("check_result",)}
 COST_LINES = ("build_cost_per_year", "upkeep_cost_per_year", "processing_cost_per_year", "transport_cost_per_year")
+# The only names the page sends (web/lib/explain.ts, web/lib/traceFacts.ts), so this route cannot carry a free-form prompt.
+ALLOWED = {
+    "network": {*REQUIRED["network"], *CLOSING["network"], *COST_LINES, "upfront_build_cost", "build_cost_years",
+                "refineries", "depots", "fuel_delivered", "saving_against_simple_plan",
+                "saving_share_of_simple_plan", "extra_cost_against_simple_plan"},
+    "no_network": {*REQUIRED["no_network"], *CLOSING["no_network"]},
+    "trace": {*REQUIRED["trace"], *CLOSING["trace"], "cargo", "transport_mode", "route_role",
+              "straight_line_distance", "road_factor", "rate_per_tonne_km", "stored_cost", "allowed_difference"},
+}
 
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 NUMBER_WORDS = re.compile(
@@ -103,12 +114,14 @@ class GeminiUnavailable(Exception):
 
 class ExplainRequest(ContractModel):
     kind: Kind
-    facts: dict[FactName, FactText] = Field(max_length=MAX_FACTS)
+    facts: dict[FactName, FactText]
 
     @model_validator(mode="after")
     def has_required_facts(self):
         if missing := [name for name in (*REQUIRED[self.kind], *CLOSING[self.kind]) if name not in self.facts]:
             raise ValueError("facts must include " + ", ".join(missing))
+        if unknown := sorted(self.facts.keys() - ALLOWED[self.kind]):
+            raise ValueError("unknown facts: " + ", ".join(unknown))
         return self
 
 
@@ -116,6 +129,22 @@ class ExplainResponse(ContractModel):
     run_id: str
     text: str | None
     model: str | None
+
+
+recent_calls = deque()
+calls_lock = Lock()
+
+
+def allow_call() -> bool:
+    """A cap shared by all users, so no signed-in client can spend the key without limit."""
+    now = monotonic()
+    with calls_lock:
+        while recent_calls and now - recent_calls[0] > 60:
+            recent_calls.popleft()
+        if len(recent_calls) >= MAX_CALLS_PER_MINUTE:
+            return False
+        recent_calls.append(now)
+        return True
 
 
 def api_key() -> str:
