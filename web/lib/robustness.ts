@@ -5,7 +5,7 @@
 //   - family: 'baseline' marks the greedy baseline (also detected by status 'heuristic').
 //     Disruptions are detected by content: excluded_ids beyond the base run's own exclusions.
 //     A family containing 'disrupt', 'removed', 'lost' or 'outage' is also read as a disruption.
-//   - parameters come from solution.scenario (echoed Scenario), falling back to entry.params with
+//   - parameters come from solution.scenario (UI-attached on live runs; not in the contract), falling back to entry.params with
 //     keys yield (fraction), road_factor, horizon_years, excluded_ids, collection_policy, capacity_basis.
 import type { BundleEntry, Facility, FacilityType, Solution } from './contract';
 import { BASE_SLUG, bundle, getEntry, siteById, solutionOf } from './bundle';

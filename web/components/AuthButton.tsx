@@ -17,14 +17,14 @@ export default function AuthButton({ getPendingInputs, className = '' }: AuthBut
     const [busy, setBusy] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
 
-    const wrap = `flex flex-wrap items-center gap-3 text-base text-slate-900 ${className}`.trim();
+    const wrap = `flex flex-wrap items-center gap-3 text-base text-ink ${className}`.trim();
     const buttonClass =
-        'inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-base font-medium text-slate-900 shadow-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 disabled:cursor-not-allowed disabled:opacity-60';
+        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-1.5 text-base font-medium text-ink shadow-thumb transition-colors duration-150 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60';
 
     if (status === 'disabled') {
         return (
             <div className={wrap}>
-                <span className="text-base text-slate-500">Stored runs only, no login</span>
+                <span className="text-base text-ink2">Stored runs only, no login</span>
             </div>
         );
     }
@@ -32,7 +32,7 @@ export default function AuthButton({ getPendingInputs, className = '' }: AuthBut
     if (status === 'loading') {
         return (
             <div className={wrap} aria-busy="true">
-                <span className="text-base text-slate-500">Checking sign-in…</span>
+                <span className="text-base text-ink2">Checking sign-in…</span>
             </div>
         );
     }
@@ -71,11 +71,11 @@ export default function AuthButton({ getPendingInputs, className = '' }: AuthBut
                 <>
                     <span
                         aria-hidden="true"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-base font-semibold text-sky-900"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-base font-semibold text-blue-900"
                     >
                         {initial}
                     </span>
-                    <span className="max-w-[16rem] truncate text-base" title={user.email ?? undefined}>
+                    <span className="max-w-[11rem] truncate text-base" title={user.email ?? undefined}>
                         {label}
                     </span>
                     <button type="button" className={buttonClass} onClick={handleSignOut} disabled={busy}>
@@ -93,7 +93,7 @@ export default function AuthButton({ getPendingInputs, className = '' }: AuthBut
                     {busy ? 'Redirecting to Google…' : 'Sign in with Google'}
                 </button>
             )}
-            {!liveEnabled && <span className="text-base text-slate-500">{NO_SOLVE_NOTE}</span>}
+            {!liveEnabled && <span className="text-base text-ink2">{NO_SOLVE_NOTE}</span>}
             {shownError && (
                 <span role="alert" className="text-base text-red-700">
                     {shownError}

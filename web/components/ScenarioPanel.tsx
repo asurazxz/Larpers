@@ -7,7 +7,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { liveEnabled } from '../lib/api';
 import { restorePendingInputs, savePendingInputs, signInWithGoogle, useSession } from '../lib/auth';
 import { bundle, getSolution, siteById, slugs } from '../lib/bundle';
-import { AIRPORTS, type BundleEntry, type CapacityBasis, type CollectionPolicy, type Solution } from '../lib/contract';
+import {
+    AIRPORTS,
+    DEFAULT_SCENARIO,
+    type BundleEntry,
+    type CapacityBasis,
+    type CollectionPolicy,
+    type Scenario,
+    type Solution,
+} from '../lib/contract';
+import { runIndex } from '../lib/robustness';
 import { MISSING, orMissing, statusLabel } from '../lib/format';
 import {
     asScenarioForm,
@@ -16,13 +25,11 @@ import {
     formFromScenario,
     HORIZON_OPTIONS,
     isCandidate,
-    ROAD_FACTOR_OPTIONS,
     setCurrentForm,
     storedSlugOf,
     TIME_LIMIT_S,
     useLiveRunner,
     viewForEntry,
-    YIELD_OPTIONS,
     type LiveRun,
     type ScenarioForm,
     type SolverHealth,
@@ -42,6 +49,32 @@ export interface ScenarioPanelProps {
     pickedNode?: { id: string; seq: number } | null;
 }
 
+/** Organisers' base (challenge3_parameters.xlsx, 12:45 update): the form default when a run echoes no scenario. */
+const ORGANISER_SCENARIO: Scenario = {
+    ...DEFAULT_SCENARIO,
+    demand_kt: { PNK: 300, PKN: 300, BPN: 300, TRK: 300 },
+    yield: 0.2,
+    road_factor: 1.3,
+    horizon_years: 1,
+    collection_policy: 'optional',
+    capacity_basis: 'biomass_input',
+};
+/** Organisers' 15-25% yield range; stored runs' yields are added. */
+const ORGANISER_YIELDS = [0.15, 0.2, 0.25];
+/** 1.3 organisers' factor, 1.9 our measured OSM sensitivity. */
+const ROAD_OPTIONS = [1.3, 1.9];
+
+const formFor = (sc: Scenario | undefined | null): ScenarioForm => formFromScenario(sc ?? ORGANISER_SCENARIO);
+
+function storedYields(): number[] {
+    const out = [...ORGANISER_YIELDS];
+    for (const r of runIndex().runs) {
+        const y = r.params.yieldValue;
+        if (y !== null && Number.isFinite(y) && !out.some((o) => Math.abs(o - y) < 1e-9)) out.push(y);
+    }
+    return out;
+}
+
 const pctLabel = (v: number) => `${(v * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
 
 function withCurrent(options: readonly number[], current: string): number[] {
@@ -53,15 +86,15 @@ function withCurrent(options: readonly number[], current: string): number[] {
 
 function Row({ k, v }: { k: string; v: string }) {
     return (
-        <div className="flex justify-between gap-3">
-            <span className="text-gray-600">{k}</span>
-            <span className="text-right font-medium">{v}</span>
+        <div className="flex justify-between gap-3 py-px">
+            <span className="text-ink2">{k}</span>
+            <span className="num text-right font-medium">{v}</span>
         </div>
     );
 }
 
-const fieldClass = 'w-full rounded border border-gray-400 bg-white px-2 py-1 text-sm';
-const labelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-600';
+const fieldClass = 'field';
+const labelClass = 'mb-0.5 block text-base font-medium text-ink2';
 
 function StoredRuns({ solution, isLive, onPick, name }: { solution: Solution | null; isLive: boolean; onPick: (slug: string) => void; name: string }) {
     const current = isLive ? undefined : storedSlugOf(solution);
@@ -77,24 +110,35 @@ function StoredRuns({ solution, isLive, onPick, name }: { solution: Solution | n
     }, []);
     if (groups.length === 0) return <div className="text-sm">No stored run in the bundle.</div>;
     return (
-        <fieldset className="space-y-1" data-testid="stored-runs">
+        <fieldset className="space-y-1.5" data-testid="stored-runs">
             {groups.map(([fam, entries]) => (
                 <div key={fam}>
-                    <div className="text-xs font-semibold uppercase text-gray-500">{fam}</div>
-                    {entries.map((e) => (
-                        <label key={e.slug} className="flex cursor-pointer items-center gap-2 text-sm">
-                            <input
-                                type="radio"
-                                name={name}
-                                value={e.slug}
-                                checked={current === e.slug}
-                                onChange={() => onPick(e.slug)}
-                            />
-                            <span>
-                                {e.label ?? e.slug} <span className="text-gray-500">(stored{e.status ? `, ${e.status}` : ''})</span>
-                            </span>
-                        </label>
-                    ))}
+                    <div className="mb-1 text-base capitalize text-ink2">{fam}</div>
+                    <div className="space-y-0.5 rounded-[12px] bg-track p-[3px]">
+                        {entries.map((e) => {
+                            const on = current === e.slug;
+                            return (
+                                <label
+                                    key={e.slug}
+                                    className={`flex cursor-pointer items-start gap-2.5 rounded-[9px] px-3 py-1 text-base leading-snug transition-colors duration-150 ${
+                                        on ? 'bg-white shadow-thumb' : 'hover:bg-white/50'
+                                    }`}
+                                >
+                                    <input
+                                        type="radio"
+                                        className="mt-[5px] shrink-0"
+                                        name={name}
+                                        value={e.slug}
+                                        checked={on}
+                                        onChange={() => onPick(e.slug)}
+                                    />
+                                    <span className={on ? 'font-medium' : undefined}>
+                                        {e.label ?? e.slug} <span className="font-normal text-ink2">(stored{e.status ? `, ${e.status}` : ''})</span>
+                                    </span>
+                                </label>
+                            );
+                        })}
+                    </div>
                 </div>
             ))}
         </fieldset>
@@ -103,7 +147,8 @@ function StoredRuns({ solution, isLive, onPick, name }: { solution: Solution | n
 
 export default function ScenarioPanel({ solution, health, isLive, setSolution, setView, onLiveRun, pickedNode }: ScenarioPanelProps) {
     const session = useSession();
-    const [form, setForm] = useState<ScenarioForm>(() => formFromScenario(solution?.scenario));
+    const [form, setForm] = useState<ScenarioForm>(() => formFor(solution?.scenario));
+    const yieldOptions = useMemo(storedYields, []);
     const [note, setNote] = useState<string | null>(null);
     const [pickMode, setPickMode] = useState(false);
     const [signInError, setSignInError] = useState<string | null>(null);
@@ -127,7 +172,7 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
         const id = solution?.run_id ?? null;
         if (id === syncedRunId.current) return;
         syncedRunId.current = id;
-        setForm(formFromScenario(solution?.scenario));
+        setForm(formFor(solution?.scenario));
     }, [solution]);
 
     useEffect(() => {
@@ -187,27 +232,77 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
     const candidatesLeft = CANDIDATE_IDS.filter((id) => !form.excluded.includes(id));
     const st = runner.state;
 
-    return (
-        <div className="space-y-2 text-sm" data-mode={liveMode ? 'live' : 'stored'}>
-            {solution ? (
-                <div>
-                    <Row k="Showing" v={isLive ? `live result, run ID ${solution.run_id}` : `stored run (${solution.source})`} />
-                    <Row k="Status" v={statusLabel(solution)} />
-                    {!liveMode && (
-                        <>
-                            <Row k="Yield" v={orMissing(solution.scenario?.yield, (y: number) => pctLabel(y))} />
-                            <Row k="Road factor" v={orMissing(solution.scenario?.road_factor)} />
-                            <Row k="Horizon" v={orMissing(solution.scenario?.horizon_years, (h: number) => `${h} yr`)} />
-                        </>
-                    )}
+    // Run status, including the sign-in prompt. In live mode it sits right under the Run button.
+    const statusBlock = (
+        <div aria-live="polite" data-testid="run-status" className="empty:hidden">
+            {running && (
+                <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-1.5 text-blue-900">
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden="true" />
+                    <span>
+                        Solving and running the baseline… <span className="num font-medium">{st.elapsedS.toFixed(1)} s</span>
+                    </span>
                 </div>
-            ) : (
-                <div>{MISSING}</div>
             )}
+            {st.phase === 'done' && (
+                <div className="rounded-xl bg-canvas px-3 py-1.5">
+                    New run ID <span className="num font-semibold">{st.runId}</span> in {st.elapsedS.toFixed(1)} s.
+                    {st.message && <div className="text-red-700">{st.message}</div>}
+                </div>
+            )}
+            {st.phase === 'infeasible' && (
+                <div className="rounded-xl bg-canvas px-3 py-1.5">
+                    No feasible network for these inputs (run ID <span className="num font-medium">{st.runId}</span>). This is a solver
+                    result, not an error.
+                    {st.message && <div className="text-red-700">{st.message}</div>}
+                </div>
+            )}
+            {st.phase === 'error' && (
+                <div role="alert" className="rounded-xl bg-red-50 px-3 py-1.5 text-red-800">
+                    {st.message}
+                </div>
+            )}
+            {st.phase === 'auth' && (
+                <div role="alert" data-testid="signin-prompt" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-blue-50 px-3 py-1.5 text-blue-900">
+                    <div className="font-medium">{st.message}</div>
+                    {session.status === 'disabled' ? (
+                        <div className="text-ink3">Sign-in is not configured on this URL.</div>
+                    ) : (
+                        <button type="button" className="pill-primary py-0.5" onClick={() => void startSignIn()}>
+                            Sign in with Google
+                        </button>
+                    )}
+                    {signInError && <div className="text-red-700">{signInError}</div>}
+                </div>
+            )}
+            {note && st.phase === 'idle' && <div className="text-ink3">{note}</div>}
+        </div>
+    );
+
+    const showing = solution ? (
+        <div>
+            <Row k="Showing" v={isLive ? `live result, run ID ${solution.run_id}` : `stored run (${solution.source})`} />
+            {!liveMode && (
+                <Row
+                    k="Scenario"
+                    v={`yield ${orMissing(solution.scenario?.yield, (y: number) => pctLabel(y))}, road ${orMissing(
+                        solution.scenario?.road_factor,
+                    )}, H ${orMissing(solution.scenario?.horizon_years, (h: number) => `${h} yr`)}`}
+                />
+            )}
+        </div>
+    ) : (
+        <div>{MISSING}</div>
+    );
+
+    return (
+        <div className="space-y-2.5 text-base" data-mode={liveMode ? 'live' : 'stored'}>
+            {/* The current control comes first (Run, or the stored-run choice); what is showing follows it. */}
+
+            {!liveMode && statusBlock}
 
             {!liveMode && (
-                <div className="space-y-1">
-                    <div className="text-xs text-gray-600">
+                <div className="space-y-2">
+                    <div className="text-ink3">
                         {!liveEnabled
                             ? 'No solver on this URL: stored runs only.'
                             : health.state === 'checking'
@@ -218,22 +313,46 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                 </div>
             )}
 
+            {!liveMode && showing}
+
             {liveMode && (
                 <form
-                    className="space-y-2"
+                    className="space-y-2.5"
                     data-testid="live-form"
                     onSubmit={(e) => {
                         e.preventDefault();
                         onRun();
                     }}
                 >
-                    <fieldset disabled={running} className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        {!running ? (
+                            <button type="submit" data-testid="run-button" disabled={!scenario} className="pill-primary px-6">
+                                Run
+                            </button>
+                        ) : (
+                            <button type="button" onClick={runner.cancel} className="pill-secondary">
+                                Cancel
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            disabled={running}
+                            className="pill-link"
+                            onClick={() => setForm(formFor(solution?.scenario))}
+                        >
+                            Reset to displayed run
+                        </button>
+                        <span className="ml-auto text-base text-ink2">r = 1, limit {TIME_LIMIT_S} s</span>
+                    </div>
+                    {statusBlock}
+                    {showing}
+                    <fieldset disabled={running} className="space-y-2.5">
                         <div>
                             <span className={labelClass}>Demand, kt/yr (blank = full-production preset)</span>
-                            <div className="mt-1 grid grid-cols-4 gap-1">
+                            <div className="grid grid-cols-4 gap-1.5">
                                 {AIRPORTS.map((a) => (
-                                    <label key={a} className="text-xs">
-                                        <span className="font-semibold">{a}</span>
+                                    <label key={a} className="text-base text-ink2">
+                                        <span className="font-semibold text-ink">{a}</span>
                                         <input
                                             className={fieldClass}
                                             name={`demand-${a}`}
@@ -245,14 +364,14 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                     </label>
                                 ))}
                             </div>
-                            {errors.demand && <div className="text-xs text-red-700">{errors.demand}</div>}
+                            {errors.demand && <div className="text-sm text-red-700">{errors.demand}</div>}
                         </div>
 
                         <div className="grid grid-cols-3 gap-2">
                             <label>
                                 <span className={labelClass}>Yield</span>
                                 <select className={fieldClass} name="yield" value={form.yieldValue} onChange={(e) => setForm((f) => ({ ...f, yieldValue: e.target.value }))}>
-                                    {withCurrent(YIELD_OPTIONS, form.yieldValue).map((v) => (
+                                    {withCurrent(yieldOptions, form.yieldValue).map((v) => (
                                         <option key={v} value={String(v)}>
                                             {pctLabel(v)}
                                         </option>
@@ -262,7 +381,7 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                             <label>
                                 <span className={labelClass}>Road factor</span>
                                 <select className={fieldClass} name="road_factor" value={form.roadFactor} onChange={(e) => setForm((f) => ({ ...f, roadFactor: e.target.value }))}>
-                                    {withCurrent(ROAD_FACTOR_OPTIONS, form.roadFactor).map((v) => (
+                                    {withCurrent(ROAD_OPTIONS, form.roadFactor).map((v) => (
                                         <option key={v} value={String(v)}>
                                             {v}
                                         </option>
@@ -270,7 +389,7 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                 </select>
                             </label>
                             <label>
-                                <span className={labelClass}>Horizon</span>
+                                <span className={labelClass}>Horizon (yr)</span>
                                 <select className={fieldClass} name="horizon" value={form.horizon} onChange={(e) => setForm((f) => ({ ...f, horizon: e.target.value }))}>
                                     {withCurrent(HORIZON_OPTIONS, form.horizon).map((v) => (
                                         <option key={v} value={String(v)}>
@@ -280,8 +399,11 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                 </select>
                             </label>
                         </div>
+                        <div className="text-base text-ink2" data-testid="cost-basis">
+                            Cost basis: per year (annualised)
+                        </div>
                         {(errors.yield || errors.road || errors.horizon) && (
-                            <div className="text-xs text-red-700">{[errors.yield, errors.road, errors.horizon].filter(Boolean).join(' ')}</div>
+                            <div className="text-sm text-red-700">{[errors.yield, errors.road, errors.horizon].filter(Boolean).join(' ')}</div>
                         )}
 
                         <div className="grid grid-cols-2 gap-2">
@@ -313,13 +435,13 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
 
                         <div>
                             <span className={labelClass}>Excluded facility sites (unavailable at design stage)</span>
-                            <div className="mt-1 flex flex-wrap gap-1" data-testid="excluded-list">
-                                {form.excluded.length === 0 && <span className="text-xs text-gray-500">none</span>}
+                            <div className="flex flex-wrap gap-1.5" data-testid="excluded-list">
+                                {form.excluded.length === 0 && <span className="text-base text-ink2">none</span>}
                                 {form.excluded.map((id) => (
                                     <button
                                         key={id}
                                         type="button"
-                                        className="rounded border border-gray-500 px-1 text-xs hover:bg-gray-100"
+                                        className="rounded-full bg-track px-2.5 text-base text-ink hover:bg-gray-300"
                                         title={`${siteById(id)?.label ?? id}: click to remove`}
                                         onClick={() => setForm((f) => ({ ...f, excluded: f.excluded.filter((x) => x !== id) }))}
                                     >
@@ -327,7 +449,7 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                     </button>
                                 ))}
                             </div>
-                            <div className="mt-1 flex items-center gap-2">
+                            <div className="mt-1.5 flex items-center gap-2">
                                 <select
                                     className={fieldClass}
                                     name="exclude-add"
@@ -344,90 +466,23 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                         </option>
                                     ))}
                                 </select>
-                                <label className="flex shrink-0 items-center gap-1 text-xs">
+                                <label className="flex shrink-0 items-center gap-1.5 text-base text-ink3">
                                     <input type="checkbox" checked={pickMode} onChange={(e) => setPickMode(e.target.checked)} />
                                     pick on map
                                 </label>
                             </div>
-                            {errors.excluded && <div className="text-xs text-red-700">{errors.excluded}</div>}
+                            {errors.excluded && <div className="text-sm text-red-700">{errors.excluded}</div>}
                         </div>
                     </fieldset>
-
-                    <div className="flex items-center gap-2">
-                        {!running ? (
-                            <button
-                                type="submit"
-                                data-testid="run-button"
-                                disabled={!scenario}
-                                className="rounded bg-sky-800 px-4 py-1.5 font-semibold text-white hover:bg-sky-900 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                Run
-                            </button>
-                        ) : (
-                            <button type="button" onClick={runner.cancel} className="rounded border border-gray-500 px-3 py-1.5">
-                                Cancel
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            disabled={running}
-                            className="text-xs text-gray-600 underline disabled:opacity-50"
-                            onClick={() => setForm(formFromScenario(solution?.scenario))}
-                        >
-                            reset to displayed run
-                        </button>
-                        <span className="ml-auto text-xs text-gray-500">r = 1, limit {TIME_LIMIT_S} s</span>
-                    </div>
                 </form>
             )}
 
-            <div aria-live="polite" data-testid="run-status">
-                {running && (
-                    <div className="flex items-center gap-2 rounded border border-sky-700 bg-sky-50 px-2 py-1">
-                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-sky-800 border-t-transparent" aria-hidden="true" />
-                        <span>
-                            Solving and running the baseline… <span className="font-mono">{st.elapsedS.toFixed(1)} s</span>
-                        </span>
-                    </div>
-                )}
-                {st.phase === 'done' && (
-                    <div className="rounded border border-gray-400 px-2 py-1">
-                        New run ID <span className="font-mono font-semibold">{st.runId}</span> in {st.elapsedS.toFixed(1)} s.
-                        {st.message && <div className="text-red-700">{st.message}</div>}
-                    </div>
-                )}
-                {st.phase === 'infeasible' && (
-                    <div className="rounded border border-gray-800 px-2 py-1">
-                        No feasible network for these inputs (run ID <span className="font-mono">{st.runId}</span>). This is a solver
-                        result, not an error.
-                        {st.message && <div className="text-red-700">{st.message}</div>}
-                    </div>
-                )}
-                {st.phase === 'error' && (
-                    <div role="alert" className="rounded border border-red-700 bg-red-50 px-2 py-1 text-red-800">
-                        {st.message}
-                    </div>
-                )}
-                {st.phase === 'auth' && (
-                    <div role="alert" data-testid="signin-prompt" className="space-y-1 rounded border border-gray-800 px-2 py-1">
-                        <div>{st.message}</div>
-                        {session.status === 'disabled' ? (
-                            <div className="text-xs text-gray-600">Sign-in is not configured on this URL.</div>
-                        ) : (
-                            <button type="button" className="rounded border border-gray-500 px-3 py-1" onClick={() => void startSignIn()}>
-                                Sign in with Google
-                            </button>
-                        )}
-                        {signInError && <div className="text-red-700">{signInError}</div>}
-                    </div>
-                )}
-                {note && st.phase === 'idle' && <div className="text-xs text-gray-700">{note}</div>}
-            </div>
-
             {liveMode && (
-                <details className="text-sm">
-                    <summary className="cursor-pointer text-xs font-semibold uppercase text-gray-600">Stored runs ({slugs().length})</summary>
-                    <StoredRuns solution={solution} isLive={isLive} onPick={pickStored} name="stored-run-live" />
+                <details className="hair-t pt-2">
+                    <summary className="text-base text-ink2">Stored runs ({slugs().length})</summary>
+                    <div className="mt-1.5">
+                        <StoredRuns solution={solution} isLive={isLive} onPick={pickStored} name="stored-run-live" />
+                    </div>
                 </details>
             )}
         </div>

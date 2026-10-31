@@ -1,4 +1,5 @@
 // Build-time: writes web/data/fixture_solution.json and the placeholder web/data/bundle.json.
+// Output must validate against contracts/solution.schema.json (no scenario, airports or per-leg echo).
 // A hand-made, internally consistent Solution on REAL site ids, coordinates and tonnages
 // (greedy construction, not a solver result). Run after make-sites.mjs: npm run data:fixture
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -80,6 +81,7 @@ function flow(leg, from, to, kt) {
         cost_usd: kt * 1000 * km * RATE[leg],
         truck_t: TRUCK[leg],
         trips: Math.ceil((kt * 1000) / TRUCK[leg]),
+        road_km: null,
     });
 }
 
@@ -166,8 +168,7 @@ const stranded = STRANDED.map((id) => {
     return { site_id: id, label: s.label, lat: s.lat, lon: s.lon, kt: s.kt, reason: 'Not collected under optional collection' };
 });
 const surplus = refineries.filter((r) => r.left > 1e-9).map((r) => {
-    const s = byId[r.id];
-    return { site_id: r.id, label: s.label, lat: s.lat, lon: s.lon, kt: r.left, reason: 'SAF above airport demand, held at the refinery gate' };
+    return { site_id: r.id, kt: r.left };
 });
 
 const capex = facilities.reduce((a, f) => a + f.capex_usd, 0);
@@ -176,26 +177,14 @@ const H = 1;
 const total = capex + H * logistics;
 const gap = 0.0042;
 const bound = total * (1 - gap);
-const legSum = (leg) => flows.filter((f) => f.leg === leg).reduce((a, f) => a + f.cost_usd, 0);
 
-const scenario = {
-    demand_kt: DEMAND,
-    yield: YIELD,
-    depot_retention: 1,
-    road_factor: ROAD,
-    horizon_years: H,
-    collection_policy: 'optional',
-    capacity_basis: 'saf_output',
-    excluded_ids: EXCLUDED,
-    time_limit_s: 90,
-};
-
+// Built under demand PNK 320, PKN 50, BPN 560, TRK 70; optional collection; KAL_SUP_41 excluded.
 const solution = {
+    schema_version: 1,
     run_id: 'fixture-0001',
     source: 'fixture',
     data_hash: 'fixture-not-a-real-hash',
     scenario_hash: 'fixture-not-a-real-hash',
-    scenario,
     status: 'best_found',
     primal: total,
     bound,
@@ -208,40 +197,42 @@ const solution = {
     surplus,
     capex_usd: capex,
     logistics_annual_usd: logistics,
-    logistics_by_leg_usd: {
-        supply_depot: legSum('supply_depot'),
-        depot_refinery: legSum('depot_refinery'),
-        refinery_airport: legSum('refinery_airport'),
-    },
     opex: 'not_provided',
     total_horizon_usd: total,
-    portfolios: [
-        { n_large: 0, n_small: 0, status: 'skipped_capacity', reason: 'No refinery capacity' },
-        { n_large: 0, n_small: 1, status: 'skipped_capacity', reason: '500 kt SAF is below required output' },
-        { n_large: 1, n_small: 0, status: 'best_found', capex_usd: 765e6, primal: total * 1.003, bound: total * 0.992, gap: 0.011, solve_seconds: 30.1 },
-        { n_large: 0, n_small: 2, status: 'skipped_capex', reason: 'CapEx plus depot floor exceeds best total' },
-        { n_large: 1, n_small: 1, status: 'best_found', capex_usd: 1245e6, primal: total, bound, gap, solve_seconds: 42.7 },
-    ],
-    airports: IATA.map((code) => ({
-        ...airports[code],
-        demand_kt: DEMAND[code],
-        delivered_kt: flows.filter((f) => f.to === code).reduce((a, f) => a + f.kt, 0),
-    })),
     validation: { passed: true, max_residuals: { mass_kt: 0, cost_usd: 0, capacity_kt: 0, demand_kt: 0 }, failures: [] },
+    portfolios: [
+        { n_large: 0, n_small: 0, status: 'skipped', primal: null, bound: null, gap: null, solve_seconds: 0, reason: 'No refinery capacity' },
+        { n_large: 0, n_small: 1, status: 'skipped', primal: null, bound: null, gap: null, solve_seconds: 0, reason: '500 kt SAF is below required output' },
+        { n_large: 1, n_small: 0, status: 'best_found', primal: total * 1.003, bound: total * 0.992, gap: 0.011, solve_seconds: 30.1, reason: null },
+        { n_large: 0, n_small: 2, status: 'skipped', primal: null, bound: null, gap: null, solve_seconds: 0, reason: 'CapEx plus depot floor exceeds best total' },
+        { n_large: 1, n_small: 1, status: 'best_found', primal: total, bound, gap, solve_seconds: 42.7, reason: null },
+    ],
 };
 
 writeFileSync(join(here, '..', 'data', 'fixture_solution.json'), JSON.stringify(solution, null, 1) + '\n');
 
+// Same shape as solver/scenarios.py writes, so Denzel's bundle drops in unchanged.
 const bundle = {
-    base: {
-        slug: 'base',
-        family: 'base',
-        label: 'Fixture (placeholder until stored bundle v1)',
-        status: solution.status,
-        solved_at: '2026-10-31T12:45:00+08:00',
-        data_hash: solution.data_hash,
-        precomputed: true,
-        solution,
+    schema_version: 1,
+    label: 'Fixture (placeholder until stored bundle v1)',
+    data_hash: solution.data_hash,
+    generated_at: '2026-10-31T12:45:00+08:00',
+    runs: {
+        base: {
+            slug: 'base',
+            family: 'base',
+            label: 'Fixture (placeholder until stored bundle v1)',
+            status: solution.status,
+            solved_at: '2026-10-31T12:45:00+08:00',
+            data_hash: solution.data_hash,
+            scenario_hash: solution.scenario_hash,
+            precomputed: true,
+            scenario: {
+                demand_kt: DEMAND, yield: YIELD, depot_retention: 1, road_factor: ROAD, horizon_years: H,
+                collection_policy: 'optional', capacity_basis: 'saf_output', excluded_ids: EXCLUDED, time_limit_s: 90,
+            },
+            solution,
+        },
     },
 };
 writeFileSync(join(here, '..', 'data', 'bundle.json'), JSON.stringify(bundle, null, 1) + '\n');

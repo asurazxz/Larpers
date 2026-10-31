@@ -14,7 +14,7 @@ export function isProvenOptimal(s: Pick<Solution, 'status' | 'gap'>): boolean {
 }
 
 /** The only place status text is made. "Optimal" only when proven: status optimal and gap 0. */
-export function statusLabel(s: Pick<Solution, 'status' | 'gap' | 'n_candidates'>): string {
+export function statusLabel(s: Pick<Solution, 'status' | 'gap'> & { n_candidates?: number | null }): string {
     switch (s.status) {
         case 'infeasible':
             return 'No feasible network';
