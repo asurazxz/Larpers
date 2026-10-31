@@ -6,7 +6,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Flow, Solution } from './contract';
 import { baseEntry, solutionOf } from './bundle';
-import { DEFAULT_VIEW, flowKey, type Basemap, type View } from './view';
+import { DEFAULT_VIEW, flowKey, type View } from './view';
 import { isLiveDisplayed, useSolverHealth, type LiveRun, type SolverHealth } from './useLive';
 import { baseSolution, disruptHighlight, robustness, siteBandFn, type RobustKind } from './robustness';
 import { storedBaselineFor } from '../components/CostPanel';
@@ -38,8 +38,6 @@ export interface AppState {
     isLive: boolean;
     /** Greedy baseline for the displayed run: live baseline or the stored baseline run, else null. */
     baseline: Solution | null;
-    basemap: Basemap;
-    setBasemap: (b: Basemap) => void;
     selectedFlow: SelectedFlow | null;
     selectFlow: (f: SelectedFlow | null) => void;
     selectedNode: string | null;
@@ -88,7 +86,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const liveBaseline = isLiveDisplayed(solution, liveRun) ? (liveRun?.baseline ?? null) : null;
     const baseline = view.kind === 'disrupt' ? null : (liveBaseline ?? storedBaselineFor(solution));
 
-    const [basemap, setBasemap] = useState<Basemap>('none');
     const [selectedFlow, setSelectedFlow] = useState<SelectedFlow | null>(null);
     const [selectedNode, setSelectedNode] = useState<string | null>(null);
     const [pickedNode, setPickedNode] = useState<{ id: string; seq: number } | null>(null);
@@ -153,8 +150,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         onLiveRun,
         isLive,
         baseline,
-        basemap,
-        setBasemap,
         selectedFlow,
         selectFlow,
         selectedNode,

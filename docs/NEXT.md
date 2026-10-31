@@ -8,7 +8,6 @@ None of these are in the build. One line each, with the reason.
 |---|---|---|
 | `nk_excluded`: remove Bulungan and scale demand | A way to drop supply sites while keeping them out of the 6,800 kt total, plus a demand-scaling rule | Shows the price of serving Bulungan |
 | `nk_local_refinery`: force a small refinery at KAL_SUP_70 | `forced_open_ids` (or `forced_refinery_ids`) | Tests a local plant against hauling 700+ km |
-| `road_matrix`: solve on OSRM road km instead of haversine x factor | A `distance_basis` field (`factor` or `osrm`) | Answers whether the network changes on real roads |
 | District lost without losing depots | `excluded_refinery_ids` | "District lost" runs now exclude every site in the district, depots too, because there is no refinery-only exclusion |
 
 ## Model and data
@@ -17,7 +16,8 @@ None of these are in the build. One line each, with the reason.
 - Real barge rates and a port model for Tarakan and Bulungan. The organisers set the barge at the truck rate, which a real barge may not match.
 - Port nodes and a sea export leg. Most SAF would leave by sea, and we have none.
 - Mill-level tonnage, crop and moisture data. The sites are organiser-supplied and treated as synthetic.
-- Real OSRM routes on a self-hosted truck profile, with plantation tracks added. OSM under-maps them. Today the OSRM table is a reference check only.
+- OSRM on a self-hosted truck profile, with plantation tracks added. OSM under-maps them. Today `distance_basis: osrm` and the map routes use the public demo server's car profile.
+- A live-solve control for `distance_basis` in the scenario panel. The API accepts it today; the panel does not send it.
 - Multi-period model with harvest seasons and inventory. Annual totals hide peaks.
 - Proof over all refinery sites. Today's "optimal" holds among the shortlisted candidates only.
 - Re-solve the baseline under each scenario's own settings, not a fixed baseline.

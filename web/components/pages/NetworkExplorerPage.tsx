@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import NetworkMap, { ALL_LAYERS, type MapLayers } from '../map/NetworkMap';
 import Inspector from '../network/Inspector';
-import { BasemapPill, LayersPanel, SearchBox } from '../network/MapOverlays';
+import { LayersPanel, SearchBox } from '../network/MapOverlays';
 import { IconCollapse, IconLayers } from '../common/icons';
 import { useApp } from '../../lib/store';
 
@@ -44,9 +44,6 @@ export default function NetworkExplorerPage() {
                             Inspector
                         </button>
                     )}
-                </div>
-                <div className="absolute bottom-8 right-3 z-[1000]">
-                    <BasemapPill />
                 </div>
             </div>
             {open && (

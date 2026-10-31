@@ -7,7 +7,6 @@ import { getCurrentForm } from '../../lib/useLive';
 import { useApp, type PageKey } from '../../lib/store';
 import { getEntry, slugs, solutionOf } from '../../lib/bundle';
 import { storedSlugOf, viewForEntry } from '../../lib/useLive';
-import { BASEMAP_LABEL, type Basemap } from '../../lib/view';
 import { useSession } from '../../lib/auth';
 import { isProvenOptimal, pct, statusLabel } from '../../lib/format';
 import { IconBell, IconChart, IconCheckCircle, IconChevronDown, IconCollapse, IconGear, IconHelp, IconHome, IconMap, IconShield, IconSliders } from '../common/icons';
@@ -21,7 +20,7 @@ export const NAV: { key: PageKey; label: string; icon: ComponentType }[] = [
 ];
 
 function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-    const { page, go, basemap, setBasemap } = useApp();
+    const { page, go } = useApp();
     const [settingsOpen, setSettingsOpen] = useState(false);
     const item = (active: boolean) =>
         `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] transition-colors ${active ? 'bg-primary text-white shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`;
@@ -59,15 +58,6 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
                     </button>
                     {settingsOpen && (
                         <div className="absolute bottom-0 left-full z-[1200] ml-2 w-64 rounded-xl border border-line bg-white p-4 text-deep shadow-lg">
-                            <div className="mb-2 text-[13px] font-medium text-muted">Map basemap</div>
-                            <div className="mb-4 flex overflow-hidden rounded-lg border border-line text-sm">
-                                {(Object.keys(BASEMAP_LABEL) as Basemap[]).map((b) => (
-                                    <button key={b} type="button" aria-pressed={basemap === b} onClick={() => setBasemap(b)} className={`flex-1 px-2 py-1.5 ${basemap === b ? 'bg-primary text-white' : 'hover:bg-slate-50'}`}>
-                                        {BASEMAP_LABEL[b]}
-                                    </button>
-                                ))}
-                            </div>
-                            <p className="mb-3 text-[12px] text-muted">Offline needs no network. OSM and CARTO load map tiles.</p>
                             <button type="button" className="btn-secondary w-full" onClick={() => { onToggle(); setSettingsOpen(false); }}>
                                 {collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                             </button>

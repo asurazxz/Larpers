@@ -96,12 +96,15 @@ export default function Provenance({ solution, entry, live }: ProvenanceProps) {
             <Item k="solve" v={seconds(solution.solve_seconds)} minor fixed />
             <Item k="data" v={short(solution.data_hash)} title={solution.data_hash} minor />
             <Item k="scenario" v={short(solution.scenario_hash)} title={solution.scenario_hash} minor />
+            {solution.flows.some((f) => f.distance_basis === 'osrm') && (
+                <Item k="km" v="OSRM car" title="Costed on OSRM car-profile road km (© OpenStreetMap contributors), not the official 1.3 factor. TRK barge stays on the factor." minor />
+            )}
             <span
                 id="provenance-trace"
                 data-pass={tr.pass}
                 data-total={tr.total}
                 className={`num ml-auto shrink-0 whitespace-nowrap rounded-full px-2.5 text-base font-semibold ${allOk ? 'bg-blue-50 text-blue-800' : 'bg-orange-100 text-orange-900'}`}
-                title={`Every drawn arc: haversine × road factor and kt × 1000 × km × PDF rate, recomputed in the browser. Co-located (0 km) flows: ${tr.hiddenPass}/${tr.hiddenTotal} ok.`}
+                title={`Every drawn arc: haversine × road factor (or max(OSRM car road km, haversine) on distance_basis osrm) and kt × 1000 × km × PDF rate, recomputed in the browser. Co-located (0 km) flows: ${tr.hiddenPass}/${tr.hiddenTotal} ok. Routes and road km: OSRM on © OpenStreetMap contributors.`}
             >
                 Trace {tr.pass}/{tr.total} ok
                 {tr.hiddenPass !== tr.hiddenTotal && `; ${tr.hiddenTotal - tr.hiddenPass} undrawn flow(s) fail`}

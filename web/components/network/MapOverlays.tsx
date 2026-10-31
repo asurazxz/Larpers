@@ -4,7 +4,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../lib/store';
 import { sites } from '../../lib/bundle';
-import { BASEMAP_LABEL, type Basemap } from '../../lib/view';
 import type { RobustKind } from '../../lib/robustness';
 import { IconChevron, IconClose, IconFactory, IconPlane, IconSearch } from '../common/icons';
 import type { MapLayers } from '../map/NetworkMap';
@@ -143,25 +142,6 @@ export function LayersPanel({ layers, onChange, counts, onClose }: { layers: Map
                     </select>
                 )}
             </div>
-        </div>
-    );
-}
-
-export function BasemapPill() {
-    const { basemap, setBasemap } = useApp();
-    return (
-        <div className="flex overflow-hidden rounded-md border border-line bg-white shadow-md" role="group" aria-label="Basemap">
-            {(Object.keys(BASEMAP_LABEL) as Basemap[]).map((b) => (
-                <button
-                    key={b}
-                    type="button"
-                    aria-pressed={basemap === b}
-                    onClick={() => setBasemap(b)}
-                    className={`px-3 py-1.5 text-xs font-medium ${basemap === b ? 'bg-navy text-white' : 'bg-white text-deep hover:bg-app'}`}
-                >
-                    {BASEMAP_LABEL[b]}
-                </button>
-            ))}
         </div>
     );
 }

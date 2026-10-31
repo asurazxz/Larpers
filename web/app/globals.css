@@ -523,3 +523,9 @@ div:has(> #header) {
 #auth-slot span.text-ink2 {
     color: #56677b;
 }
+
+/* Tile attribution: required by Esri, kept small so it does not cover the map. */
+.leaflet-container .leaflet-control-attribution {
+    font-size: 11px;
+    line-height: 1.4;
+}

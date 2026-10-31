@@ -3,15 +3,18 @@
 // Client-only map. Load it with dynamic(() => import('./Map'), { ssr: false }).
 // Every marker and line comes from the run data; nothing is hard-coded except site coordinates
 // (sites.json, from data/raw) and the offline land layer (borneo.json).
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import L from 'leaflet';
 import { CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer } from 'react-leaflet';
 import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
+import rawRoutes from '../data/routes.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
 import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
+import { decodePolyline } from '../lib/polyline';
 import { legMaxima, legWidth, sceneFromProgress, sceneFromSolution } from '../lib/scene';
 import { isSolving, useSolveProgress, useSolving, type LiveNode, type SolveFeed } from '../lib/solveProgress';
+import { isOsrmLeg } from '../lib/trace';
 import { BAND_COLOR, flowKey, type Band } from '../lib/view';
 import FlowLayer from './FlowLayer';
 
@@ -26,13 +29,13 @@ export interface MapProps {
     onSelectFlow?: (flow: Flow, index: number) => void;
     /** Called when a facility, site or airport marker is clicked. */
     onSelectNode?: (id: string) => void;
-    /** Optional CARTO tiles under the land layer. Off by default and on stage. */
-    showTiles?: boolean;
     /** Robustness band of a site's district; banded sites get a blue/orange ring. Absent = no rings. */
     bandFor?: (siteId: string) => Band | null;
     /** The solver's progress: during a live run the map draws what the solver has found so far. */
     feed: SolveFeed;
 }
+
+const ESRI_ATTRIBUTION = 'Tiles &copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, &copy; OpenStreetMap contributors';
 
 export const KALIMANTAN_BOUNDS: L.LatLngBoundsExpression = [
     [-4.4, 108.5],
@@ -116,6 +119,36 @@ function SiteImage({ siteId }: { siteId: string }) {
     );
 }
 
+// OSRM car routes (web/data/routes.json, display only). Keys "A|B" with A < B, geometry from A to B, encoded.
+const ROUTES = rawRoutes as Record<string, string>;
+const decoded = new Map<string, [number, number][]>();
+function routeOf(key: string): [number, number][] | undefined {
+    const enc = ROUTES[key];
+    if (enc === undefined) return undefined;
+    if (!decoded.has(key)) decoded.set(key, decodePolyline(enc));
+    return decoded.get(key);
+}
+const SNAP_GAP_M = 1000;
+type LatLon = [number, number];
+
+/**
+ * Line(s) to draw for one flow. With a stored route: the road geometry solid, plus dashed connectors where an end
+ * snapped more than 1 km to the road (offshore sites). Without one, or for the TRK barge: one dashed straight line.
+ */
+function flowPaths(f: Flow): { solid: LatLon[] | null; dashed: LatLon[][] } {
+    const from: LatLon = [f.from_lat, f.from_lon];
+    const to: LatLon = [f.to_lat, f.to_lon];
+    const forward = f.from < f.to;
+    const route = f.from === 'TRK' || f.to === 'TRK' ? undefined : routeOf(forward ? `${f.from}|${f.to}` : `${f.to}|${f.from}`);
+    if (!route || route.length < 2) return { solid: null, dashed: [[from, to]] };
+    const road = forward ? route : [...route].reverse();
+    const gap = (a: LatLon, b: LatLon) => L.latLng(a).distanceTo(L.latLng(b)) > SNAP_GAP_M;
+    const dashed: LatLon[][] = [];
+    if (gap(from, road[0])) dashed.push([from, road[0]]);
+    if (gap(road[road.length - 1], to)) dashed.push([road[road.length - 1], to]);
+    return { solid: road, dashed };
+}
+
 function PopupRows({ title, rows, imageSiteId }: { title: string; rows: [string, string][]; imageSiteId?: string }) {
     return (
         <div style={{ fontSize: 16, lineHeight: 1.4, minWidth: 230, color: '#1d1d1f' }}>
@@ -156,7 +189,7 @@ function LiveFlows({ feed, solution, sites, resting, highlight, onSettled }: {
     return <FlowLayer scene={scene} resting={resting} highlight={highlight} settleId={solving ? null : solution} onSettled={onSettled} colors={LEG_COLOR} />;
 }
 
-export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, showTiles = false, bandFor, feed }: MapProps) {
+export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, bandFor, feed }: MapProps) {
     const renderer = useMemo(() => L.canvas({ padding: 0.5, tolerance: 6 }), []);
     const flows = useMemo(() => solution?.flows ?? [], [solution]);
     const facilities = useMemo(() => solution?.facilities ?? [], [solution]);
@@ -224,20 +257,19 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             maxBounds={MAX_BOUNDS}
             maxBoundsViscosity={1}
             minZoom={5}
-            maxZoom={11}
+            maxZoom={13}
             zoomSnap={0.25}
             preferCanvas
             renderer={renderer}
-            attributionControl={showTiles}
             style={{ height: '100%', width: '100%', background: SEA }}
         >
-            {showTiles && (
-                <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; OpenStreetMap contributors &copy; CARTO'
-                />
-            )}
-            {/* Offline land layer, below tilePane (200) so tiles, if on and loaded, cover it. */}
+            {/* The only basemap: Esri World Street Map, free with roads built in, no API key. Attribution always shown. */}
+            <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+                attribution={ESRI_ATTRIBUTION}
+                maxZoom={19}
+            />
+            {/* Land layer below tilePane (200): the tiles cover it, and it still shows land if they fail to load. */}
             <Pane name="land" style={{ zIndex: 150 }}>
                 <GeoJSON
                     data={borneo as unknown as FeatureCollection}
@@ -248,23 +280,34 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
 
             <LiveFlows feed={feed} solution={solution} sites={sites} resting={resting} highlight={resting ? hl : null} onSettled={onSettled} />
 
-            {/* Flows, coloured by leg; 0 km co-located flows are kept in the data but not drawn. */}
+            {/* Flows, coloured by leg, along OSRM car routes where stored (display only; dashed = straight line, snap
+                gap or TRK barge). 0 km co-located flows are kept in the data but not drawn. */}
             {shownFlows.map((f, i) => {
                 if (!(f.km > 0) || (f.from_lat === f.to_lat && f.from_lon === f.to_lon)) return null;
                 const key = flowKey(f);
                 const d = dim(key);
+                const { solid, dashed } = flowPaths(f);
+                const weight = widthOf(f) + (hl && !d ? 2 : 0);
                 return (
+                    <Fragment key={`${key}#${i}`}>
+                    {solid &&
+                        dashed.map((p, j) => (
+                            <Polyline
+                                key={j}
+                                positions={p}
+                                interactive={false}
+                                pathOptions={{ color: LEG_COLOR[f.leg], weight: Math.max(1, weight - 1), opacity: d ? 0.15 : 0.7, dashArray: '3 5' }}
+                            />
+                        ))}
                     <Polyline
-                        key={`${key}#${i}`}
-                        positions={[
-                            [f.from_lat, f.from_lon],
-                            [f.to_lat, f.to_lon],
-                        ]}
+                        positions={solid ?? dashed[0]}
                         pathOptions={{
                             color: LEG_COLOR[f.leg],
-                            weight: widthOf(f) + (hl && !d ? 2 : 0),
+                            weight,
                             opacity: d ? 0.15 : 0.9,
                             lineCap: 'round',
+                            lineJoin: 'round',
+                            dashArray: solid ? undefined : '6 6',
                         }}
                         eventHandlers={{ click: () => onSelectFlow?.(f, i) }}
                     >
@@ -275,13 +318,19 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                                     ['From', f.from_label ?? f.from],
                                     ['To', f.to_label ?? f.to],
                                     [f.commodity === 'saf' ? 'SAF kt/year' : 'kt/year', kt(f.kt, 2)],
-                                    ['Distance', `${km(f.hav_km)} × ${f.road_factor} = ${km(f.km)}`],
+                                    isOsrmLeg(f)
+                                        ? ['Distance', `OSRM road (car) ${km(f.road_km ?? f.km)}, costed ${km(f.km)}`]
+                                        : ['Distance', `${km(f.hav_km)} × ${f.road_factor} = ${km(f.km)}`],
+                                    ...(!isOsrmLeg(f) && typeof f.road_km === 'number'
+                                        ? ([['OSRM road (car)', `${km(f.road_km)}, reference only`]] as [string, string][])
+                                        : []),
                                     ['Rate', `$${f.rate_usd_per_t_km}/t/km`],
                                     ['Cost/year', usdExact(f.cost_usd)],
                                 ]}
                             />
                         </Popup>
                     </Polyline>
+                    </Fragment>
                 );
             })}
 

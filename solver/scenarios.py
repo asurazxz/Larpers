@@ -82,6 +82,8 @@ def tier_specs(tier, base_solution, sites):
             BASE,
             RunSpec("baseline", "baseline", "T1", kind="baseline"),
             RunSpec("earlier_assumptions", "our_assumptions", "T1", EARLIER_ASSUMPTIONS),
+            # OSRM car road km instead of the official 1.3 factor; a sensitivity, never the base case.
+            RunSpec("road_matrix", "distance_basis", "T1", {"distance_basis": "osrm"}),
         ]
         refineries = sensitivity.facilities_of(base_solution, "refinery") if base_solution else []
         specs += [
