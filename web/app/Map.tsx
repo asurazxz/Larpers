@@ -5,7 +5,7 @@
 // (sites.json, from data/raw) and the offline land layer (borneo.json).
 import { Fragment, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import L from 'leaflet';
-import { CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer, ZoomControl } from 'react-leaflet';
 import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
@@ -32,6 +32,8 @@ export interface MapProps {
     bandFor?: (siteId: string) => Band | null;
     /** The solver's progress: during a live run the map draws what the solver has found so far. */
     feed: SolveFeed;
+    /** Corner for the zoom +/- buttons. Default 'topleft' (Leaflet's own control). */
+    zoomPosition?: L.ControlPosition;
 }
 
 const ESRI_ATTRIBUTION = 'Tiles &copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, &copy; OpenStreetMap contributors';
@@ -169,7 +171,9 @@ function LiveFlows({ feed, solution, sites, resting, highlight, onSettled }: {
     return <FlowLayer scene={scene} resting={resting} highlight={highlight} settleId={solving ? null : solution} onSettled={onSettled} colors={LEG_COLOR} />;
 }
 
-export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, bandFor, feed }: MapProps) {
+export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, bandFor, feed, zoomPosition = 'topleft' }: MapProps) {
+    // Leaflet reads zoomControl once, at creation; each page passes a fixed corner, so that is enough.
+    const defaultZoom = zoomPosition === 'topleft';
     const renderer = useMemo(() => L.canvas({ padding: 0.5, tolerance: 6 }), []);
     const flows = useMemo(() => solution?.flows ?? [], [solution]);
     const facilities = useMemo(() => solution?.facilities ?? [], [solution]);
@@ -241,8 +245,10 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             zoomSnap={0.25}
             preferCanvas
             renderer={renderer}
+            zoomControl={defaultZoom}
             style={{ height: '100%', width: '100%', background: SEA }}
         >
+            {!defaultZoom && <ZoomControl position={zoomPosition} />}
             {/* The only basemap: Esri World Street Map, free with roads built in, no API key. Attribution always shown. */}
             <TileLayer
                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"

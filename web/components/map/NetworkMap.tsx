@@ -8,6 +8,7 @@ import { useCallback, useMemo } from 'react';
 import { useApp } from '../../lib/store';
 import { sites } from '../../lib/bundle';
 import type { Flow, Leg } from '../../lib/contract';
+import type { ControlPosition } from 'leaflet';
 
 const SafMap = dynamic(() => import('../../app/Map'), {
     ssr: false,
@@ -35,7 +36,16 @@ export const ALL_LAYERS: MapLayers = {
     legs: { supply_depot: true, depot_refinery: true, refinery_airport: true },
 };
 
-export default function NetworkMap({ interactive = true, layers }: { interactive?: boolean; layers?: MapLayers }) {
+export default function NetworkMap({
+    interactive = true,
+    layers,
+    zoomPosition,
+}: {
+    interactive?: boolean;
+    layers?: MapLayers;
+    /** Corner for the zoom +/- buttons; omitted keeps Leaflet's default (top left). */
+    zoomPosition?: ControlPosition;
+}) {
     const app = useApp();
     const { solution } = app;
 
@@ -65,6 +75,7 @@ export default function NetworkMap({ interactive = true, layers }: { interactive
             feed={app.feed}
             onSelectFlow={interactive ? selectFlow : undefined}
             onSelectNode={interactive ? (id) => app.selectNode(id) : undefined}
+            zoomPosition={zoomPosition}
         />
     );
 }
