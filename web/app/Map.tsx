@@ -5,7 +5,7 @@
 // (sites.json, from data/raw) and the offline land layer (borneo.json).
 import { Fragment, useMemo } from 'react';
 import L from 'leaflet';
-import { AttributionControl, CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer } from 'react-leaflet';
 import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
 import rawRoutes from '../data/routes.json';
@@ -13,7 +13,7 @@ import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
 import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
 import { decodePolyline } from '../lib/polyline';
 import { isOsrmLeg } from '../lib/trace';
-import { BAND_COLOR, flowKey, type Band, type Basemap } from '../lib/view';
+import { BAND_COLOR, flowKey, type Band } from '../lib/view';
 
 export interface MapProps {
     /** The run to draw. null draws sites only. */
@@ -26,13 +26,10 @@ export interface MapProps {
     onSelectFlow?: (flow: Flow, index: number) => void;
     /** Called when a facility, site or airport marker is clicked. */
     onSelectNode?: (id: string) => void;
-    /** Basemap tiles over the offline land layer. 'none' draws the land layer only and needs no network. */
-    basemap?: Basemap;
     /** Robustness band of a site's district; banded sites get a blue/orange ring. Absent = no rings. */
     bandFor?: (siteId: string) => Band | null;
 }
 
-const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const ESRI_ATTRIBUTION = 'Tiles &copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, &copy; OpenStreetMap contributors';
 
 export const KALIMANTAN_BOUNDS: L.LatLngBoundsExpression = [
@@ -129,7 +126,7 @@ function PopupRows({ title, rows }: { title: string; rows: [string, string][] })
     );
 }
 
-export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, basemap = 'none', bandFor }: MapProps) {
+export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, bandFor }: MapProps) {
     const renderer = useMemo(() => L.canvas({ padding: 0.5, tolerance: 6 }), []);
     const flows = useMemo(() => solution?.flows ?? [], [solution]);
     const facilities = useMemo(() => solution?.facilities ?? [], [solution]);
@@ -190,24 +187,15 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             zoomSnap={0.25}
             preferCanvas
             renderer={renderer}
-            attributionControl={false}
             style={{ height: '100%', width: '100%', background: SEA }}
         >
-            {/* Free tiles with roads built in, no API key. Attribution always shown (OSM and Esri terms); no prefetching.
-                MapContainer reads attributionControl only once, so the control mounts with the tiles instead. */}
-            {basemap !== 'none' && <AttributionControl position="bottomright" prefix={false} />}
-            {basemap === 'osm' && (
-                <TileLayer key="osm" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={OSM_ATTRIBUTION} maxZoom={19} />
-            )}
-            {basemap === 'streets' && (
-                <TileLayer
-                    key="streets"
-                    url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
-                    attribution={ESRI_ATTRIBUTION}
-                    maxZoom={19}
-                />
-            )}
-            {/* Offline land layer, below tilePane (200) so tiles, if on and loaded, cover it. */}
+            {/* The only basemap: Esri World Street Map, free with roads built in, no API key. Attribution always shown. */}
+            <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+                attribution={ESRI_ATTRIBUTION}
+                maxZoom={19}
+            />
+            {/* Land layer below tilePane (200): the tiles cover it, and it still shows land if they fail to load. */}
             <Pane name="land" style={{ zIndex: 150 }}>
                 <GeoJSON
                     data={borneo as unknown as FeatureCollection}

@@ -37,3 +37,4 @@ One line per call, with the reason. Newest at the bottom.
 | 15:20 | OSRM is fetched once, offline, from the public demo server (car profile) and committed; the app never calls it | The presenter's laptop must work with no network. A self-hosted truck profile is in NEXT.md |
 | 15:20 | Bundle not regenerated in this PR; `road_matrix` joins T1 for Denzel's next `solver.scenarios` run | Denzel owns `bundle.json`, and v3 is on his branch. The solver change bumps `solver_version`, so every stored run re-solves anyway |
 | 15:45 | Default basemap is Esri World Street Map (free, no key), OSM optional, Offline the fallback; CARTO removed | Lead asked for a map with roads built in. CARTO tiles now return "API key required". The land layer under the tiles keeps a tile failure readable |
+| 15:55 | Esri World Street Map is the only basemap; the OSM and Offline options and the switch are removed | Lead's instruction. The land layer stays under the tiles as a silent fallback |
