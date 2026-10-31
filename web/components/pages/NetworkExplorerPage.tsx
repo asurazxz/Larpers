@@ -26,7 +26,8 @@ export default function NetworkExplorerPage() {
         <div className="flex h-[calc(100vh-64px)] min-w-0">
             <div className="relative min-w-0 flex-1">
                 <div className="absolute inset-0">
-                    <NetworkMap layers={layers} />
+                    {/* Zoom sits bottom left: the search box and layers panel cover the top-left corner. */}
+                    <NetworkMap layers={layers} zoomPosition="bottomleft" popupPaddingTopLeft={[290, 64]} />
                 </div>
                 <div className="absolute left-3 top-3 z-[1000] flex flex-col gap-2">
                     <SearchBox />
