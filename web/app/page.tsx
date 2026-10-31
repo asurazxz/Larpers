@@ -11,6 +11,8 @@ import { DEFAULT_VIEW, flowKey, type View } from '../lib/view';
 import Header from '../components/Header';
 import ScenarioPanel from '../components/ScenarioPanel';
 import { isLiveDisplayed, useSolverHealth, type LiveRun } from '../lib/useLive';
+import { createSolveFeed, useFeedActive } from '../lib/solveProgress';
+import SolvePanel from '../components/SolvePanel';
 import SweepPicker from '../components/SweepPicker';
 import Disrupt from '../components/Disrupt';
 import Robustness from '../components/Robustness';
@@ -44,6 +46,8 @@ export default function Page() {
     // Live run (Header, ScenarioPanel). The displayed run is live only while `solution` is that exact
     // object; any other setSolution (stored radio, sweep, disrupt) makes it a stored run again.
     const solverHealth = useSolverHealth();
+    const feed = useMemo(createSolveFeed, []);
+    const running = useFeedActive(feed);
     const [liveRun, setLiveRun] = useState<LiveRun | null>(null);
     const isLive = isLiveDisplayed(solution, liveRun) || (view.kind === 'disrupt' && !!view.live);
     /** Greedy baseline for the displayed live run (null for stored runs). */
@@ -89,6 +93,7 @@ export default function Page() {
                         sites={sites}
                         highlight={selected ? highlight : (viewHighlight ?? highlight)}
                         bandFor={bandFor}
+                        feed={feed}
                         onSelectFlow={(flow, index) => setSelected({ flow, index })}
                         onSelectNode={(id) => setPickedNode((p) => ({ id, seq: (p?.seq ?? 0) + 1 }))}
                     />
@@ -101,8 +106,12 @@ export default function Page() {
                 <aside id="right-column" className="min-w-0 pb-3 md:h-full md:flex-[2_1_0%] md:overflow-y-auto">
                     {/* Pinned summary: total, status, audit and baseline stay visible while the column scrolls. */}
                     <div id="panel-summary" className="z-10 bg-canvas pb-3 md:sticky md:top-0">
-                        <div className="card px-5 py-3">
-                            <CostSummary solution={solution} baseline={costBaseline} />
+                        <div className="card relative overflow-hidden px-5 py-3">
+                            <div key={solution?.run_id} className="result-in pointer-events-none absolute inset-0 rounded-card" aria-hidden="true" />
+                            <div className={`transition-opacity duration-300 ${running ? 'opacity-0' : ''}`}>
+                                <CostSummary solution={solution} baseline={costBaseline} hold={running} />
+                            </div>
+                            <SolvePanel feed={feed} />
                         </div>
                     </div>
                     <div className="space-y-3">
@@ -113,9 +122,11 @@ export default function Page() {
                                 isLive={isLive}
                                 setSolution={setSolution}
                                 setView={setView}
+                                feed={feed}
                                 onLiveRun={(run) => {
                                     setLiveRun(run);
                                     setSolution(run.solution);
+                                    setSelected(null);
                                 }}
                                 pickedNode={pickedNode}
                             />
@@ -129,7 +140,7 @@ export default function Page() {
                             <SweepPicker view={view} onSelect={selectView} />
                         </Section>
                         <Section id="panel-disrupt" title="Disrupt" aside="at base assumptions">
-                            <Disrupt view={view} solution={solution} onSelect={selectView} focusSiteId={pickedNode?.id ?? null} />
+                            <Disrupt view={view} solution={solution} onSelect={selectView} focusSiteId={pickedNode?.id ?? null} feed={feed} />
                         </Section>
                         <Section id="panel-robustness" title="Robustness">
                             <Robustness kind={robustKind} onKindChange={setRobustKind} />

@@ -1,7 +1,8 @@
 // Client for Damien's FastAPI solver (api/main.py).
 // Public: GET /api/health, GET /api/data, POST /api/validate.
-// Signed-in: POST /api/solve, POST /api/baseline, with Authorization: Bearer <Supabase access token>.
+// Signed-in: POST /api/solve, POST /api/solve/stream, POST /api/baseline, with Authorization: Bearer <Supabase access token>.
 import type { AuditReport, Scenario, Solution } from './contract';
+import type { SolveEvent } from './solveProgress';
 import { getAccessToken, refreshAccessToken } from './supabase';
 
 export const SOLVER_API_URL = (process.env.NEXT_PUBLIC_SOLVER_API_URL ?? '').trim().replace(/\/+$/, '');
@@ -11,6 +12,8 @@ export const liveEnabled = SOLVER_API_URL.length > 0;
 export const HEALTH_TIMEOUT_MS = 3_000;
 export const SOLVE_TIMEOUT_MS = 150_000;
 export const DEFAULT_TIMEOUT_MS = 30_000;
+/** The API sends a line at least every 2 s during a run, so this much silence means the connection died. */
+export const STREAM_IDLE_MS = 15_000;
 
 // Fixed unless a caller overrides them explicitly.
 export const SCENARIO_DEFAULTS = { depot_retention: 1, time_limit_s: 90 } as const;
@@ -71,6 +74,10 @@ export interface RequestOptions {
     timeoutMs?: number;
 }
 
+export interface StreamOptions extends RequestOptions {
+    onEvent: (event: SolveEvent) => void;
+}
+
 export interface ApiClient {
     readonly baseUrl: string;
     readonly liveEnabled: boolean;
@@ -78,6 +85,7 @@ export interface ApiClient {
     getData<T = unknown>(opts?: RequestOptions): Promise<T>;
     validate(scenario: ScenarioInput, solution: Solution, opts?: RequestOptions): Promise<AuditReport>;
     solve(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution>;
+    solveStream(scenario: ScenarioInput, opts: StreamOptions): Promise<Solution>;
     baseline(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution>;
 }
 
@@ -212,7 +220,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     }
 
     // POST with the session token; on 401 refresh once and retry once, else AuthRequiredError.
-    async function authedPost<T>(path: string, body: unknown, opts: RequestOptions = {}): Promise<T> {
+    async function authedResponse(path: string, body: unknown, opts: RequestOptions = {}): Promise<Response> {
         const timeoutMs = opts.timeoutMs ?? solveTimeoutMs;
         const token = await tokens.getAccessToken();
         let res = await send('POST', path, body, token, timeoutMs, opts.signal);
@@ -226,7 +234,93 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
                 throw new AuthRequiredError('Your session expired. Sign in with Google again to run the solver.');
             }
         }
-        return parseOk<T>(res);
+        return res;
+    }
+
+    async function authedPost<T>(path: string, body: unknown, opts: RequestOptions = {}): Promise<T> {
+        return parseOk<T>(await authedResponse(path, body, opts));
+    }
+
+    // Reads NDJSON until the result line. Cancelling closes the connection, which ends the solve on the server.
+    async function readStream(res: Response, opts: StreamOptions): Promise<Solution> {
+        if (!res.ok) {
+            await parseOk(res);
+        }
+        if (!res.body) {
+            throw new ApiError(res.status, 'The solver API returned an empty stream.', 'bad_response');
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let cancelled = false;
+        let idle = false;
+        const onAbort = () => {
+            cancelled = true;
+            void reader.cancel();
+        };
+        if (opts.signal?.aborted) {
+            onAbort();
+        } else {
+            opts.signal?.addEventListener('abort', onAbort, { once: true });
+        }
+        let silence: ReturnType<typeof setTimeout> | undefined;
+        const watch = () => {
+            clearTimeout(silence);
+            silence = setTimeout(() => {
+                idle = true;
+                void reader.cancel();
+            }, STREAM_IDLE_MS);
+        };
+        let buffer = '';
+        let solution: Solution | null = null;
+        const line = (text: string) => {
+            if (!text.trim()) return;
+            let event: SolveEvent;
+            try {
+                event = JSON.parse(text) as SolveEvent;
+            } catch {
+                throw new ApiError(res.status, 'The solver API sent an unreadable progress line.', 'bad_response');
+            }
+            if (event.type === 'error') {
+                throw new ApiError(500, event.detail, 'http', event);
+            }
+            if (event.type === 'result') {
+                solution = event.solution;
+            }
+            opts.onEvent(event);
+        };
+        try {
+            watch();
+            for (;;) {
+                let chunk: ReadableStreamReadResult<Uint8Array>;
+                try {
+                    chunk = await reader.read();
+                } catch (err) {
+                    if (cancelled) break;
+                    const reason = err instanceof Error ? err.message : String(err);
+                    throw new ApiError(0, `Lost the solver API mid-run (${reason}).`, 'network');
+                }
+                if (chunk.done) break;
+                watch();
+                buffer += decoder.decode(chunk.value, { stream: true });
+                const parts = buffer.split('\n');
+                buffer = parts.pop() ?? '';
+                parts.forEach(line);
+            }
+            line(buffer);
+        } finally {
+            clearTimeout(silence);
+            opts.signal?.removeEventListener('abort', onAbort);
+        }
+        if (cancelled) {
+            throw new ApiError(0, 'Request cancelled.', 'aborted');
+        }
+        if (idle) {
+            throw new ApiError(0, `The solver went silent for ${Math.round(STREAM_IDLE_MS / 1000)} s.`, 'timeout');
+        }
+        if (!solution) {
+            throw new ApiError(res.status, 'The solver stream ended without a result.', 'network');
+        }
+        return solution;
     }
 
     return {
@@ -278,6 +372,15 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
             return authedPost<Solution>('/api/solve', buildScenario(scenario), opts);
         },
 
+        // Falls back to the plain endpoint when the API predates streaming: the run still finishes, unseen.
+        async solveStream(scenario: ScenarioInput, opts: StreamOptions): Promise<Solution> {
+            const res = await authedResponse('/api/solve/stream', buildScenario(scenario), opts);
+            if (res.status === 404 || res.status === 405) {
+                return authedPost<Solution>('/api/solve', buildScenario(scenario), opts);
+            }
+            return readStream(res, opts);
+        },
+
         baseline(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> {
             return authedPost<Solution>('/api/baseline', buildScenario(scenario), opts);
         },
@@ -292,5 +395,6 @@ export const getData = <T = unknown>(opts?: RequestOptions): Promise<T> => api.g
 export const validate = (scenario: ScenarioInput, solution: Solution, opts?: RequestOptions): Promise<AuditReport> =>
     api.validate(scenario, solution, opts);
 export const solve = (scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> => api.solve(scenario, opts);
+export const solveStream = (scenario: ScenarioInput, opts: StreamOptions): Promise<Solution> => api.solveStream(scenario, opts);
 export const baseline = (scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> =>
     api.baseline(scenario, opts);

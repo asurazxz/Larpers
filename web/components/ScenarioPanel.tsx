@@ -34,6 +34,7 @@ import {
     type ScenarioForm,
     type SolverHealth,
 } from '../lib/useLive';
+import type { SolveFeed } from '../lib/solveProgress';
 import type { View } from '../lib/view';
 
 export interface ScenarioPanelProps {
@@ -47,6 +48,8 @@ export interface ScenarioPanelProps {
     onLiveRun: (run: LiveRun) => void;
     /** Last map click (site id) with a counter, so clicking the same site twice toggles twice. */
     pickedNode?: { id: string; seq: number } | null;
+    /** Receives the solver's progress while a run is live. */
+    feed: SolveFeed;
 }
 
 /** Organisers' base (challenge3_parameters.xlsx, 12:45 update): the form default when a run echoes no scenario. */
@@ -145,7 +148,15 @@ function StoredRuns({ solution, isLive, onPick, name }: { solution: Solution | n
     );
 }
 
-export default function ScenarioPanel({ solution, health, isLive, setSolution, setView, onLiveRun, pickedNode }: ScenarioPanelProps) {
+function runningLabel(feed: SolveFeed): string {
+    const p = feed.get();
+    if (!p || p.phase === 'starting') return 'Starting the solver…';
+    if (p.phase === 'polish') return 'Polishing the winning network…';
+    if (p.phase === 'audit') return 'Auditing the result…';
+    return p.total > 0 ? `Settled ${p.settled} of ${p.total} refinery mixes…` : 'Building the portfolio…';
+}
+
+export default function ScenarioPanel({ solution, health, isLive, setSolution, setView, onLiveRun, pickedNode, feed }: ScenarioPanelProps) {
     const session = useSession();
     const [form, setForm] = useState<ScenarioForm>(() => formFor(solution?.scenario));
     const yieldOptions = useMemo(storedYields, []);
@@ -154,7 +165,7 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
     const [signInError, setSignInError] = useState<string | null>(null);
     const syncedRunId = useRef<string | null>(solution?.run_id ?? null);
 
-    const runner = useLiveRunner(onLiveRun);
+    const runner = useLiveRunner(onLiveRun, feed);
     const running = runner.state.phase === 'running';
     const liveMode = liveEnabled && (health.state === 'up' || running);
 
@@ -234,12 +245,12 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
 
     // Run status, including the sign-in prompt. In live mode it sits right under the Run button.
     const statusBlock = (
-        <div aria-live="polite" data-testid="run-status" className="empty:hidden">
+        <div id="run-status-block" aria-live="polite" data-testid="run-status" className="empty:hidden">
             {running && (
                 <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-1.5 text-blue-900">
                     <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden="true" />
                     <span>
-                        Solving and running the baseline… <span className="num font-medium">{st.elapsedS.toFixed(1)} s</span>
+                        {runningLabel(feed)} <span className="num font-medium">{st.elapsedS.toFixed(1)} s</span>
                     </span>
                 </div>
             )}

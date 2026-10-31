@@ -33,7 +33,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import multiprocessing
 import os
+import threading
 import time
 import uuid
 from collections import defaultdict, deque
@@ -70,6 +72,37 @@ WORKERS, LEAD_THREADS = worker_plan(int(os.getenv("SOLVER_CORES") or os.cpu_coun
 EPS = 1e-9
 RESOLVED = {"proven", "infeasible", "skipped_capacity", "skipped_capex", "dominated"}
 MIX_STATUS = {"proven": "optimal", "infeasible": "infeasible", "best_found": "best_found"}
+STOP_POLL_S = 0.25
+BOUND_EVERY_S = 0.5
+LEG_NAME = ("supply_depot", "depot_refinery", "refinery_airport")
+
+
+class SolveCancelled(Exception):
+    """The caller stopped listening, so the run was abandoned."""
+
+
+class ReportingHiGHS(pulp.HiGHS):
+    """HiGHS that passes each improving solution and each bound update to `report` while it solves."""
+
+    def __init__(self, report, **options):
+        super().__init__(**options)
+        self.report = report
+
+    def callSolver(self, lp):
+        h = lp.solverModel
+        last = 0.0
+
+        def tick(event):
+            nonlocal last
+            now = time.monotonic()
+            if now - last >= BOUND_EVERY_S:
+                last = now
+                self.report("bound", event.data_out)
+
+        h.cbMipImprovingSolution.subscribe(lambda event: self.report("incumbent", event.data_out))
+        # cbMipLogging stays silent with msg=False. Listening here changed no result in a timed comparison.
+        h.cbMipInterrupt.subscribe(tick)
+        h.solve()
 
 
 @dataclass(frozen=True)
@@ -245,8 +278,22 @@ def _finite(v) -> float | None:
     return float(v) if v is not None and math.isfinite(v) else None
 
 
-def solve_mix(p: Problem, n_large: int, n_small: int, time_limit: float, threads: int = THREADS, fixed=None) -> dict:
-    """Solve one refinery mix and return a plain dict. `fixed` pins the facilities and re-solves only the flows."""
+def _network(solution, p: Problem, zd, zr, x, f, g) -> dict:
+    """The facilities and flows in one raw HiGHS solution vector, in kt."""
+    open_sites = lambda variables: [[key[0], SIZE_NAME[key[1]]] for key, v in variables.items() if solution[v.index] > 0.5]
+    arcs = lambda leg, variables, kt: [[LEG_NAME[leg], *e, kt(e, solution[v.index])] for e, v in variables.items()
+                                       if solution[v.index] > EPS]
+    return {"depots": open_sites(zd), "refineries": open_sites(zr),
+            "flows": (arcs(0, x, lambda e, share: p.supply[e[0]] * share) + arcs(1, f, lambda e, kt: kt)
+                      + arcs(2, g, lambda e, kt: kt))}
+
+
+def solve_mix(p: Problem, n_large: int, n_small: int, time_limit: float, threads: int = THREADS, fixed=None,
+              events=None) -> dict:
+    """Solve one refinery mix and return a plain dict. `fixed` pins the facilities and re-solves only the flows.
+
+    `events` is a queue that receives each incumbent and bound update as HiGHS finds it. Losing one never costs the solve.
+    """
     started = time.monotonic()
     sizes = ("S", "L")
     c = p.costs
@@ -322,7 +369,22 @@ def solve_mix(p: Problem, n_large: int, n_small: int, time_limit: float, threads
         m += pulp.lpSum(c.depot_kt["S"] * zd[j, "S"] + c.depot_kt["L"] * zd[j, "L"] for j in p.depots) >= depot_intake(p)
 
     limit = max(time_limit - (time.monotonic() - started), 0.1)
-    m.solve(pulp.HiGHS(msg=False, timeLimit=limit, gapRel=0.0, threads=threads))
+    options = {"msg": False, "timeLimit": limit, "gapRel": 0.0, "threads": threads}
+    if events is None:
+        m.solve(pulp.HiGHS(**options))
+    else:
+        def report(kind, data):
+            try:
+                event = {"type": kind, "n_large": n_large, "n_small": n_small}
+                if kind == "incumbent":
+                    event.update(primal=_finite(data.objective_function_value),
+                                 **_network(data.mip_solution, p, zd, zr, x, f, g))
+                else:
+                    event.update(bound=_finite(data.mip_dual_bound), nodes=int(data.mip_node_count))
+                events.put(event)
+            except Exception:
+                pass
+        m.solve(ReportingHiGHS(report, **options))
     h = m.solverModel
     info = h.getInfo()
     model_status = h.modelStatusToString(h.getModelStatus())
@@ -364,11 +426,65 @@ def _stop_workers(pool: ProcessPoolExecutor) -> None:
         process.terminate()
 
 
-def _submit_mix(pool, p: Problem, mix: dict, left: float, threads: int):
-    return pool.submit(solve_mix, p, mix["n_large"], mix["n_small"], left, threads)
+def _submit_mix(pool, p: Problem, mix: dict, left: float, threads: int, events=None):
+    if events is None:
+        return pool.submit(solve_mix, p, mix["n_large"], mix["n_small"], left, threads)
+    return pool.submit(solve_mix, p, mix["n_large"], mix["n_small"], left, threads, None, events)
 
 
-def run_portfolio(p: Problem, budget_s: float, grace_s: float = 2.0) -> list[dict]:
+class Progress:
+    """Sends portfolio and worker happenings to `on_event`, each stamped with the run's best, lower bound and gap."""
+
+    def __init__(self, on_event, mixes):
+        self.on_event = on_event
+        self.mixes = mixes
+        self.lock = threading.Lock()
+        self.best = math.inf
+        self.dual = {}
+        self.nodes = {}
+
+    def summary(self) -> dict:
+        lower = [max(mix["bound"], self.dual.get((mix["n_large"], mix["n_small"]), mix["bound"]))
+                 for mix in self.mixes if mix["state"] not in RESOLVED and mix["bound"] is not None]
+        lower = min([self.best, *lower])
+        found = math.isfinite(self.best)
+        settled = sum(mix["state"] in RESOLVED or (mix["bound"] is not None and mix["bound"] >= self.best)
+                      for mix in self.mixes)
+        return {"best": self.best if found else None, "lower_bound": lower if math.isfinite(lower) else None,
+                "gap": max(self.best - lower, 0.0) / self.best if found and self.best else None,
+                "settled": settled, "total": len(self.mixes), "nodes": sum(self.nodes.values())}
+
+    def send(self, event: dict) -> None:
+        with self.lock:
+            self.on_event({**event, **self.summary()})
+
+    def mix(self, mix: dict) -> None:
+        self.send({"type": "mix", "n_large": mix["n_large"], "n_small": mix["n_small"], "state": mix["state"],
+                   "primal": mix.get("primal"), "bound": mix["bound"], "seconds": mix.get("seconds")})
+
+    def worker(self, event: dict) -> None:
+        with self.lock:
+            key = (event["n_large"], event["n_small"])
+            if event["type"] == "bound":
+                if event["bound"] is not None:
+                    self.dual[key] = max(event["bound"], self.dual.get(key, -math.inf))
+                self.nodes[key] = event["nodes"]
+            elif event["primal"] is not None:
+                event["improved"] = event["primal"] < self.best
+                self.best = min(self.best, event["primal"])
+            self.on_event({**event, **self.summary()})
+
+
+def _pump(queue, progress: Progress) -> None:
+    """Forward worker events until told to stop or the queue goes away."""
+    try:
+        while (event := queue.get()) is not None:
+            progress.worker(event)
+    except (EOFError, OSError):
+        pass
+
+
+def run_portfolio(p: Problem, budget_s: float, grace_s: float = 2.0, on_event=None, stop=None) -> list[dict]:
     """Solve every mix that can still win, lowest floor first, and report what happened to each one."""
     deadline = time.monotonic() + budget_s
     need = required_capacity(p)
@@ -388,26 +504,48 @@ def run_portfolio(p: Problem, budget_s: float, grace_s: float = 2.0) -> list[dic
     best = math.inf
     running = {}
     threads = LEAD_THREADS
+    progress = manager = events = pump = None
+    if on_event is not None:
+        progress = Progress(on_event, mixes)
+        progress.send({"type": "portfolio", "workers": WORKERS, "budget_s": budget_s,
+                       "mixes": [{key: mix[key] for key in ("n_large", "n_small", "state", "bound")} for mix in mixes]})
+        manager = multiprocessing.Manager()
+        events = manager.Queue()
+        pump = threading.Thread(target=_pump, args=(events, progress), daemon=True)
+        pump.start()
     pool = ProcessPoolExecutor(max_workers=WORKERS, max_tasks_per_child=1)
     try:
         while queue or running:
+            if stop is not None and stop.is_set():
+                break
             while queue and len(running) < WORKERS and time.monotonic() < deadline:
                 mix = queue.popleft()
                 if mix["bound"] >= best:
                     mix["state"] = "skipped_capex"
+                    if progress:
+                        progress.mix(mix)
                     continue
                 try:
-                    running[_submit_mix(pool, p, mix, deadline - time.monotonic(), threads)] = mix
+                    if events is None:
+                        running[_submit_mix(pool, p, mix, deadline - time.monotonic(), threads)] = mix
+                    else:
+                        running[_submit_mix(pool, p, mix, deadline - time.monotonic(), threads, events)] = mix
                 except BrokenProcessPool:
                     mix["state"] = "failed"
                     queue.clear()
                     break
                 threads = THREADS
+                if progress:
+                    progress.send({"type": "mix", "n_large": mix["n_large"], "n_small": mix["n_small"],
+                                   "state": "running", "primal": None, "bound": mix["bound"], "seconds": None})
             if not running or all(mix["bound"] >= best for mix in running.values()):
                 break
-            done, _ = wait(running, timeout=max(deadline + grace_s - time.monotonic(), 0),
+            left = max(deadline + grace_s - time.monotonic(), 0)
+            done, _ = wait(running, timeout=left if stop is None else min(left, STOP_POLL_S),
                            return_when=FIRST_COMPLETED)
             if not done:
+                if stop is not None and left > STOP_POLL_S:
+                    continue
                 break
             broken = False
             for future in done:
@@ -427,6 +565,10 @@ def run_portfolio(p: Problem, budget_s: float, grace_s: float = 2.0) -> list[dic
                     mix["bound"] = floor if result["bound"] is None else max(floor, result["bound"])
                 if mix["primal"] is not None:
                     best = min(best, mix["primal"])
+                if progress:
+                    with progress.lock:
+                        progress.best = min(progress.best, best)
+                    progress.mix(mix)
             if broken:
                 for other in running.values():
                     other["state"] = "failed"
@@ -434,10 +576,19 @@ def run_portfolio(p: Problem, budget_s: float, grace_s: float = 2.0) -> list[dic
                 queue.clear()
     finally:
         _stop_workers(pool)
+        if manager is not None:
+            try:
+                events.put(None)
+                pump.join(1)
+            except (EOFError, OSError):
+                pass
+            manager.shutdown()
 
     for mix in mixes:
         if mix["state"] not in RESOLVED and mix["bound"] is not None and mix["bound"] >= best:
             mix["state"] = "skipped_capex" if mix["state"] == "not_run" else "dominated"
+            if progress:
+                progress.mix(mix)
     return mixes
 
 
@@ -529,8 +680,12 @@ def _report(scenario, inputs, p: Problem, flows: dict) -> dict:
             "total_horizon_usd": p.horizon * annual, "primal": p.horizon * annual}
 
 
-def resolve(scenario: Scenario, inputs=None, candidates=None, rates=None) -> Solution:
-    """Solve a scenario across all refinery mixes and label the result by what was actually proven."""
+def resolve(scenario: Scenario, inputs=None, candidates=None, rates=None, on_event=None, stop=None) -> Solution:
+    """Solve a scenario across all refinery mixes and label the result by what was actually proven.
+
+    `on_event` receives plain dicts as the run happens, from more than one thread. Setting the `stop` event abandons
+    the run: its workers end and SolveCancelled is raised.
+    """
     started = time.monotonic()
     inputs = load_inputs() if inputs is None else inputs
     p = build_problem(scenario, inputs, _refinery_pool(scenario, candidates), rates)
@@ -540,7 +695,15 @@ def resolve(scenario: Scenario, inputs=None, candidates=None, rates=None) -> Sol
 
     budget = min(scenario.time_limit_s, MAX_SOLVE_S)
     reserve = min(7.0, budget * 0.2)
-    mixes = run_portfolio(p, budget - reserve, grace_s=reserve * 0.3)
+    if on_event is None:
+        mixes = run_portfolio(p, budget - reserve, grace_s=reserve * 0.3)
+    else:
+        nodes = _nodes(inputs)
+        on_event({"type": "start", "budget_s": budget, "candidates": list(p.refineries), "n_depots": len(p.depots),
+                  "airports": [{"id": a, **nodes[a]} for a in p.demand]})
+        mixes = run_portfolio(p, budget - reserve, grace_s=reserve * 0.3, on_event=on_event, stop=stop)
+    if stop is not None and stop.is_set():
+        raise SolveCancelled
     portfolios = [portfolio_row(mix) for mix in mixes]
     found = [mix for mix in mixes if mix["primal"] is not None]
     if not found:
@@ -552,6 +715,8 @@ def resolve(scenario: Scenario, inputs=None, candidates=None, rates=None) -> Sol
 
     winner = min(found, key=lambda mix: mix["primal"])
     fixed = {"depots": set(winner["depots"]), "refineries": set(winner["refineries"])}
+    if on_event is not None:
+        on_event({"type": "phase", "phase": "polish"})
     try:
         clean = solve_mix(p, winner["n_large"], winner["n_small"], max(reserve * 0.7, 0.1), fixed=fixed)
     except Exception:
