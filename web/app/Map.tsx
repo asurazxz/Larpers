@@ -8,6 +8,7 @@ import L from 'leaflet';
 import { AttributionControl, CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer } from 'react-leaflet';
 import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
+import rawRoads from '../data/roads.json';
 import rawRoutes from '../data/routes.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
 import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
@@ -90,6 +91,24 @@ function routeOf(key: string): [number, number][] | undefined {
     return decoded.get(key);
 }
 const SNAP_GAP_M = 1000;
+
+// Offline OSM road layer (web/data/roads.json): one multi-line per class, decoded once. Display only.
+type RoadClass = 'motorway' | 'trunk' | 'primary' | 'secondary';
+const ROAD_STYLE: Record<RoadClass, { color: string; weight: number }> = {
+    motorway: { color: '#9a9aa0', weight: 2.2 },
+    trunk: { color: '#9a9aa0', weight: 1.8 },
+    primary: { color: '#ababb1', weight: 1.3 },
+    secondary: { color: '#c2c2c7', weight: 0.8 },
+};
+const ROAD_ORDER: RoadClass[] = ['secondary', 'primary', 'trunk', 'motorway'];
+let roadLines: Record<RoadClass, [number, number][][]> | null = null;
+function roadsByClass() {
+    if (!roadLines) {
+        const raw = rawRoads as Record<RoadClass, string[]>;
+        roadLines = Object.fromEntries(ROAD_ORDER.map((c) => [c, raw[c].map(decodePolyline)])) as Record<RoadClass, [number, number][][]>;
+    }
+    return roadLines;
+}
 type LatLon = [number, number];
 
 /**
@@ -213,6 +232,21 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                     interactive={false}
                 />
             </Pane>
+
+            {/* OSM main roads, offline, above the land layer and below everything else. Hidden under OSM tiles,
+                which already draw them. */}
+            {basemap !== 'osm' && (
+                <Pane name="roads" style={{ zIndex: 250 }}>
+                    {ROAD_ORDER.map((c) => (
+                        <Polyline
+                            key={c}
+                            positions={roadsByClass()[c]}
+                            interactive={false}
+                            pathOptions={{ ...ROAD_STYLE[c], opacity: 0.9, lineCap: 'round', lineJoin: 'round' }}
+                        />
+                    ))}
+                </Pane>
+            )}
 
             {/* Flows, coloured by leg, along OSRM car routes where stored (display only; dashed = straight line, snap
                 gap or TRK barge). 0 km co-located flows are kept in the data but not drawn. */}
