@@ -2,6 +2,7 @@
 
 // Cost, solver state, audit and baseline comparison. Every value is read from the run; anything the run
 // does not carry shows "not in this run". Bars are plain divs, no chart library.
+import { useEffect, useRef, useState } from 'react';
 import type { Leg, Portfolio, Solution } from '../lib/contract';
 import { bundle, solutionOf } from '../lib/bundle';
 import { LEG_LABEL, MISSING, orMissing, pct, seconds, statusLabel, usd } from '../lib/format';
@@ -161,7 +162,34 @@ const ANNUAL_ROWS = (a: AnnualCost): [string, string, number | null][] => [
 ];
 
 /** Always-visible summary: total annual cost (organisers' basis), solver status, audit and the baseline saving. */
-export function CostSummary({ solution, baseline }: { solution: Solution | null; baseline: Solution | null }) {
+const TWEEN_MS = 650;
+
+/** Counts from the previous figure to the new one, and always lands on the exact value. */
+function Tweened({ value, format, hold }: { value: number | null; format: (v: number | null) => string; hold: boolean }) {
+    const [shown, setShown] = useState(value);
+    const from = useRef(value);
+    useEffect(() => {
+        if (hold) return undefined;
+        const start = from.current;
+        from.current = value;
+        if (value === null || start === null || start === value || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            setShown(value);
+            return undefined;
+        }
+        const began = performance.now();
+        let frame = 0;
+        const step = (now: number) => {
+            const t = Math.min(1, (now - began) / TWEEN_MS);
+            setShown(t < 1 ? start + (value - start) * (1 - (1 - t) ** 3) : value);
+            if (t < 1) frame = requestAnimationFrame(step);
+        };
+        frame = requestAnimationFrame(step);
+        return () => cancelAnimationFrame(frame);
+    }, [value, hold]);
+    return <>{format(shown)}</>;
+}
+
+export function CostSummary({ solution, baseline, hold = false }: { solution: Solution | null; baseline: Solution | null; hold?: boolean }) {
     if (!solution) return <div className="text-base text-ink2">No run selected: {MISSING}.</div>;
     const s = solution;
     const { H, capex, horizonTotal, annual, total, baseTotal, saving } = derive(s, baseline);
@@ -173,9 +201,9 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
                 <AuditBadge s={s} />
             </div>
             <div className="mt-0.5 flex items-baseline justify-between gap-3">
-                <span className="flex items-baseline gap-1.5">
+                <span className="flex shrink-0 items-baseline gap-1.5">
                     <span id="cost-total" className="figure-xl">
-                        {usd(total)}
+                        <Tweened value={total} format={usd} hold={hold} />
                     </span>
                     {total !== null && <span className="text-base text-ink2">/ yr</span>}
                 </span>

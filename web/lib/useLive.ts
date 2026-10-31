@@ -2,7 +2,7 @@
 // The page keeps `solution` as the single source of truth; a live result is displayed by
 // passing it to setSolution, exactly as a stored run is.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, AuthRequiredError, baseline, health, liveEnabled, solve } from './api';
+import { ApiError, AuthRequiredError, baseline, health, liveEnabled, solveStream } from './api';
 import { bundle, getEntry, siteById, sites, slugs, solutionOf } from './bundle';
 import {
     AIRPORTS,
@@ -14,6 +14,7 @@ import {
     type Scenario,
     type Solution,
 } from './contract';
+import type { SolveFeed } from './solveProgress';
 import { baseView, disruptView, gridView, type View } from './view';
 
 // ---------- Options (sweep values from the brief amendments) ----------
@@ -273,14 +274,19 @@ function describeError(err: unknown): string {
     return `Run failed: ${err instanceof Error ? err.message : String(err)}. Still showing the previous run.`;
 }
 
-/** Runs solve and baseline in parallel with a ticking elapsed counter. */
-export function useLiveRunner(onResult: (run: LiveRun) => void, onFailure?: () => void) {
+/** How long the finished solve stays on screen before the panel clears. */
+export const RESULT_LINGER_MS = 1_800;
+
+/** Runs solve and baseline in parallel with a ticking elapsed counter, feeding the solver's progress to `feed`. */
+export function useLiveRunner(onResult: (run: LiveRun) => void, feed: SolveFeed, onFailure?: () => void) {
     const [state, setState] = useState<RunState>({ phase: 'idle', startedAt: null, elapsedS: 0, message: null, runId: null });
     const controller = useRef<AbortController | null>(null);
     const resultRef = useRef(onResult);
     const failureRef = useRef(onFailure);
+    const feedRef = useRef(feed);
     resultRef.current = onResult;
     failureRef.current = onFailure;
+    feedRef.current = feed;
 
     useEffect(() => {
         if (state.phase !== 'running' || state.startedAt === null) return;
@@ -299,10 +305,14 @@ export function useLiveRunner(onResult: (run: LiveRun) => void, onFailure?: () =
         controller.current = ctl;
         const startedAt = Date.now();
         setState({ phase: 'running', startedAt, elapsedS: 0, message: null, runId: null });
+        feedRef.current.begin();
 
         const [sol, base] = await Promise.allSettled([
-            solve(scenario, { signal: ctl.signal }),
-            baseline(scenario, { signal: ctl.signal }),
+            solveStream(scenario, { signal: ctl.signal, onEvent: (e) => controller.current === ctl && feedRef.current.push(e) }),
+            baseline(scenario, { signal: ctl.signal }).then((b) => {
+                if (controller.current === ctl) feedRef.current.setGreedy({ ...b, scenario });
+                return b;
+            }),
         ]);
         if (controller.current !== ctl) return; // superseded by a newer run
         controller.current = null;
@@ -310,6 +320,7 @@ export function useLiveRunner(onResult: (run: LiveRun) => void, onFailure?: () =
 
         if (sol.status === 'rejected') {
             const err = sol.reason;
+            feedRef.current.end();
             if (err instanceof AuthRequiredError) {
                 setState({ phase: 'auth', startedAt: null, elapsedS, message: err.message, runId: null });
             } else {
@@ -322,6 +333,7 @@ export function useLiveRunner(onResult: (run: LiveRun) => void, onFailure?: () =
         // If the API does not echo the scenario, attach the one we sent (the map draws exclusions from it).
         const solution = sol.value && !sol.value.scenario ? { ...sol.value, scenario } : sol.value;
         if (!solution || !Array.isArray(solution.flows) || !Array.isArray(solution.facilities)) {
+            feedRef.current.end();
             setState({
                 phase: 'error',
                 startedAt: null,
@@ -337,6 +349,7 @@ export function useLiveRunner(onResult: (run: LiveRun) => void, onFailure?: () =
                     ? base.reason.message
                     : String(base.reason)
                 : null;
+        feedRef.current.end(RESULT_LINGER_MS);
         resultRef.current({
             solution,
             baseline: base.status === 'fulfilled' ? base.value : null,

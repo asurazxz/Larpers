@@ -33,3 +33,4 @@ One line per call, with the reason. Newest at the bottom.
 | 14:58 | Haul limit, refinery and depot candidate lists, solve-time cap and solver cores are backend settings | None of the five comes from the organisers. Defaults reproduce the base case and keep stored-run hashes |
 | 14:58 | One facility of each type per site stays fixed | It is ours too, but stacking depots changes the audit, the contract and the map too close to submission |
 | 15:08 | Organiser values are defaults, not fixed: every rate, truck size, capacity, CapEx, OpEx and annualisation value can be overridden per scenario | Lead's instruction, for more control. Defaults are tested against `challenge3_parameters.xlsx`, and overridden runs are labelled "(custom parameters)" |
+| 15:12 | Live solve streaming and map animation added after the 14:00 freeze | Asked for at 14:41. It sits beside `POST /api/solve`, which is unchanged, and the frontend falls back to that endpoint if streaming is missing |
