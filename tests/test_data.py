@@ -51,6 +51,29 @@ def test_demand_shares_sum_to_one(airports):
     assert airports["demand_share"].sum() == pytest.approx(1.0)
 
 
+def test_official_demand_300_kt_per_airport(airports):
+    assert dict(zip(airports["iata"], airports["demand_kt"])) == {a: 300.0 for a in ["PNK", "PKN", "BPN", "TRK"]}
+    assert airports["demand_kt"].sum() == 1200.0
+
+
+def test_official_parameters():
+    p = prepare.load_parameters()
+    assert (p["yield"], p["road_factor"], p["capex_years"], p["fixed_opex_rate"]) == (0.20, 1.3, 20, 0.05)
+    assert p["capacity_basis"] == "biomass_input"
+    assert p["collection_policy"] == "optional"
+    by = {(f["facility"], f["size"]): f for f in p["facilities"]}
+    assert by[("refinery", "large")]["capacity_kt_biomass_in"] == 1087.0
+    assert by[("refinery", "small")]["variable_opex_usd_per_t_in"] == 60.0
+    assert by[("refinery", "large")]["variable_opex_usd_per_t_in"] == 55.0
+    assert by[("depot", "small")]["variable_opex_usd_per_t_in"] == 5.0
+    assert by[("depot", "large")]["variable_opex_usd_per_t_in"] == 4.0
+    assert by[("refinery", "large")]["annualised_capex_usd_per_year"] == 765e6 / 20
+    rates = {t["leg"]: t["usd_per_t_km"] for t in p["transport"]}
+    assert rates == {"supply_depot": 0.10, "depot_refinery": 0.12, "refinery_airport": 0.08}
+    # 1,200 kt SAF at 20% needs 6,000 kt biomass, within the 6,800 kt supply.
+    assert sum(p["demand_kt"].values()) / p["yield"] == pytest.approx(6000.0)
+
+
 def test_exactly_69_onshore(sites):
     assert int(sites["is_onshore"].sum()) == 69
     assert (sites["is_candidate"] == sites["is_onshore"]).all()
@@ -126,6 +149,7 @@ def test_processed_inputs_load():
     assert i.hav_km.shape == (84, 84)
     assert list(i.node_ids[-4:]) == ["PNK", "PKN", "BPN", "TRK"]
     assert len(i.data_hash) == 64
+    assert i.parameters["yield"] == 0.20
 
 
 def test_load_inputs_names_prepare_when_missing(tmp_path):
