@@ -121,6 +121,7 @@ export interface Portfolio {
     /** Defaults to 0. */
     solve_seconds?: number;
     reason?: string | null;
+    capex_usd?: number | null;
 }
 
 /** All fields have solver defaults (passed false, failures ["Not audited"]). */
@@ -137,6 +138,7 @@ export interface Solution {
     data_hash: string;
     scenario_hash: string;
     status: SolveStatus;
+    status_reason?: string | null;
     primal: number | null;
     bound: number | null;
     gap: number | null;
