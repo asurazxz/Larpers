@@ -64,9 +64,9 @@ module.exports = {
                 muted: '#64748B',
                 app: '#F8FAFC',
                 line: '#E2E8F0',
-                success: '#16A34A',
-                warning: '#D97706',
-                danger: '#DC2626',
+                success: '#15803D',
+                warning: '#B45309',
+                danger: '#B91C1C',
             },
             fontFamily: {
                 sans: [
@@ -85,10 +85,10 @@ module.exports = {
                 card: '16px',
             },
             boxShadow: {
-                card: '0 1px 2px rgba(11, 31, 51, 0.05), 0 6px 20px -6px rgba(11, 31, 51, 0.12)',
-                tile: '0 1px 2px rgba(11, 31, 51, 0.05), 0 4px 12px -4px rgba(11, 31, 51, 0.10)',
-                thumb: '0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 1px rgba(0, 0, 0, 0.04)',
-                float: '0 10px 40px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06)',
+                card: '0 1px 2px rgba(11, 31, 51, 0.06)',
+                tile: '0 1px 2px rgba(11, 31, 51, 0.06)',
+                thumb: '0 1px 2px rgba(0, 0, 0, 0.12)',
+                float: '0 8px 24px rgba(0, 0, 0, 0.14)',
             },
         },
     },

@@ -12,3 +12,5 @@ To refetch from a self-hosted server instead of the public demo:
     docker run -t -p 5000:5000 -v "$PWD:/data" ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/kalimantan-latest.osrm
     OSRM_URL=http://localhost:5000 python data/fetch_osrm_routes.py
 Swap /opt/car.lua for a truck profile to model trucks. Geofabrik's Kalimantan extract omits Sabah, Sarawak and Brunei.
+
+borneo.json: Natural Earth 1:10m land via world-atlas 2.0.2 (public domain).
