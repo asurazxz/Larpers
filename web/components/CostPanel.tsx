@@ -9,6 +9,8 @@ import { legSums } from '../lib/trace';
 import { annualCost, CAPEX_YEARS, FIXED_OPEX_SHARE, type AnnualCost } from '../lib/annual';
 import { Tween } from './motion';
 import { preUpdateBasis } from '../lib/basis';
+import { explainInput, fixedText, hasNoNetwork, plainReason } from '../lib/explain';
+import ExplainButton from './ExplainButton';
 import { Factory, ShieldCheck, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 
 const LEGS: Leg[] = ['supply_depot', 'depot_refinery', 'refinery_airport'];
@@ -104,6 +106,7 @@ function AuditBadge({ s }: { s: Solution }) {
     const v = s.validation;
     if (!v) return <span id="audit-result" className="text-base text-ink2">Audit: {MISSING}</span>;
     const failures = v.failures ?? [];
+    if (v.passed && hasNoNetwork(s)) return <span id="audit-result" data-passed="true" className="text-base text-ink2">No network to audit</span>;
     return (
         <span
             id="audit-result"
@@ -172,6 +175,9 @@ export function CostSummary({ solution, baseline, hold = false }: { solution: So
     const refineries = (s.facilities ?? []).filter((f) => f.type === 'refinery').length;
     const depots = (s.facilities ?? []).filter((f) => f.type === 'depot').length;
     const preUpdate = preUpdateBasis(s);
+    const noNetwork = hasNoNetwork(s);
+    const reason = plainReason(s.status_reason);
+    const explanation = explainInput(s, baseline);
     return (
         <div id="cost-summary" className="text-base leading-snug" data-run-id={s.run_id} data-annual-source={annual.fromSolver ? 'solver' : 'recomputed'}>
             <div className="grid grid-cols-2 gap-2">
@@ -189,19 +195,31 @@ export function CostSummary({ solution, baseline, hold = false }: { solution: So
                         </span>
                     </div>
                     <div className="mt-1 flex items-baseline gap-1.5">
-                        <Tween id="cost-total" className="figure-xl text-brand-ink" value={total} format={usd} start={!hold} />
-                        {total !== null && <span className="text-base text-ink2">/ yr</span>}
+                        {noNetwork ? (
+                            <span id="cost-total" className="figure-xl text-brand-ink">
+                                No network
+                            </span>
+                        ) : (
+                            <Tween id="cost-total" className="figure-xl text-brand-ink" value={total} format={usd} start={!hold} />
+                        )}
+                        {total !== null && !noNetwork && <span className="text-base text-ink2">/ yr</span>}
                     </div>
-                    <div id="annual-rows" className="mt-1 grid grid-cols-2 gap-x-5 gap-y-0.5">
-                        {ANNUAL_ROWS(annual).map(([id, k, v]) => (
-                            <div key={id} id={id} className="flex items-baseline justify-between gap-2">
-                                <span className="text-ink2">{k}</span>
-                                <Tween className="num font-medium" value={v} format={usd} start={!hold} />
-                            </div>
-                        ))}
-                    </div>
+                    {noNetwork ? (
+                        <div id="no-network-reason" className="mt-1 text-ink2">
+                            {reason.charAt(0).toUpperCase() + reason.slice(1)}.
+                        </div>
+                    ) : (
+                        <div id="annual-rows" className="mt-1 grid grid-cols-2 gap-x-5 gap-y-0.5">
+                            {ANNUAL_ROWS(annual).map(([id, k, v]) => (
+                                <div key={id} id={id} className="flex items-baseline justify-between gap-2">
+                                    <span className="text-ink2">{k}</span>
+                                    <Tween className="num font-medium" value={v} format={usd} start={!hold} />
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
-                {baseline && baseTotal !== null && total !== null ? (
+                {noNetwork ? null : baseline && baseTotal !== null && total !== null ? (
                     <div id="baseline-compare" className="tile col-span-2 flex items-center justify-between gap-3 py-2" data-kpi="saving">
                         <span className="flex items-center gap-2 text-ink2">
                             <span
@@ -241,6 +259,8 @@ export function CostSummary({ solution, baseline, hold = false }: { solution: So
                     </span>
                 </div>
             </div>
+            {explanation && <ExplainButton key={s.run_id} id="explain" input={explanation} fixedText={fixedText(explanation)} />}
+            {!noNetwork && (
             <div className="mt-1.5 px-1 leading-tight text-ink2" id="objective-note">
                 {preUpdate ? (
                     <span data-testid="pre-update-basis" title={`Stored run's scenario: ${preUpdate.full}.`}>
@@ -259,6 +279,7 @@ export function CostSummary({ solution, baseline, hold = false }: { solution: So
                 . One-off CapEx <span className="num">{usd(capex)}</span>; MILP objective <span className="num">{usd(horizonTotal)}</span> (H ={' '}
                 {orMissing(H, (h: number) => `${h} yr`)}).
             </div>
+            )}
             {failures.length > 0 && (
                 <ul className="mt-1 list-disc pl-5 text-orange-900">
                     {failures.map((f) => (
@@ -296,7 +317,7 @@ export default function CostPanel({ solution, baseline }: { solution: Solution |
 
     return (
         <div id="cost-panel" data-run-id={s.run_id}>
-            <Fold
+            {!hasNoNetwork(s) && <Fold
                 id="cost-breakdown"
                 title={
                     <>
@@ -366,7 +387,7 @@ export default function CostPanel({ solution, baseline }: { solution: Solution |
                         </div>
                     </>
                 )}
-            </Fold>
+            </Fold>}
 
             <Fold
                 id="solver-state"

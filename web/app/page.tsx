@@ -139,14 +139,14 @@ function Planner() {
                         onSelectNode={(id) => setPickedNode((p) => ({ id, seq: (p?.seq ?? 0) + 1 }))}
                     />
                     {/* Arc-click trace panel, floating over the map. */}
-                    <div id="trace-slot" className="pointer-events-none absolute bottom-3 left-3 z-[1000]">
+                    <div id="trace-slot" className="pointer-events-none absolute bottom-3 left-3 z-[1000] flex max-h-[calc(100%-1.5rem)]">
                         <Trace solution={solution} selected={selected} onClose={() => setSelected(null)} />
                     </div>
                 </div>
 
                 <aside id="right-column" className="relative min-w-0 pb-3 md:h-full md:flex-[2_1_0%] md:overflow-y-auto">
                     {/* Pinned summary: total, status, audit and baseline stay visible while the column scrolls. */}
-                    <div id="panel-summary" className="z-10 bg-canvas pb-3 md:sticky md:top-0">
+                    <div id="panel-summary" className="z-10 bg-canvas pb-3 md:sticky md:top-0 md:max-h-full md:overflow-y-auto">
                         <div className="card relative overflow-hidden bg-gradient-to-b from-white to-[#f6faf9] px-3.5 py-3">
                             <div key={solution?.run_id} className="result-in pointer-events-none absolute inset-0 rounded-card" aria-hidden="true" />
                             <div className={`transition-opacity duration-300 ${running ? 'opacity-0' : ''}`}>

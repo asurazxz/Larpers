@@ -6,6 +6,8 @@ import { useEffect } from 'react';
 import type { Flow, Solution } from '../lib/contract';
 import { LEG_LABEL, MISSING, usdExact } from '../lib/format';
 import { EARTH_RADIUS_KM, KM_TOL, runRoadFactor, traceFlow } from '../lib/trace';
+import { traceFacts, traceFallback } from '../lib/traceFacts';
+import ExplainButton from './ExplainButton';
 
 const n = (v: number, dp: number) =>
     Number.isFinite(v) ? v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }) : MISSING;
@@ -41,7 +43,7 @@ export default function Trace({ solution, selected, onClose }: TraceProps) {
     if (solution.flows[index] !== flow) return null;
     const rf = runRoadFactor(solution, flow);
     const box =
-        'pointer-events-auto w-[36rem] max-w-[calc(100vw-3rem)] rounded-[18px] md:max-w-[calc(60vw-2rem)] border bg-white/90 px-4 py-3 text-base shadow-float backdrop-blur-xl backdrop-saturate-150';
+        'pointer-events-auto w-[36rem] max-w-[calc(100vw-3rem)] overflow-y-auto rounded-[18px] md:max-w-[calc(60vw-2rem)] border bg-white/90 px-4 py-3 text-base shadow-float backdrop-blur-xl backdrop-saturate-150';
 
     if (!rf) {
         return (
@@ -52,6 +54,7 @@ export default function Trace({ solution, selected, onClose }: TraceProps) {
     }
     const t = traceFlow(flow, rf);
     const commodity = flow.commodity === 'saf' ? 'SAF' : flow.commodity === 'biomass' ? 'biomass' : '';
+    const facts = traceFacts(solution, flow, t);
 
     return (
         <div
@@ -61,7 +64,7 @@ export default function Trace({ solution, selected, onClose }: TraceProps) {
             role="region"
             aria-label="Flow trace"
         >
-            <div className="flex items-start justify-between gap-2">
+            <div id="trace-header" className="sticky -top-3 z-10 -mx-4 -mt-3 flex items-start justify-between gap-2 bg-white px-4 pb-1 pt-3">
                 <div className="min-w-0">
                     <div className="font-semibold tracking-[-0.01em]">
                         Trace: {LEG_LABEL[flow.leg]} {commodity && <span className="font-normal text-ink2">({commodity})</span>}
@@ -117,6 +120,7 @@ export default function Trace({ solution, selected, onClose }: TraceProps) {
                     stored {usdExact(t.storedCost)}, Δ {usdExact(t.dCost)} (tol {usdExact(t.costTol)}) <Verdict ok={t.costOk} />
                 </div>
             </div>
+            <ExplainButton key={`${solution.run_id}:${index}`} id="trace-explain" input={{ kind: 'trace', facts }} fixedText={traceFallback(facts)} />
         </div>
     );
 }

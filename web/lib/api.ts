@@ -1,8 +1,9 @@
 // Client for Damien's FastAPI solver (api/main.py).
 // Public: GET /api/health, GET /api/data, POST /api/validate.
-// Signed-in: POST /api/solve, POST /api/solve/stream, POST /api/baseline, POST /api/explain,
+// Signed-in: POST /api/solve, POST /api/solve/stream, POST /api/baseline, POST /api/explain, POST /api/plain-english,
 // with Authorization: Bearer <Supabase access token>.
 import type { AuditReport, Scenario, Solution } from './contract';
+import type { ExplainInput } from './explain';
 import type { SolveEvent } from './solveProgress';
 import { getAccessToken, refreshAccessToken } from './supabase';
 
@@ -16,12 +17,19 @@ export const DEFAULT_TIMEOUT_MS = 30_000;
 export const EXPLAIN_TIMEOUT_MS = 30_000;
 /** The API sends a line at least every 2 s during a run, so this much silence means the connection died. */
 export const STREAM_IDLE_MS = 15_000;
+export const PLAIN_ENGLISH_TIMEOUT_MS = 20_000; // above the API's 16 s worst case, so its empty answer arrives first
 
 // Fixed unless a caller overrides them explicitly.
 export const SCENARIO_DEFAULTS = { depot_retention: 1, time_limit_s: 90 } as const;
 
 export type ScenarioInput = Partial<Scenario>;
 export type { AuditReport };
+
+export interface PlainEnglishResult {
+    run_id: string;
+    text: string | null;
+    model: string | null;
+}
 
 /** One number-bearing statement computed from the run by the API (api/explain.py). */
 export interface ExplainFact {
@@ -109,6 +117,7 @@ export interface ApiClient {
     solveStream(scenario: ScenarioInput, opts: StreamOptions): Promise<Solution>;
     baseline(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution>;
     explain(scenario: ScenarioInput, solution: Solution, baseline: Solution | null, opts?: RequestOptions): Promise<Explanation>;
+    plainEnglish(input: ExplainInput, opts?: RequestOptions): Promise<PlainEnglishResult>;
 }
 
 // Applies depot_retention 1 and time_limit_s 90 when the caller left them out.
@@ -417,6 +426,10 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
             }
             return authedPost<Explanation>('/api/explain', body, { ...opts, timeoutMs: opts.timeoutMs ?? EXPLAIN_TIMEOUT_MS });
         },
+
+        plainEnglish(input: ExplainInput, opts?: RequestOptions): Promise<PlainEnglishResult> {
+            return authedPost<PlainEnglishResult>('/api/plain-english', input, { timeoutMs: PLAIN_ENGLISH_TIMEOUT_MS, ...opts });
+        },
     };
 }
 
@@ -437,3 +450,4 @@ export const explain = (
     baseline: Solution | null,
     opts?: RequestOptions,
 ): Promise<Explanation> => api.explain(scenario, solution, baseline, opts);
+export const plainEnglish = (input: ExplainInput, opts?: RequestOptions): Promise<PlainEnglishResult> => api.plainEnglish(input, opts);
