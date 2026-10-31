@@ -23,20 +23,26 @@ import Trace from '../components/Trace';
 import Landing from '../components/Landing';
 import Explanation from '../components/Explanation';
 import { reducedMotion } from '../components/motion';
+import { FlaskConical, Receipt, ShieldCheck, SlidersHorizontal, Zap, type LucideIcon } from 'lucide-react';
 
 const SafMap = dynamic(() => import('./Map'), {
     ssr: false,
     loading: () => <div className="flex h-full items-center justify-center text-ink2">Loading map…</div>,
 });
 
-function Section({ id, title, aside, children }: { id: string; title: string; aside?: string; children?: React.ReactNode }) {
+function Section({ id, title, aside, icon: Icon, children }: { id: string; title: string; aside?: string; icon: LucideIcon; children?: React.ReactNode }) {
     return (
         <section id={id} className="card px-5 py-3.5">
-            <h2 className="flex items-baseline justify-between gap-3">
-                <span className="card-title">{title}</span>
-                {aside && <span className="text-base text-ink2">{aside}</span>}
+            <h2 className="flex items-center justify-between gap-3">
+                <span className="card-head">
+                    <span className="card-icon" aria-hidden="true">
+                        <Icon size={17} strokeWidth={2.25} />
+                    </span>
+                    <span className="card-title">{title}</span>
+                </span>
+                {aside && <span className="rounded-full bg-track px-2.5 text-base font-medium text-ink3">{aside}</span>}
             </h2>
-            <div className="mt-1.5">{children}</div>
+            <div className="mt-2">{children}</div>
         </section>
     );
 }
@@ -103,9 +109,12 @@ function Planner() {
     }, []);
 
     return (
-        <div className="flex min-h-screen flex-col bg-canvas text-ink md:h-screen md:overflow-hidden" data-view={view.kind}>
+        <div
+            className="flex min-h-screen flex-col bg-canvas bg-[radial-gradient(90%_60%_at_100%_0%,rgba(20,184,166,0.08)_0%,transparent_60%),radial-gradient(70%_50%_at_0%_100%,rgba(245,158,11,0.06)_0%,transparent_60%)] text-ink md:h-screen md:overflow-hidden"
+            data-view={view.kind}
+        >
             {/* Translucent header: run label, badge (#header-badge), auth (#auth-slot) and the provenance strip. */}
-            <div className="relative z-[1100] bg-white/80 backdrop-blur-xl backdrop-saturate-150 hair-b md:sticky md:top-0">
+            <div className="relative z-[1100] bg-white/85 shadow-[0_4px_16px_-8px_rgba(11,31,51,0.25)] backdrop-blur-xl backdrop-saturate-150 hair-b md:sticky md:top-0">
                 <Header solution={solution} view={view} health={solverHealth} isLive={isLive} />
                 <Provenance solution={solution} entry={entry} live={isLive} />
             </div>
@@ -114,7 +123,7 @@ function Planner() {
             <main className="flex flex-col gap-3 px-3 pt-3 md:min-h-0 md:flex-1 md:flex-row">
                 <div
                     id="map-slot"
-                    className="relative h-[55vh] min-h-[320px] min-w-0 overflow-hidden rounded-card bg-white shadow-card md:h-full md:min-h-0 md:flex-[3_1_0%]"
+                    className="relative h-[55vh] min-h-[320px] min-w-0 overflow-hidden rounded-card border border-hairline bg-white shadow-card md:h-full md:min-h-0 md:flex-[3_1_0%]"
                 >
                     <SafMap
                         solution={solution}
@@ -133,13 +142,13 @@ function Planner() {
                 <aside id="right-column" className="min-w-0 pb-3 md:h-full md:flex-[2_1_0%] md:overflow-y-auto">
                     {/* Pinned summary: total, status, audit and baseline stay visible while the column scrolls. */}
                     <div id="panel-summary" className="z-10 bg-canvas pb-3 md:sticky md:top-0">
-                        <div className="card px-5 py-3">
+                        <div className="card bg-gradient-to-b from-white to-[#f6faf9] px-3.5 py-3">
                             <CostSummary solution={solution} baseline={costBaseline} />
                         </div>
                     </div>
                     <div className="space-y-3">
                         {liveRun && isLiveDisplayed(solution, liveRun) && <Explanation run={liveRun} />}
-                        <Section id="panel-scenario" title="Scenario and run">
+                        <Section id="panel-scenario" title="Scenario and run" icon={SlidersHorizontal}>
                             <ScenarioPanel
                                 solution={solution}
                                 health={solverHealth}
@@ -154,17 +163,17 @@ function Planner() {
                             />
                         </Section>
 
-                        <Section id="panel-cost" title="Cost detail" aside="USD">
+                        <Section id="panel-cost" title="Cost detail" aside="USD" icon={Receipt}>
                             <CostPanel solution={solution} baseline={costBaseline} />
                         </Section>
 
-                        <Section id="panel-assumptions" title="Assumptions">
+                        <Section id="panel-assumptions" title="Assumptions" icon={FlaskConical}>
                             <SweepPicker view={view} onSelect={selectView} />
                         </Section>
-                        <Section id="panel-disrupt" title="Disrupt" aside="at base assumptions">
+                        <Section id="panel-disrupt" title="Disrupt" aside="at base assumptions" icon={Zap}>
                             <Disrupt view={view} solution={solution} onSelect={selectView} focusSiteId={pickedNode?.id ?? null} />
                         </Section>
-                        <Section id="panel-robustness" title="Robustness">
+                        <Section id="panel-robustness" title="Robustness" icon={ShieldCheck}>
                             <Robustness kind={robustKind} onKindChange={setRobustKind} />
                         </Section>
                     </div>
