@@ -59,18 +59,26 @@ export interface AppState {
 
 const Ctx = createContext<AppState | null>(null);
 
+/** Workspace route of a hash (#results/compare → results, compare), or null for any other hash. */
+export function parseWorkspaceHash(hash: string): { page: PageKey; tab: string | null } | null {
+    const [p, t] = hash.replace(/^#\/?/, '').split('/');
+    return (PAGES as readonly string[]).includes(p) ? { page: p as PageKey, tab: t || null } : null;
+}
+
 function parseHash(): { page: PageKey; tab: string | null } {
     if (typeof window === 'undefined') return { page: 'overview', tab: null };
-    const [p, t] = window.location.hash.replace(/^#\/?/, '').split('/');
-    const page = (PAGES as readonly string[]).includes(p) ? (p as PageKey) : 'overview';
-    return { page, tab: t || null };
+    return parseWorkspaceHash(window.location.hash) ?? { page: 'overview', tab: null };
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-    const [{ page, tab }, setRoute] = useState<{ page: PageKey; tab: string | null }>({ page: 'overview', tab: null });
+    // AppProvider only mounts in the browser (app/page.tsx renders a placeholder until the hash is known).
+    const [{ page, tab }, setRoute] = useState<{ page: PageKey; tab: string | null }>(parseHash);
     useEffect(() => {
-        const sync = () => setRoute(parseHash());
-        sync();
+        // Leaving for #home or #planner unmounts the workspace; only workspace hashes move the route.
+        const sync = () => {
+            const r = parseWorkspaceHash(window.location.hash);
+            if (r) setRoute(r);
+        };
         window.addEventListener('hashchange', sync);
         return () => window.removeEventListener('hashchange', sync);
     }, []);
