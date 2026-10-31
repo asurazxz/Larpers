@@ -54,6 +54,7 @@ def test_sixteen_percent_adds_small_near_bpn(real_inputs):
     assert [(f.site_id, f.size) for f in result.facilities if f.type == "refinery"] == [("KAL_SUP_45", "large"), ("KAL_SUP_77", "small")]
     assert audit(scenario, result, inputs=real_inputs).passed
     assert sum(f.kt for f in result.flows if f.leg == "refinery_airport") == pytest.approx(1088)
+    assert Counter(f.from_id for f in result.flows if f.leg == "supply_depot") == Counter({s: 1 for s in real_inputs.sites.site_id})
 
 
 @pytest.mark.parametrize("policy", ["all", "optional"])
@@ -61,7 +62,12 @@ def test_unreachable_site_in_leftover_branch(policy):
     inputs, _, _ = tiny_case()
     inputs.sites.loc[1, ["is_candidate", "is_onshore"]] = False
     inputs.is_candidate[1] = False
+    # An unused eligible site exists, but is also outside the haul limit. The
+    # prototype's final else branch incorrectly opened it without checking this.
+    inputs.sites.loc[2, ["is_candidate", "is_onshore"]] = True
+    inputs.is_candidate[2] = True
     inputs.hav_km[0, 1] = inputs.hav_km[1, 0] = 215
+    inputs.hav_km[1, 2] = inputs.hav_km[2, 1] = 300
     scenario = Scenario(collection_policy=policy, demand_kt={"BPN": 8.37, "PNK": 4.755, "TRK": 1.125, "PKN": .75})
     result = run_baseline(scenario, inputs)
     if policy == "all":
