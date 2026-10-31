@@ -94,11 +94,12 @@ const SNAP_GAP_M = 1000;
 
 // Offline OSM road layer (web/data/roads.json): one multi-line per class, decoded once. Display only.
 type RoadClass = 'motorway' | 'trunk' | 'primary' | 'secondary';
-const ROAD_STYLE: Record<RoadClass, { color: string; weight: number }> = {
-    motorway: { color: '#9a9aa0', weight: 2.2 },
-    trunk: { color: '#9a9aa0', weight: 1.8 },
-    primary: { color: '#ababb1', weight: 1.3 },
-    secondary: { color: '#c2c2c7', weight: 0.8 },
+// Thin and dark: the layer sits above the flows, so a road shows through the flow drawn along it.
+const ROAD_STYLE: Record<RoadClass, { color: string; weight: number; opacity: number }> = {
+    motorway: { color: '#3a3a3f', weight: 1.6, opacity: 0.8 },
+    trunk: { color: '#3a3a3f', weight: 1.3, opacity: 0.75 },
+    primary: { color: '#55555b', weight: 1, opacity: 0.65 },
+    secondary: { color: '#77777d', weight: 0.7, opacity: 0.55 },
 };
 const ROAD_ORDER: RoadClass[] = ['secondary', 'primary', 'trunk', 'motorway'];
 let roadLines: Record<RoadClass, [number, number][][]> | null = null;
@@ -204,7 +205,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             maxBounds={MAX_BOUNDS}
             maxBoundsViscosity={1}
             minZoom={5}
-            maxZoom={11}
+            maxZoom={13}
             zoomSnap={0.25}
             preferCanvas
             renderer={renderer}
@@ -233,20 +234,18 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                 />
             </Pane>
 
-            {/* OSM main roads, offline, above the land layer and below everything else. Hidden under OSM tiles,
-                which already draw them. */}
-            {basemap !== 'osm' && (
-                <Pane name="roads" style={{ zIndex: 250 }}>
-                    {ROAD_ORDER.map((c) => (
-                        <Polyline
-                            key={c}
-                            positions={roadsByClass()[c]}
-                            interactive={false}
-                            pathOptions={{ ...ROAD_STYLE[c], opacity: 0.9, lineCap: 'round', lineJoin: 'round' }}
-                        />
-                    ))}
-                </Pane>
-            )}
+            {/* OSM main roads, offline, in every basemap mode. Above the flows (overlayPane 400) so a road shows through
+                the flow routed along it, below the markers (600). pointer-events none keeps flows clickable. */}
+            <Pane name="roads" style={{ zIndex: 450, pointerEvents: 'none' }}>
+                {ROAD_ORDER.map((c) => (
+                    <Polyline
+                        key={c}
+                        positions={roadsByClass()[c]}
+                        interactive={false}
+                        pathOptions={{ ...ROAD_STYLE[c], lineCap: 'round', lineJoin: 'round' }}
+                    />
+                ))}
+            </Pane>
 
             {/* Flows, coloured by leg, along OSRM car routes where stored (display only; dashed = straight line, snap
                 gap or TRK barge). 0 km co-located flows are kept in the data but not drawn. */}

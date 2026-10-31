@@ -40,7 +40,7 @@ function decode(str, factor) {
     return out;
 }
 
-// Douglas-Peucker in degrees: 0.002 deg is about 220 m, finer than a pixel at the map's max zoom of 11.
+// Douglas-Peucker in degrees: 0.002 deg is about 220 m, a pixel at zoom 9 and a few pixels at the max zoom of 13.
 const TOLERANCE_DEG = 0.002;
 
 function simplify(pts, tol = TOLERANCE_DEG) {
