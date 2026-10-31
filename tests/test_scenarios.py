@@ -120,6 +120,32 @@ def test_entry_fields_and_stored_label(tmp_path):
     assert entry["scenario"] == {"horizon_years": 5}
 
 
+def test_resume_reruns_when_scenario_or_solver_changes(tmp_path):
+    calls = []
+    run_all(make_runner(tmp_path, calls=calls, inputs=fake_inputs(parameters=OFFICIAL)), tiers=("T1",), stress=False)
+    calls.clear()
+    changed = {**OFFICIAL, "road_factor": 1.9}
+    run_all(make_runner(tmp_path, calls=calls, inputs=fake_inputs(parameters=changed)), tiers=("T1",), stress=False)
+    assert ("resolve", scenarios.official_base(changed)) in calls
+
+    calls.clear()
+    runner = make_runner(tmp_path, calls=calls, inputs=fake_inputs(parameters=changed))
+    object.__setattr__(runner, "solver_version", "new-objective")
+    run_all(runner, tiers=("T1",), stress=False)
+    assert any(c[0] == "baseline" for c in calls)
+    assert runner.bundle["runs"]["base"]["solver_version"] == "new-objective"
+
+
+def test_fresh_ignores_existing_bundle(tmp_path):
+    calls = []
+    run_all(make_runner(tmp_path, calls=calls), tiers=("T1",), stress=False)
+    calls.clear()
+    runner = make_runner(tmp_path, calls=calls)
+    runner.bundle = {"runs": {}}
+    run_all(runner, tiers=("T1",), stress=False)
+    assert calls
+
+
 def test_resume_skips_matching_hash_and_reruns_stale(tmp_path):
     calls = []
     run_all(make_runner(tmp_path, calls=calls), tiers=("T1",), stress=False)
