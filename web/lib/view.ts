@@ -96,3 +96,7 @@ export const BAND_COLOR: Record<Band, string> = {
     most: '#60a5fa', // light blue
     some: '#ea580c', // orange
 };
+
+/** Map basemap. 'none' is the offline land layer only and needs no network; it is the default and the stage setting. */
+export type Basemap = 'none' | 'osm' | 'carto';
+export const BASEMAP_LABEL: Record<Basemap, string> = { none: 'Offline', osm: 'OSM', carto: 'CARTO' };

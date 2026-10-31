@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
 import type { Flow, Solution } from '../lib/contract';
 import { baseEntry, sites, solutionOf } from '../lib/bundle';
-import { DEFAULT_VIEW, flowKey, type View } from '../lib/view';
+import { BASEMAP_LABEL, DEFAULT_VIEW, flowKey, type Basemap, type View } from '../lib/view';
 import Header from '../components/Header';
 import ScenarioPanel from '../components/ScenarioPanel';
 import { isLiveDisplayed, useSolverHealth, type LiveRun } from '../lib/useLive';
@@ -48,6 +48,7 @@ export default function Page() {
     const isLive = isLiveDisplayed(solution, liveRun) || (view.kind === 'disrupt' && !!view.live);
     /** Greedy baseline for the displayed live run (null for stored runs). */
     const baselineSolution = isLiveDisplayed(solution, liveRun) ? (liveRun?.baseline ?? null) : null;
+    const [basemap, setBasemap] = useState<Basemap>('none');
     const [pickedNode, setPickedNode] = useState<{ id: string; seq: number } | null>(null);
     const [selected, setSelected] = useState<{ flow: Flow; index: number } | null>(null);
     const highlight = useMemo(
@@ -89,9 +90,24 @@ export default function Page() {
                         sites={sites}
                         highlight={selected ? highlight : (viewHighlight ?? highlight)}
                         bandFor={bandFor}
+                        basemap={basemap}
                         onSelectFlow={(flow, index) => setSelected({ flow, index })}
                         onSelectNode={(id) => setPickedNode((p) => ({ id, seq: (p?.seq ?? 0) + 1 }))}
                     />
+                    {/* Basemap switch: Offline needs no network; OSM and CARTO load tiles. */}
+                    <div className="absolute right-3 top-3 z-[1000] flex overflow-hidden rounded-full bg-white/90 text-sm shadow-card">
+                        {(Object.keys(BASEMAP_LABEL) as Basemap[]).map((b) => (
+                            <button
+                                key={b}
+                                type="button"
+                                onClick={() => setBasemap(b)}
+                                aria-pressed={basemap === b}
+                                className={`px-3 py-1 ${basemap === b ? 'bg-ink text-white' : 'text-ink2 hover:text-ink'}`}
+                            >
+                                {BASEMAP_LABEL[b]}
+                            </button>
+                        ))}
+                    </div>
                     {/* Arc-click trace panel, floating over the map. */}
                     <div id="trace-slot" className="pointer-events-none absolute bottom-3 left-3 z-[1000]">
                         <Trace solution={solution} selected={selected} onClose={() => setSelected(null)} />

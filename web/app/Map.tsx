@@ -10,7 +10,7 @@ import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
 import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
-import { BAND_COLOR, flowKey, type Band } from '../lib/view';
+import { BAND_COLOR, flowKey, type Band, type Basemap } from '../lib/view';
 
 export interface MapProps {
     /** The run to draw. null draws sites only. */
@@ -23,11 +23,13 @@ export interface MapProps {
     onSelectFlow?: (flow: Flow, index: number) => void;
     /** Called when a facility, site or airport marker is clicked. */
     onSelectNode?: (id: string) => void;
-    /** Optional CARTO tiles under the land layer. Off by default and on stage. */
-    showTiles?: boolean;
+    /** Basemap tiles over the offline land layer. 'none' (the default, and on stage) needs no network. */
+    basemap?: Basemap;
     /** Robustness band of a site's district; banded sites get a blue/orange ring. Absent = no rings. */
     bandFor?: (siteId: string) => Band | null;
 }
+
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 export const KALIMANTAN_BOUNDS: L.LatLngBoundsExpression = [
     [-4.4, 108.5],
@@ -93,7 +95,7 @@ function PopupRows({ title, rows }: { title: string; rows: [string, string][] })
     );
 }
 
-export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, showTiles = false, bandFor }: MapProps) {
+export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, basemap = 'none', bandFor }: MapProps) {
     const renderer = useMemo(() => L.canvas({ padding: 0.5, tolerance: 6 }), []);
     const flows = useMemo(() => solution?.flows ?? [], [solution]);
     const facilities = useMemo(() => solution?.facilities ?? [], [solution]);
@@ -154,13 +156,18 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             zoomSnap={0.25}
             preferCanvas
             renderer={renderer}
-            attributionControl={showTiles}
+            attributionControl={basemap !== 'none'}
             style={{ height: '100%', width: '100%', background: SEA }}
         >
-            {showTiles && (
+            {/* OSM tile usage policy: attribution always shown, no prefetching, maxZoom 19. */}
+            {basemap === 'osm' && (
+                <TileLayer key="osm" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={OSM_ATTRIBUTION} maxZoom={19} />
+            )}
+            {basemap === 'carto' && (
                 <TileLayer
+                    key="carto"
                     url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+                    attribution={`${OSM_ATTRIBUTION} &copy; CARTO`}
                 />
             )}
             {/* Offline land layer, below tilePane (200) so tiles, if on and loaded, cover it. */}
