@@ -1,5 +1,6 @@
 'use client';
 
+import RunExplain from '../RunExplain';
 import { useApp } from '../../lib/store';
 import { statusLabel } from '../../lib/format';
 import { EmptyState, Tabs } from '../common/ui';
@@ -31,7 +32,12 @@ export default function ResultsPage() {
                     <EmptyState title="No run to show">Run or load a scenario first.</EmptyState>
                 ) : (
                     <>
-                        {active === 'overview' && <Overview solution={solution} />}
+                        {active === 'overview' && (
+                            <div className="space-y-5">
+                                <RunExplain />
+                                <Overview solution={solution} />
+                            </div>
+                        )}
                         {active === 'costs' && <Costs solution={solution} />}
                         {active === 'facilities' && <FacilitiesTable solution={solution} />}
                         {active === 'flows' && <FlowsTable solution={solution} />}

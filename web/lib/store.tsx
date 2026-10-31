@@ -13,7 +13,7 @@ import { storedBaselineFor } from '../components/CostPanel';
 import { createSolveFeed, type SolveFeed } from './solveProgress';
 import type { Band } from './view';
 
-export const PAGES = ['overview', 'network', 'scenarios', 'results', 'reliability'] as const;
+export const PAGES = ['overview', 'network', 'scenarios', 'results', 'reliability', 'live'] as const;
 export type PageKey = (typeof PAGES)[number];
 
 export interface SelectedFlow {

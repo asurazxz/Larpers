@@ -5,7 +5,8 @@ import { useEffect, useState, type ComponentType } from 'react';
 import AuthButton from '../AuthButton';
 import { getCurrentForm } from '../../lib/useLive';
 import { useApp, type PageKey } from '../../lib/store';
-import { getEntry, slugs, solutionOf } from '../../lib/bundle';
+import { getEntry, getSolution, slugs, solutionOf } from '../../lib/bundle';
+import { runKind, runLabel, type RunKind } from '../../lib/runs';
 import { storedSlugOf, viewForEntry } from '../../lib/useLive';
 import { useSession } from '../../lib/auth';
 import { isProvenOptimal, pct, statusLabel } from '../../lib/format';
@@ -46,7 +47,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
             </ul>
             <ul className="flex flex-col gap-1 px-3 pb-4">
                 <li>
-                    <button type="button" onClick={() => go('scenarios')} title="Run the solver and watch the live solve" className={item(false)}>
+                    <button type="button" onClick={() => go('live')} aria-label="Live solve view" aria-current={page === 'live' ? 'page' : undefined} title="Stream a live solve and explain the result" className={item(page === 'live')}>
                         <IconBolt />
                         {!collapsed && 'Live solve view'}
                     </button>
@@ -81,6 +82,19 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
     );
 }
 
+// Optimal and greedy come first: they are the comparison the page is built around.
+const RUN_GROUPS: { label: string; kinds: RunKind[] }[] = [
+    { label: 'Optimal vs greedy', kinds: ['base', 'baseline'] },
+    { label: 'Comparison', kinds: ['earlier', 'sensitivity', 'other'] },
+    { label: 'Disruptions', kinds: ['disruption'] },
+];
+
+/** Says "Optimal" only when the stored run proves it. */
+function runOptionLabel(slug: string): string {
+    const stored = getSolution(slug);
+    return slug === 'base' && stored && isProvenOptimal(stored) ? 'Optimal network (base)' : runLabel(slug);
+}
+
 function RunSelect() {
     const { solution, isLive, liveRun, selectView, setSolution } = useApp();
     const slug = isLive ? '__live' : (storedSlugOf(solution) ?? '');
@@ -99,12 +113,18 @@ function RunSelect() {
             >
                 {liveRun && <option value="__live">Live run {liveRun.solution.run_id.slice(0, 8)}</option>}
                 {!isLive && slug === '' && <option value="">{solution ? 'Unsaved view' : 'No run'}</option>}
-                {slugs().map((s) => {
-                    const e = getEntry(s)!;
+                {RUN_GROUPS.map((g) => {
+                    const list = slugs().filter((s) => g.kinds.includes(runKind(s, false)));
                     return (
-                        <option key={s} value={s}>
-                            {(e.label ?? (s === 'base' ? 'Base Scenario' : s)) + ' (stored run)'}
-                        </option>
+                        list.length > 0 && (
+                            <optgroup key={g.label} label={g.label}>
+                                {list.map((s) => (
+                                    <option key={s} value={s}>
+                                        {runOptionLabel(s)}
+                                    </option>
+                                ))}
+                            </optgroup>
+                        )
                     );
                 })}
             </select>
@@ -123,7 +143,7 @@ function StatusChip() {
     return (
         <span className={`chip ${cls}`} title={statusLabel(solution)}>
             <IconCheckCircle />
-            {bad ? 'Infeasible' : optimal ? 'Proven optimal' : 'Best found'}
+            {bad ? 'Infeasible' : optimal ? 'Proven optimal' : solution.status === 'heuristic' ? 'Greedy heuristic' : 'Best found'}
             {!bad && solution.gap != null && <span className="num">· Gap {pct(solution.gap, 2)}</span>}
             {!bad && audited && <span className="font-normal">· audited</span>}
         </span>

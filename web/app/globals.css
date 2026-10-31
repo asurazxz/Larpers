@@ -398,3 +398,37 @@ details[open] > :not(summary) {
         font-size: 14px;
     }
 }
+
+/* Live Solve: the shared ScenarioPanel in the workspace look. Scoped to the page, so #planner keeps its
+   projector sizes, and written against the id so it wins over the panel's own utility classes. */
+[data-page='live'] #panel-scenario .text-base {
+    @apply text-[14px] leading-5;
+}
+[data-page='live'] #panel-scenario .text-ink2,
+[data-page='live'] #panel-scenario .text-ink3 {
+    @apply text-muted;
+}
+[data-page='live'] #panel-scenario label > span:first-child,
+[data-page='live'] #panel-scenario span.mb-0\.5 {
+    @apply text-[13px] font-medium text-deep;
+}
+[data-page='live'] #panel-scenario span.mb-0\.5 {
+    margin-bottom: 4px;
+}
+[data-page='live'] #panel-scenario .num {
+    @apply text-deep;
+}
+[data-page='live'] #panel-scenario .pill-primary {
+    @apply rounded-lg border-transparent bg-primary px-6 py-2 text-[14px] font-medium text-white shadow-none hover:brightness-110;
+    background-image: none;
+}
+[data-page='live'] #panel-scenario .pill-secondary,
+[data-page='live'] #panel-scenario .pill-link {
+    @apply rounded-lg border border-line bg-white px-4 py-2 text-[14px] font-medium text-deep shadow-none hover:bg-slate-50;
+}
+[data-page='live'] #panel-scenario .field {
+    @apply rounded-lg border-line px-3 py-2 text-[14px] text-deep shadow-none hover:border-line focus:border-primary;
+}
+[data-page='live'] #panel-scenario input[type='checkbox'] {
+    accent-color: #2563eb;
+}

@@ -295,7 +295,7 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
 
     const showing = solution ? (
         <div>
-            <Row k="Showing" v={isLive ? `live result, run ID ${solution.run_id}` : `stored run (${solution.source})`} />
+            <Row k="Showing" v={isLive ? `live result, run ID ${solution.run_id}` : solution.source === 'stored' ? 'stored run' : `stored run (${solution.source})`} />
             {!liveMode && (
                 <Row
                     k="Scenario"

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from api import explain
+from api import explain, plain_english
 from solver.contract import Scenario, Solution
 from test_api import api_client, signer  # noqa: F401  (pytest fixtures)
 
@@ -130,10 +130,32 @@ def test_explain_success_and_withheld(api_client, signer, monkeypatch):  # noqa:
 def test_explain_without_key_is_503(api_client, signer, monkeypatch):  # noqa: F811
     client, _ = api_client
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(plain_english, "ENV_FILE", plain_english.ROOT / "no-such-env-file")
     monkeypatch.setattr(explain.genai, "Client", lambda **kwargs: pytest.fail("no client without a key"))
     response = client.post("/api/explain", json=body(baseline=True), headers={"Authorization": "Bearer " + signer()})
     assert response.status_code == 503
     assert response.json()["detail"] == explain.NO_KEY
+
+
+def test_explain_reads_the_key_from_the_env_file(api_client, signer, monkeypatch, tmp_path):  # noqa: F811
+    client, _ = api_client
+    facts = explain.build_facts(Scenario(), fixture_solution())
+    env_file = tmp_path / ".env"
+    env_file.write_text("OTHER=1\nGEMINI_API_KEY=key-from-env-file\n")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(plain_english, "ENV_FILE", env_file)
+    monkeypatch.setattr(explain, "_client", None)
+    keys = []
+
+    def fake_client(**kwargs):
+        keys.append(kwargs["api_key"])
+        return SimpleNamespace(models=FakeModels(grounded_payload(facts)))
+
+    monkeypatch.setattr(explain.genai, "Client", fake_client)
+    response = client.post("/api/explain", json=body(), headers={"Authorization": "Bearer " + signer()})
+    assert response.status_code == 200, response.text
+    assert keys == ["key-from-env-file"]
+    assert "key-from-env-file" not in response.text
 
 
 def test_explain_api_error_is_502(api_client, signer, monkeypatch):  # noqa: F811

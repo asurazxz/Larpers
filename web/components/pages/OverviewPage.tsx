@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import NetworkMap from '../map/NetworkMap';
+import RunExplain from '../RunExplain';
 import { EmptyState, PageHeader } from '../common/ui';
 import { IconDollar, IconTruck, IconCheck } from '../common/icons';
 import { HeroArt, IconArrow, IconBuilding, IconDepot, IconFlame, IconNetwork, IconPin, IconPlaneSm, IconTrend, Kpi, OutcomeRow, Tile } from '../overview/Parts';
@@ -178,6 +179,8 @@ export default function OverviewPage() {
                     </ul>
                 </section>
             </div>
+
+            <RunExplain />
 
             <section className={`p-5 ${card}`}>
                 <h2 className="mb-4 text-[15px] font-bold text-deep">Top insights</h2>

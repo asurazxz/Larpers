@@ -18,6 +18,7 @@ from google.genai import errors, types
 from pydantic import BaseModel, ValidationError
 
 from api.auth import require_user
+from api.plain_english import api_key as gemini_key
 from solver.context import PROJECT_CONTEXT
 from solver.contract import CAPEX_YEARS, FIXED_OPEX_SHARE, VARIABLE_OPEX_USD_T, ContractModel, Scenario, Solution
 
@@ -269,7 +270,7 @@ def ask_gemini(api_key: str, model: str, facts: list[dict]) -> Explanation:
 @router.post("/explain")
 def explain(body: ExplainRequest) -> dict:
     # Read only GEMINI_API_KEY and pass it explicitly: the SDK would otherwise prefer GOOGLE_API_KEY.
-    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    api_key = gemini_key()
     if not api_key:
         raise HTTPException(503, NO_KEY)
     model = os.environ.get("GEMINI_MODEL", "").strip() or DEFAULT_MODEL
