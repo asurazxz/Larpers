@@ -49,9 +49,11 @@ Google sign-in is needed only for live solves through the API. Stored runs open 
 | 80 biomass sites, 6,800 kt | Organisers, `data/raw/kalimantan_80_locations_6800kt_full_range.csv` | Read-only |
 | Cost table, rates, truck sizes | Airbus Challenge #3 PDF, p. 3 | `resource/` |
 | Official parameters (yield, demand, OpEx, capacity basis, road factor) | Organisers' update, 31 Oct 12:45: `resource/Autonomous SG 2026_Summary of Updates.pdf` p. 2 and `data/raw/challenge3_parameters.xlsx` | Base scenario |
-| Airports PNK, PKN, BPN, TRK | OpenFlights, `data/raw/airports.dat` | Selected by IATA code only |
+| Airports PNK, PKN, BPN, TRK | OpenFlights, `data/raw/airports.dat` | Selected by IATA code only. ODbL, see below |
 | Road distances, 84 × 84 | OSRM table on OpenStreetMap, `data/reference/osrm_table_84.json` | © OpenStreetMap contributors. Bundled; never called at runtime |
 | Onshore test | `global-land-mask` | 69 onshore sites are facility candidates |
+
+`data/raw/airports.dat` is the [OpenFlights](https://openflights.org/data) airport database, made available under the [Open Database License (ODbL) v1.0](https://opendatacommons.org/licenses/odbl/1-0/). Its individual contents are under the [Database Contents License (DbCL) v1.0](https://opendatacommons.org/licenses/dbcl/1-0/).
 
 `data/processed/hashes.json` holds SHA-256 hashes of the raw files and distance arrays. Every result carries that `data_hash`, which ties it to these inputs. Every input is marked official, assumed or computed in [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md).
 
