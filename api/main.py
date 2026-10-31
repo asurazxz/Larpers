@@ -37,6 +37,16 @@ def load_resolver():
 resolve, SOLVER_AVAILABLE, SOLVER_VERSION = load_resolver()
 
 
+def load_precheck():
+    try:
+        return importlib.import_module("solver.model").precheck
+    except ImportError:
+        return lambda scenario, inputs: None
+
+
+precheck = load_precheck()
+
+
 def get_inputs() -> Inputs:
     try:
         return load_inputs()
@@ -70,6 +80,12 @@ def validate_scenario(scenario: Scenario, inputs: Inputs):
     unknown = sorted(set(scenario.excluded_ids) - set(inputs.node_ids))
     if unknown:
         raise HTTPException(422, "Unknown excluded_ids: " + ", ".join(unknown))
+
+
+def refuse_infeasible(scenario: Scenario, inputs: Inputs):
+    """Answer at once with the reason when the inputs rule out every network, instead of starting a run."""
+    if reason := precheck(scenario, inputs):
+        raise HTTPException(422, reason)
 
 
 def create_app() -> FastAPI:
@@ -138,6 +154,7 @@ def create_app() -> FastAPI:
     @protected.post("/solve")
     def solve(scenario: Scenario, request: Request, inputs: InputsDep) -> Solution:
         validate_scenario(scenario, inputs)
+        refuse_infeasible(scenario, inputs)
         result = Solution.model_validate(resolve(scenario)).model_copy(deep=True)
         result.run_id = request.state.run_id
         result.validation = audit(scenario, result, inputs=inputs)
@@ -146,6 +163,7 @@ def create_app() -> FastAPI:
     @protected.post("/baseline")
     def greedy(scenario: Scenario, request: Request, inputs: InputsDep) -> Solution:
         validate_scenario(scenario, inputs)
+        refuse_infeasible(scenario, inputs)
         result = baseline(scenario, inputs=inputs)
         result.run_id = request.state.run_id
         return result

@@ -22,6 +22,7 @@ def api_client(monkeypatch):
     inputs, _, _ = tiny_case()
     monkeypatch.setenv("SUPABASE_URL", SUPABASE_URL)
     monkeypatch.setattr(main, "resolve", lambda scenario: baseline(scenario, inputs=inputs))
+    monkeypatch.setattr(main, "precheck", lambda scenario, inputs: None)
     main.app.dependency_overrides[main.get_inputs] = lambda: inputs
     with TestClient(main.app) as client:
         yield client, inputs
@@ -306,3 +307,51 @@ def test_proof_reason_and_portfolio_capex_survive_solution_round_trip():
     assert wire["portfolios"][0]["capex_usd"] == 1_530_000_000
     assert wire["portfolios"][0]["reason"] == "skipped_capex"
     assert Solution.model_validate(wire) == result
+
+
+@pytest.mark.parametrize("endpoint, target", [("solve", "resolve"), ("baseline", "baseline")])
+def test_infeasible_input_is_refused_with_its_reason_before_any_solve(api_client, signer, monkeypatch, endpoint, target):
+    from api import main
+    from solver import model
+
+    def must_not_run(*args, **kwargs):
+        raise AssertionError("a refused scenario must not reach the solver")
+
+    client, _ = api_client
+    monkeypatch.setattr(main, "precheck", model.precheck)
+    monkeypatch.setattr(main, target, must_not_run)
+    demand = {"BPN": 5000, "PNK": 0, "TRK": 0, "PKN": 0}
+    response = client.post(f"/api/{endpoint}", json={"demand_kt": demand}, headers={"Authorization": "Bearer "+signer()})
+    assert response.status_code == 422
+    assert "exceeds" in response.json()["detail"]
+    assert response.json()["run_id"]
+
+
+def test_refusal_still_needs_a_signed_in_user(api_client, monkeypatch):
+    from api import main
+    from solver import model
+    client, _ = api_client
+    monkeypatch.setattr(main, "precheck", model.precheck)
+    response = client.post("/api/solve", json={"demand_kt": {"BPN": 5000, "PNK": 0, "TRK": 0, "PKN": 0}})
+    assert response.status_code == 401
+
+
+def test_a_scenario_that_passes_the_precheck_still_solves(api_client, signer, monkeypatch):
+    from api import main
+    client, _ = api_client
+    monkeypatch.setattr(main, "precheck", lambda scenario, inputs: None)
+    response = client.post("/api/solve", json={"demand_kt": {"BPN": 5, "PNK": 3, "TRK": 2, "PKN": 1}},
+                           headers={"Authorization": "Bearer "+signer()})
+    assert response.status_code == 200
+
+
+def test_validate_still_audits_a_scenario_the_precheck_would_refuse(api_client, monkeypatch):
+    from api import main
+    client, _ = api_client
+    monkeypatch.setattr(main, "precheck", lambda scenario, inputs: "refused")
+    _, legacy, solution = tiny_case()
+    scenario = Scenario.model_validate({**legacy.model_dump(by_alias=True), "demand_kt": legacy.airport_demand(120.)})
+    solution.scenario_hash = scenario.scenario_hash()
+    response = client.post("/api/validate", json={"scenario": scenario.model_dump(by_alias=True),
+                                                  "solution": solution.model_dump(by_alias=True)})
+    assert response.status_code == 200
