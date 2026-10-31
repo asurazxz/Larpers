@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AuthRequiredError, liveEnabled, plainEnglish, PLAIN_ENGLISH_TIMEOUT_MS } from '../lib/api';
 import type { ExplainInput } from '../lib/explain';
+import type { Explanation } from '../lib/explanations';
 
 interface Shown {
     text: string;
@@ -34,9 +35,11 @@ export interface ExplainButtonProps {
     input: ExplainInput;
     /** The same figures in fixed words, shown when Gemini gives nothing. */
     fixedText: string;
+    /** A checked paragraph stored for this run, shown instead of calling Gemini. */
+    stored?: Explanation | null;
 }
 
-export default function ExplainButton({ id, input, fixedText }: ExplainButtonProps) {
+export default function ExplainButton({ id, input, fixedText, stored }: ExplainButtonProps) {
     const [busy, setBusy] = useState(false);
     const [shown, setShown] = useState<Shown | null>(null);
     const controller = useRef<AbortController | null>(null);
@@ -49,6 +52,10 @@ export default function ExplainButton({ id, input, fixedText }: ExplainButtonPro
     const press = async () => {
         if (shown) {
             setShown(null);
+            return;
+        }
+        if (stored) {
+            setShown({ text: stored.text, note: `Stored text worded by ${stored.model}. The solver made every decision, and every figure comes from this run.` });
             return;
         }
         const ctl = new AbortController();

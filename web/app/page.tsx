@@ -25,7 +25,7 @@ import Trace from '../components/Trace';
 import Landing from '../components/Landing';
 import Explanation from '../components/Explanation';
 import { reducedMotion } from '../components/motion';
-import { AppProvider, PAGES as WORKSPACE_PAGES } from '../lib/store';
+import { AppProvider, parseWorkspaceHash } from '../lib/store';
 import AppShell from '../components/layout/AppShell';
 import OverviewPage from '../components/pages/OverviewPage';
 import NetworkExplorerPage from '../components/pages/NetworkExplorerPage';
@@ -67,8 +67,7 @@ export default function Page() {
     if (hash === null) return <div className="min-h-screen bg-canvas" />;
     if (hash === '#planner') return <Planner />;
     // Five-page workspace (#overview, #network, #scenarios, #results, #reliability, each with an optional /tab).
-    const page = hash.replace(/^#\/?/, '').split('/')[0];
-    if ((WORKSPACE_PAGES as readonly string[]).includes(page)) {
+    if (parseWorkspaceHash(hash)) {
         return (
             <AppProvider>
                 <AppShell pages={WORKSPACE} />

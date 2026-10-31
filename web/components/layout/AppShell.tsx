@@ -9,7 +9,7 @@ import { getEntry, slugs, solutionOf } from '../../lib/bundle';
 import { storedSlugOf, viewForEntry } from '../../lib/useLive';
 import { useSession } from '../../lib/auth';
 import { isProvenOptimal, pct, statusLabel } from '../../lib/format';
-import { IconBell, IconChart, IconCheckCircle, IconChevronDown, IconCollapse, IconGear, IconHelp, IconHome, IconMap, IconShield, IconSliders } from '../common/icons';
+import { IconBell, IconBolt, IconChart, IconCheckCircle, IconChevronDown, IconCollapse, IconGear, IconHelp, IconHome, IconMap, IconShield, IconSliders } from '../common/icons';
 
 export const NAV: { key: PageKey; label: string; icon: ComponentType }[] = [
     { key: 'overview', label: 'Overview', icon: IconHome },
@@ -26,14 +26,14 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
         `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] transition-colors ${active ? 'bg-primary text-white shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`;
     return (
         <nav aria-label="Primary" className={`relative flex shrink-0 flex-col bg-navy transition-[width] duration-150 ${collapsed ? 'w-[68px]' : 'w-[232px]'}`}>
-            <div className="flex h-16 items-center gap-2.5 border-b border-white/10 px-4">
+            <a href="#home" title="Back to the front page" className="flex h-16 items-center gap-2.5 border-b border-white/10 px-4 hover:bg-white/5">
                 <svg viewBox="0 0 32 32" width={30} height={30} aria-hidden="true" className="shrink-0">
                     <path d="M6 24C6 12 14 6 27 5c-1 13-7 21-19 21" fill="#22c55e" />
                     <path d="M4 27c4-1 7-3 9-6" stroke="#2563eb" strokeWidth="2.4" fill="none" strokeLinecap="round" />
                     <path d="M7 25c5-6 10-10 17-15" stroke="#fff" strokeWidth="1.6" fill="none" />
                 </svg>
                 {!collapsed && <span className="text-[14px] font-semibold leading-tight text-white">Kalimantan SAF<br />Network Planner</span>}
-            </div>
+            </a>
             <ul className="mt-3 flex flex-1 flex-col gap-1 px-3">
                 {NAV.map(({ key, label, icon: Icon }) => (
                     <li key={key}>
@@ -45,6 +45,12 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
                 ))}
             </ul>
             <ul className="flex flex-col gap-1 px-3 pb-4">
+                <li>
+                    <a href="#planner" title="The one-screen planner: streams the live solve and explains a live run" className={item(false)}>
+                        <IconBolt />
+                        {!collapsed && 'Live solve view'}
+                    </a>
+                </li>
                 <li>
                     <button type="button" onClick={() => go('reliability', 'data')} title="Data, assumptions and limitations" className={item(false)}>
                         <IconHelp />

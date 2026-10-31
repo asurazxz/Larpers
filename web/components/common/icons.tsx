@@ -35,3 +35,4 @@ export const IconCheckCircle = (p: SVGProps<SVGSVGElement>) => (
         <path d="M7.5 12.5l3 3 6-6.5" stroke="#fff" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
 );
+export const IconBolt = base(<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />);
