@@ -32,6 +32,7 @@ import NetworkExplorerPage from '../components/pages/NetworkExplorerPage';
 import ScenarioPlannerPage from '../components/pages/ScenarioPlannerPage';
 import ResultsPage from '../components/pages/ResultsPage';
 import ReliabilityPage from '../components/pages/ReliabilityPage';
+import LiveSolvePage from '../components/pages/LiveSolvePage';
 import { FlaskConical, Receipt, ShieldCheck, SlidersHorizontal, Zap, type LucideIcon } from 'lucide-react';
 
 const SafMap = dynamic(() => import('./Map'), {
@@ -83,6 +84,7 @@ const WORKSPACE = {
     scenarios: ScenarioPlannerPage,
     results: ResultsPage,
     reliability: ReliabilityPage,
+    live: LiveSolvePage,
 };
 
 function Planner() {
