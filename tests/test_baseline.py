@@ -5,7 +5,7 @@ from collections import Counter
 import pytest
 
 from solver.audit import audit
-from solver.contract import Scenario
+from legacy_scenario import LegacyScenario as Scenario
 from solver.inputs import load_inputs
 from test_audit import tiny_case
 

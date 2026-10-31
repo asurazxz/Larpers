@@ -3,7 +3,8 @@
 import math
 from collections import defaultdict
 
-from solver.contract import AuditReport, CAPACITY_KT, CAPEX_USD, HAUL_HAV_KM, RATES, TRUCK_T
+from solver.contract import (AuditReport, CAPACITY_KT, CAPEX_USD, CAPEX_YEARS, FIXED_OPEX_SHARE, HAUL_HAV_KM, RATES,
+                             TRUCK_T, VARIABLE_OPEX_USD_T)
 from solver.inputs import load_inputs
 
 KT_TOL = 1e-6
@@ -32,9 +33,9 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
     indices = {str(node): i for i, node in enumerate(inputs.node_ids)}
     check("scenario_hash", int(solution.scenario_hash != scenario.scenario_hash()), "scenario provenance", tol=0)
     check("data_hash", int(solution.data_hash != inputs.data_hash), "data provenance", tol=0)
-    if solution.status == "infeasible":
-        require("status", False, "No feasible network supplied to audit")
-        return AuditReport(passed=False, max_residuals=residuals, failures=failures)
+    if solution.status in ("infeasible", "no_solution"):
+        require("status", not solution.facilities and not solution.flows, "No network may accompany this status")
+        return AuditReport(passed=not failures, max_residuals=residuals, failures=failures)
 
     facilities = {}
     for facility in solution.facilities:
@@ -143,7 +144,18 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
         check("demand", delivered[airport] - demand[airport], airport)
 
     capex = sum(CAPEX_USD[f.type][f.size] for f in solution.facilities)
-    total = capex + scenario.horizon_years * logistics
+    if solution.total_annual_usd is None:
+        total = capex + scenario.horizon_years * logistics
+    else:
+        intake = {"depot": depot_in, "refinery": ref_in}
+        variable = 1000 * sum(VARIABLE_OPEX_USD_T[f.type][f.size] * intake[f.type][f.site_id]
+                              for f in solution.facilities)
+        annual = capex / CAPEX_YEARS + capex * FIXED_OPEX_SHARE + variable + logistics
+        total = scenario.horizon_years * annual
+        check("totals", (solution.annualised_capex_usd or 0) - capex / CAPEX_YEARS, "annualised CapEx", USD_TOL)
+        check("totals", (solution.fixed_opex_usd or 0) - capex * FIXED_OPEX_SHARE, "fixed OpEx", USD_TOL)
+        check("totals", (solution.variable_opex_usd or 0) - variable, "variable OpEx", USD_TOL)
+        check("totals", solution.total_annual_usd - annual, "annual total", USD_TOL)
     check("totals", solution.capex_usd - capex, "CapEx", USD_TOL)
     check("totals", solution.logistics_annual_usd - logistics, "annual logistics", USD_TOL)
     check("totals", solution.total_horizon_usd - total, "horizon total", USD_TOL)
