@@ -46829,5 +46829,197 @@
  "schema_version": 1,
  "label": "Stored runs, precomputed by the solver",
  "data_hash": "f93f532b212936501fbca48ebe52c69b5b0cfe8d446caa9315d3c046ab23f87e",
- "generated_at": "2026-10-31T07:03:44+00:00"
+ "generated_at": "2026-10-31T07:33:12+00:00",
+ "stress": {
+  "seed": 2026,
+  "data_hash": "f93f532b212936501fbca48ebe52c69b5b0cfe8d446caa9315d3c046ab23f87e",
+  "solver_version": "f6c39e93b66a",
+  "base": {
+   "yield": 0.2,
+   "road_factor": 1.3,
+   "depot_retention": 1.0,
+   "collection_policy": "optional",
+   "capacity_basis": "biomass_input",
+   "demand_kt": {
+    "PNK": 300.0,
+    "PKN": 300.0,
+    "BPN": 300.0,
+    "TRK": 300.0
+   }
+  },
+  "n_random": 20,
+  "solved": 18,
+  "worst_solve_seconds": 53.57928887498565,
+  "worst_gap": 0.06133914854503049,
+  "infeasible_case_status": "infeasible",
+  "infeasible_case_detected": true,
+  "runs": [
+   {
+    "slug": "stress_00",
+    "status": "optimal",
+    "solve_seconds": 20.612466958002187,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_01",
+    "status": "optimal",
+    "solve_seconds": 30.398256791988388,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_02",
+    "status": "optimal",
+    "solve_seconds": 53.42664675001288,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_03",
+    "status": "optimal",
+    "solve_seconds": 53.388199875014834,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_04",
+    "status": "optimal",
+    "solve_seconds": 53.42153858297388,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_05",
+    "status": "optimal",
+    "solve_seconds": 53.47663929202827,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_06",
+    "status": "best_found",
+    "solve_seconds": 53.47779858400463,
+    "gap": 0.05719107093132997,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_07",
+    "status": "optimal",
+    "solve_seconds": 38.307583707995946,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_08",
+    "status": "best_found",
+    "solve_seconds": 53.50399591700989,
+    "gap": 0.04139151155130336,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_09",
+    "status": "infeasible",
+    "solve_seconds": 0.0027005000156350434,
+    "gap": null,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_10",
+    "status": "best_found",
+    "solve_seconds": 53.4716054169985,
+    "gap": 0.06133914854503049,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_11",
+    "status": "best_found",
+    "solve_seconds": 53.47855050000362,
+    "gap": 0.060991273538238355,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_12",
+    "status": "optimal",
+    "solve_seconds": 53.57737704101601,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_13",
+    "status": "infeasible",
+    "solve_seconds": 0.003785667009651661,
+    "gap": null,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_14",
+    "status": "best_found",
+    "solve_seconds": 53.57928887498565,
+    "gap": 0.04052019659843115,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_15",
+    "status": "optimal",
+    "solve_seconds": 52.23129950001021,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_16",
+    "status": "optimal",
+    "solve_seconds": 45.57666179200169,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_17",
+    "status": "optimal",
+    "solve_seconds": 53.44690487498883,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_18",
+    "status": "optimal",
+    "solve_seconds": 18.0660318750015,
+    "gap": 0.0,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_19",
+    "status": "best_found",
+    "solve_seconds": 53.55130629197811,
+    "gap": 0.019553626723706356,
+    "audit_passed": true
+   },
+   {
+    "slug": "stress_infeasible",
+    "status": "infeasible",
+    "solve_seconds": 0.003096041997196153,
+    "gap": null,
+    "audit_passed": true
+   }
+  ],
+  "precomputed": true
+ },
+ "robustness": {
+  "precomputed": true,
+  "label": "Precomputed from stored sensitivity runs",
+  "runs_considered": 0,
+  "regimes": []
+ },
+ "bulungan": {
+  "sites": [
+   "KAL_SUP_18",
+   "KAL_SUP_70"
+  ],
+  "kt": 0.0,
+  "supply_depot_usd": 0,
+  "depot_refinery_usd": 0.0,
+  "logistics_annual_usd": 0.0,
+  "usd_per_t": null,
+  "label": "Attributed share of the base run's annual logistics"
+ }
 }
