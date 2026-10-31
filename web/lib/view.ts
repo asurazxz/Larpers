@@ -97,6 +97,10 @@ export const BAND_COLOR: Record<Band, string> = {
     some: '#ea580c', // orange
 };
 
-/** Map basemap. 'none' is the offline land layer only and needs no network; it is the default and the stage setting. */
-export type Basemap = 'none' | 'osm' | 'carto';
-export const BASEMAP_LABEL: Record<Basemap, string> = { none: 'Offline', osm: 'OSM', carto: 'CARTO' };
+/**
+ * Map basemap. 'streets' (Esri World Street Map) and 'osm' are free tiles with roads built in, no API key; 'none' is
+ * the offline land layer only. The land layer stays under the tiles, so a tile failure still shows land.
+ */
+export type Basemap = 'streets' | 'osm' | 'none';
+export const BASEMAP_LABEL: Record<Basemap, string> = { streets: 'Streets', osm: 'OSM', none: 'Offline' };
+export const DEFAULT_BASEMAP: Basemap = 'streets';

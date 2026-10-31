@@ -75,14 +75,3 @@ def test_source_distances_match_the_reference_table(source):
         a, b = key.split("|")
         assert route["distance_m"] == pytest.approx(distances[at[a]][at[b]], rel=0.05, abs=500), key
 
-
-def test_offline_road_layer_is_the_reference_roads_and_in_borneo():
-    source = json.loads((ROOT / "data" / "reference" / "osm_roads.json").read_text(encoding="utf-8"))
-    web = json.loads((ROOT / "web" / "data" / "roads.json").read_text(encoding="utf-8"))
-    assert set(web) == {"motorway", "trunk", "primary", "secondary"}
-    assert web == {c: source["roads"][c] for c in web}
-    assert len(web["trunk"]) > 1000
-    for lines in web.values():
-        for encoded in lines[::50]:
-            for lat, lon in decode(encoded):
-                assert LAT[0] <= lat <= LAT[1] and LON[0] <= lon <= LON[1]

@@ -8,7 +8,6 @@ import L from 'leaflet';
 import { AttributionControl, CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer } from 'react-leaflet';
 import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
-import rawRoads from '../data/roads.json';
 import rawRoutes from '../data/routes.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
 import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
@@ -27,13 +26,14 @@ export interface MapProps {
     onSelectFlow?: (flow: Flow, index: number) => void;
     /** Called when a facility, site or airport marker is clicked. */
     onSelectNode?: (id: string) => void;
-    /** Basemap tiles over the offline land layer. 'none' (the default, and on stage) needs no network. */
+    /** Basemap tiles over the offline land layer. 'none' draws the land layer only and needs no network. */
     basemap?: Basemap;
     /** Robustness band of a site's district; banded sites get a blue/orange ring. Absent = no rings. */
     bandFor?: (siteId: string) => Band | null;
 }
 
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const ESRI_ATTRIBUTION = 'Tiles &copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, &copy; OpenStreetMap contributors';
 
 export const KALIMANTAN_BOUNDS: L.LatLngBoundsExpression = [
     [-4.4, 108.5],
@@ -91,25 +91,6 @@ function routeOf(key: string): [number, number][] | undefined {
     return decoded.get(key);
 }
 const SNAP_GAP_M = 1000;
-
-// Offline OSM road layer (web/data/roads.json): one multi-line per class, decoded once. Display only.
-type RoadClass = 'motorway' | 'trunk' | 'primary' | 'secondary';
-// Thin and dark: the layer sits above the flows, so a road shows through the flow drawn along it.
-const ROAD_STYLE: Record<RoadClass, { color: string; weight: number; opacity: number }> = {
-    motorway: { color: '#3a3a3f', weight: 1.6, opacity: 0.8 },
-    trunk: { color: '#3a3a3f', weight: 1.3, opacity: 0.75 },
-    primary: { color: '#55555b', weight: 1, opacity: 0.65 },
-    secondary: { color: '#77777d', weight: 0.7, opacity: 0.55 },
-};
-const ROAD_ORDER: RoadClass[] = ['secondary', 'primary', 'trunk', 'motorway'];
-let roadLines: Record<RoadClass, [number, number][][]> | null = null;
-function roadsByClass() {
-    if (!roadLines) {
-        const raw = rawRoads as Record<RoadClass, string[]>;
-        roadLines = Object.fromEntries(ROAD_ORDER.map((c) => [c, raw[c].map(decodePolyline)])) as Record<RoadClass, [number, number][][]>;
-    }
-    return roadLines;
-}
 type LatLon = [number, number];
 
 /**
@@ -212,17 +193,18 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             attributionControl={false}
             style={{ height: '100%', width: '100%', background: SEA }}
         >
-            {/* OSM tile usage policy: attribution always shown, no prefetching, maxZoom 19. MapContainer reads
-                attributionControl only once, so the control mounts with the tiles instead. */}
+            {/* Free tiles with roads built in, no API key. Attribution always shown (OSM and Esri terms); no prefetching.
+                MapContainer reads attributionControl only once, so the control mounts with the tiles instead. */}
             {basemap !== 'none' && <AttributionControl position="bottomright" prefix={false} />}
             {basemap === 'osm' && (
                 <TileLayer key="osm" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={OSM_ATTRIBUTION} maxZoom={19} />
             )}
-            {basemap === 'carto' && (
+            {basemap === 'streets' && (
                 <TileLayer
-                    key="carto"
-                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
-                    attribution={`${OSM_ATTRIBUTION} &copy; CARTO`}
+                    key="streets"
+                    url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+                    attribution={ESRI_ATTRIBUTION}
+                    maxZoom={19}
                 />
             )}
             {/* Offline land layer, below tilePane (200) so tiles, if on and loaded, cover it. */}
@@ -232,19 +214,6 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                     style={{ color: '#c7c7cc', weight: 0.8, fillColor: LAND, fillOpacity: 1 }}
                     interactive={false}
                 />
-            </Pane>
-
-            {/* OSM main roads, offline, in every basemap mode. Above the flows (overlayPane 400) so a road shows through
-                the flow routed along it, below the markers (600). pointer-events none keeps flows clickable. */}
-            <Pane name="roads" style={{ zIndex: 450, pointerEvents: 'none' }}>
-                {ROAD_ORDER.map((c) => (
-                    <Polyline
-                        key={c}
-                        positions={roadsByClass()[c]}
-                        interactive={false}
-                        pathOptions={{ ...ROAD_STYLE[c], lineCap: 'round', lineJoin: 'round' }}
-                    />
-                ))}
             </Pane>
 
             {/* Flows, coloured by leg, along OSRM car routes where stored (display only; dashed = straight line, snap

@@ -208,3 +208,9 @@ details[open] > summary::before {
         scroll-behavior: auto !important;
     }
 }
+
+/* Tile attribution: required by OSM and Esri, kept small so it does not cover the map. */
+.leaflet-container .leaflet-control-attribution {
+    font-size: 11px;
+    line-height: 1.4;
+}

@@ -12,8 +12,7 @@
         "data:sites": "node scripts/make-sites.mjs",
         "data:land": "node scripts/make-borneo.mjs",
         "data:fixture": "node scripts/make-fixture.mjs",
-        "data:routes": "node scripts/make-routes.mjs",
-        "data:roads": "node scripts/make-roads.mjs"
+        "data:routes": "node scripts/make-routes.mjs"
     },
     "dependencies": {
         "@supabase/supabase-js": "2.118.0",
