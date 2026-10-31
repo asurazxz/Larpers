@@ -10,7 +10,7 @@ import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
 import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
-import { flowKey } from '../lib/view';
+import { BAND_COLOR, flowKey, type Band } from '../lib/view';
 
 export interface MapProps {
     /** The run to draw. null draws sites only. */
@@ -25,6 +25,8 @@ export interface MapProps {
     onSelectNode?: (id: string) => void;
     /** Optional CARTO tiles under the land layer. Off by default and on stage. */
     showTiles?: boolean;
+    /** Robustness band of a site's district; banded sites get a blue/orange ring. Absent = no rings. */
+    bandFor?: (siteId: string) => Band | null;
 }
 
 export const KALIMANTAN_BOUNDS: L.LatLngBoundsExpression = [
@@ -89,7 +91,7 @@ function PopupRows({ title, rows }: { title: string; rows: [string, string][] })
     );
 }
 
-export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, showTiles = false }: MapProps) {
+export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, showTiles = false, bandFor }: MapProps) {
     const renderer = useMemo(() => L.canvas({ padding: 0.5, tolerance: 6 }), []);
     const flows = useMemo(() => solution?.flows ?? [], [solution]);
     const facilities = useMemo(() => solution?.facilities ?? [], [solution]);
@@ -240,6 +242,22 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                     </CircleMarker>
                 );
             })}
+
+            {/* Robustness bands (district level): blue = all / most (dashed), orange = some. Not clickable. */}
+            {bandFor &&
+                sites.map((s) => {
+                    const b = bandFor(s.id);
+                    if (!b) return null;
+                    return (
+                        <CircleMarker
+                            key={`band-${s.id}`}
+                            center={[s.lat, s.lon]}
+                            radius={8}
+                            interactive={false}
+                            pathOptions={{ color: BAND_COLOR[b], weight: b === 'all' ? 3 : 2.5, fill: false, dashArray: b === 'most' ? '4 3' : undefined }}
+                        />
+                    );
+                })}
 
             {/* Stranded supply: hollow red ring. */}
             {(solution?.stranded ?? []).map((s) => (
