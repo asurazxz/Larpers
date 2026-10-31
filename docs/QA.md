@@ -1,6 +1,6 @@
 # Judge Q&A
 
-Short answers. Where a claim needs a source we have not opened, the answer says so.
+Short answers. Where a claim needs a source we have not opened, the answer says so. The base scenario uses the organisers' 12:45 update. Our earlier assumptions are one stored run, `earlier_assumptions`.
 
 ## Why not HEFA?
 
@@ -10,30 +10,27 @@ HEFA runs on fats and oils, and the data here is agricultural and forestry resid
 
 We do not claim that no one else is working on this. Ethanol-to-jet plants are planned in Singapore and North Sumatra, and published work exists on palm biorefinery siting in Sumatra and Kalimantan. We could not find a SAF-specific depot-and-refinery MILP for Kalimantan with facility-removal re-planning, but our search was short.
 
-## Why 15%?
+## Why 20%?
 
-Because it is a number we can defend and it sits off the capacity step.
+Because the organisers set it. The 12:45 update gives 0.20 t SAF per t biomass and calls it inside the 15-25% range for biomass-to-jet routes. We follow it in the base.
 
-- The best source we found (CRL Energy, 2009) gives 0.13 to 0.16 tonnes of Fischer-Tropsch liquid per oven-dry tonne. That is all liquids, not kerosene alone, and we count all of it as SAF.
-- At 15%, 6,800 kt gives 1,020 kt, which is 93.8% of one large refinery (1,087 kt).
-- At 16% the same biomass gives 1,088 kt. That is 1 kt over capacity, and it forces a second refinery that costs $480M. The break-even is 15.985%.
-- We store a 16% run so the step is visible. We do not claim the table was built from 16%. The refinery row also fits a standard six-tenths scaling rule, so the data cannot tell the two apart.
-- We found no palm-specific or empty-fruit-bunch yield. 15% is an assumption, and the yield sweep is there for that reason.
+- Before the update we used 15%, from CRL Energy (2009), who report 0.13 to 0.16 t of Fischer-Tropsch liquid per oven-dry tonne. That is all liquids, not kerosene alone. We did not open the source ourselves.
+- We store the 15% case, with our other earlier assumptions, as the sensitivity run `earlier_assumptions`.
+- The yield sweep covers 15%, 17.5%, 20%, 22.5% and 25%. We found no palm-specific or empty-fruit-bunch yield, so the sweep is there for that reason.
 
 ## Who pays?
 
-We do not know, and the PDF does not say. The objective adds one-off CapEx to logistics cost, and OpEx is "not provided".
+We do not know, and the brief does not say. The objective is the organisers': annualised CapEx (CapEx over 20 years, no interest), fixed OpEx at 5% of CapEx per year, variable OpEx per tonne of biomass in, and transport, on a one-year basis.
 
 Our user is a supply planner comparing network options. That persona is ours, not a named customer. We did not find a source for how this decision is made today, so we make no claim about spreadsheets or status quo cost.
 
-The horizon matters here. The PDF gives no horizon, so the base case counts one year of logistics against full CapEx and shows five years beside it. A longer horizon favours more, smaller refineries. Who funds the plants is outside the model.
+Who funds the plants is outside the model. The 20-year, no-interest annualisation is the organisers' simplification. A real financing cost would raise the refinery share of the bill.
 
 ## Moisture and seasonality?
 
 Neither is modelled.
 
-- **Moisture:** neither the PDF nor the CSV states a basis. We treat the 6,800 kt as dry tonnes and say so. If it were wet empty-fruit-bunch at about 60% moisture, 15% dry would become about 6% as received. We store a 6% run to show that. The 60% figure comes from a journal paper we saw only through a search summary, so we do not cite it as fact.
-- **Depot losses:** retention is 1.0 in the base. It is a parameter. No run below 1.0 is stored.
+- **Moisture:** the organisers ignore it, and depots lose no mass (r = 1). We treat the 6,800 kt as dry tonnes and say so. Real empty-fruit-bunch can be wet, and that would change the effective yield. We have no sourced figure, so we give none.
 - **Seasonality:** the model uses annual totals. Harvest peaks, storage and inventory are not in it. A multi-period model would be the next step.
 
 ## Why would Pertamina trust this?
@@ -48,17 +45,17 @@ What we offer instead is checkability:
 - Status, bound and gap come from HiGHS directly. We say "optimal" only at gap 0 and only among the N candidates searched.
 - Stored runs are labelled stored. Assumptions are in `docs/ASSUMPTIONS.md`.
 
-What Pertamina would need to supply: mill-level tonnage and moisture, real road and river distances, barge rates, and OpEx.
+What Pertamina would need to supply: mill-level tonnage and moisture, real road and river distances, and real barge rates.
 
 ## Where does it break?
 
 Five places, in order of how much they matter:
 
-1. **Bulungan (KAL_SUP_18 and KAL_SUP_70).** 189 kt sits 88 and 57 km from Tarakan airport. The nearest other supply site is 304 km away in a straight line. The network trucks it a long way south, then ships SAF back. We price a truck leg where the real access to Tarakan includes a ferry, and one source for that ferry is not yet confirmed by a second.
-2. **The capacity step.** 1 kt of yield flips the answer by $480M of CapEx. The step is real in the table and not a yield anyone has measured.
-3. **Road factor.** 1.9 is measured on OpenStreetMap, which under-maps plantation tracks. It may run high on short legs. We sweep 1.4, 1.9 and 2.3.
-4. **Demand.** Full production is about 1 Mt of SAF, which is probably several times what four regional airports use. We label it a gateway scenario. We have no ports, so we do not model export.
-5. **Candidate set.** "Optimal among N candidates" is not a proof over all 80 sites. A better plan outside the refinery shortlist is not ruled out, and we have not yet bounded the gap on the final shortlist.
+1. **Mix size and solve time.** Demand is 1,200 kt of SAF, so 6,000 kt of biomass must go in. One large refinery takes 1,087 kt in, so that needs at least six large refineries. The mix space is larger than before, and solves are slower. The old yield step at 15.985% is no longer the story.
+2. **Optional collection.** Which sites to skip is now a decision. Demand needs 6,000 kt of the 6,800 kt, so up to 800 kt can be left out. The solver picks it, and the stored run shows which sites it skips and what that saves.
+3. **Bulungan (KAL_SUP_18 and KAL_SUP_70).** These two sites sit next to Tarakan airport and far from any other supply site. The solver either serves them or skips them. The stored run shows whether. Tarakan is an island, and the organisers price the last leg as a barge at 0.08 USD/t/km with no extra fixed cost, so we follow that.
+4. **Road factor.** 1.3 is the organisers' value. Our own check on OpenStreetMap measured about 1.9, but OSM under-maps plantation tracks. We sweep 1.3, 1.6 and 1.9, and the OSRM table stays a reference check only.
+5. **Candidate set.** "Optimal among N candidates" is not a proof over all sites. A better plan outside the refinery shortlist is not ruled out. We re-run the shortlist under the official objective after the freeze.
 
 ## Why is one depot per site not used?
 

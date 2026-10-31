@@ -1,11 +1,11 @@
 'use client';
 
 // "Stored runs": segmented radio groups, one button per solved value. No sliders: we have no
-// interpolation. A combination with no stored run is greyed "not pre-run", never mapped to the nearest.
+// interpolation. A combination with no stored run is dashed "not pre-run", never mapped to the nearest.
 import { useMemo } from 'react';
 import type { Solution } from '../lib/contract';
 import { BASE_SLUG, getSolution } from '../lib/bundle';
-import { runIndex, sweepOptions, sweepSlug } from '../lib/robustness';
+import { runIndex, sweepSlug } from '../lib/robustness';
 import { baseView, gridView, yieldLabel, type View } from '../lib/view';
 
 export interface SweepPickerProps {
@@ -15,10 +15,30 @@ export interface SweepPickerProps {
 }
 
 type Combo = { y: number; r: number; h: number };
+
+/** Organisers' 15-25% yields and road factors 1.3 (organisers) / 1.9 (measured OSM); stored values are added. */
+const BASE_OPTIONS = { yield: [0.15, 0.2, 0.25], road: [1.3, 1.9] };
+
+function union(list: readonly number[], present: (number | null)[]): number[] {
+    const out = [...list];
+    for (const v of present) if (v !== null && Number.isFinite(v) && !out.some((x) => Math.abs(x - v) < 1e-6)) out.push(v);
+    return out.sort((a, b) => a - b);
+}
+
+/** Option lists from the stored runs. Horizon is a group only when stored runs differ in it. */
+function pickerOptions(): { yield: number[]; road: number[]; horizon: number[] } {
+    const idx = runIndex();
+    const runs = [...idx.runs.filter((r) => r.kind === 'sweep'), ...(idx.base ? [idx.base] : [])];
+    return {
+        yield: union(BASE_OPTIONS.yield, runs.map((r) => r.params.yieldValue)),
+        road: union(BASE_OPTIONS.road, runs.map((r) => r.params.roadFactor)),
+        horizon: union([], runs.map((r) => r.params.horizon)),
+    };
+}
 type Group = 'y' | 'r' | 'h';
 
 export default function SweepPicker({ view, onSelect }: SweepPickerProps) {
-    const opts = useMemo(() => sweepOptions(), []);
+    const opts = useMemo(pickerOptions, []);
     const idx = runIndex();
     const baseP = idx.base?.params;
     const baseCombo: Combo | null =
@@ -36,7 +56,7 @@ export default function SweepPicker({ view, onSelect }: SweepPickerProps) {
     const anchor = current ?? baseCombo;
 
     const nStored = idx.sweep.size;
-    const nTotal = opts.yield.length * opts.road.length * opts.horizon.length;
+    const nTotal = opts.yield.length * opts.road.length * Math.max(1, opts.horizon.length);
 
     const pick = (c: Combo) => {
         const slug = sweepSlug(c.y, c.r, c.h);
@@ -46,9 +66,9 @@ export default function SweepPicker({ view, onSelect }: SweepPickerProps) {
     };
 
     const group = (g: Group, title: string, values: number[], fmt: (v: number) => string) => (
-        <div className="mt-1" role="radiogroup" aria-label={title} data-group={g}>
-            <div className="text-xs font-semibold text-gray-600">{title}</div>
-            <div className="mt-0.5 flex flex-wrap gap-1">
+        <div className="mt-2.5" role="radiogroup" aria-label={title} data-group={g}>
+            <div className="mb-1 text-base text-ink2">{title}</div>
+            <div className="seg">
                 {values.map((v) => {
                     const c: Combo | null = anchor ? { ...anchor, [g]: v } : null;
                     const slug = c ? sweepSlug(c.y, c.r, c.h) : undefined;
@@ -67,16 +87,12 @@ export default function SweepPicker({ view, onSelect }: SweepPickerProps) {
                             title={available ? `Stored run ${slug}` : 'not pre-run: no stored run for this combination'}
                             onClick={() => c && pick(c)}
                             className={
-                                'min-w-[3.5rem] rounded border px-2 py-0.5 text-center text-sm leading-tight ' +
-                                (checked
-                                    ? 'border-blue-800 bg-blue-700 font-bold text-white'
-                                    : available
-                                      ? 'border-gray-400 bg-white text-gray-900 hover:border-blue-700'
-                                      : 'cursor-not-allowed border-dashed border-gray-300 bg-gray-100 text-gray-400')
+                                'seg-btn num min-w-[3.25rem] text-center ' +
+                                (available ? '' : 'cursor-not-allowed border border-dashed border-gray-400 text-ink3')
                             }
                         >
-                            {fmt(v)}
-                            {!available && <span className="block text-[10px] leading-none">not pre-run</span>}
+                            <span className={available ? undefined : 'line-through decoration-1'}>{fmt(v)}</span>
+                            {!available && <span className="ml-1.5">not pre-run</span>}
                         </button>
                     );
                 })}
@@ -85,18 +101,18 @@ export default function SweepPicker({ view, onSelect }: SweepPickerProps) {
     );
 
     return (
-        <div id="sweep-picker" className="text-sm">
-            <div className="flex items-baseline justify-between">
-                <span className="font-semibold">Stored runs</span>
-                <span className="text-xs text-gray-600" data-testid="sweep-count">
+        <div id="sweep-picker" className="text-base">
+            <div className="flex items-baseline justify-between gap-3">
+                <span className="text-ink2">Stored runs</span>
+                <span className="num text-base text-ink2" data-testid="sweep-count">
                     {nStored} of {nTotal} combinations pre-run
                 </span>
             </div>
             {group('y', 'Yield', opts.yield, yieldLabel)}
             {group('r', 'Road factor', opts.road, (v) => String(v))}
-            {group('h', 'Horizon H (years)', opts.horizon, (v) => String(v))}
-            <p className="mt-1 text-xs text-gray-600">
-                Each button is a solved run; values in between were not solved. Greyed: not pre-run.
+            {opts.horizon.length > 1 && group('h', 'Horizon (yr)', opts.horizon, (v) => String(v))}
+            <p className="mt-2.5 text-sm text-ink2">
+                Each button is a solved run; values in between were not solved. Dashed: not pre-run.
                 {view.kind === 'disrupt' && ' A disruption is showing: picking a stored run clears it.'}
             </p>
         </div>

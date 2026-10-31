@@ -80,3 +80,4 @@ data/raw → data/prepare.py → data/processed/ → solver/ → solver/audit.py
 - Use 4-space indentation in Python and TypeScript.
 - `.env` holds Supabase secrets (`SUPABASE_SECRET_KEY`, `DATABASE_URL`, `SUPABASE_DB_PASSWORD`) and must never be committed or printed. Only the publishable key may reach `web/`, exposed under a `NEXT_PUBLIC_` name.
 - After 14:00, new ideas go in `docs/NEXT.md`, not the build. Record every expert conflict in `docs/DECISIONS.md` with a one-line reason.
+- Commit messages and PR descriptions carry no AI attribution: no AI `Co-Authored-By` trailer and no "Generated with" line. `.claude/settings.json` turns this off for every member's Claude Code.

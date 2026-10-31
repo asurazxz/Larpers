@@ -34,8 +34,8 @@ export default function Robustness({ kind, onKindChange }: RobustnessProps) {
     const res = useMemo(() => (kind === 'off' ? null : robustness(kind)), [kind]);
 
     return (
-        <div id="robustness" className="text-sm">
-            <div role="radiogroup" aria-label="Robustness overlay" className="flex gap-1">
+        <div id="robustness" className="text-base">
+            <div role="radiogroup" aria-label="Robustness overlay" className="seg">
                 {KINDS.map((k) => (
                     <button
                         key={k.value}
@@ -43,12 +43,7 @@ export default function Robustness({ kind, onKindChange }: RobustnessProps) {
                         role="radio"
                         aria-checked={kind === k.value}
                         onClick={() => onKindChange(k.value)}
-                        className={
-                            'rounded border px-3 py-0.5 text-sm ' +
-                            (kind === k.value
-                                ? 'border-blue-800 bg-blue-700 font-bold text-white'
-                                : 'border-gray-400 bg-white text-gray-900 hover:border-blue-700')
-                        }
+                        className="seg-btn min-w-[5.5rem]"
                     >
                         {k.label}
                     </button>
@@ -56,8 +51,8 @@ export default function Robustness({ kind, onKindChange }: RobustnessProps) {
             </div>
 
             {res && (
-                <div className="mt-2" data-testid="robustness-result">
-                    <p className="text-xs text-gray-700">
+                <div className="mt-2.5" data-testid="robustness-result">
+                    <p className="text-sm text-ink2">
                         Districts with a {res.kind} in k of n = {res.n} stored solved run{res.n === 1 ? '' : 's'}
                         {res.skippedBaseline + res.skippedInfeasible > 0 &&
                             ` (not counted: ${[
@@ -69,12 +64,12 @@ export default function Robustness({ kind, onKindChange }: RobustnessProps) {
                         . Sites on the map are ringed by their district&apos;s band.
                     </p>
                     {res.n <= 1 && (
-                        <p className="mt-1 text-xs font-semibold text-gray-800" data-testid="robustness-single">
+                        <p className="mt-1 text-sm font-medium text-ink3" data-testid="robustness-single">
                             Only {res.n} stored run so far, so every district reads {res.n} of {res.n} or nothing. More runs land with
                             bundle v1.
                         </p>
                     )}
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-700">
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-ink3">
                         {(['all', 'most', 'some'] as Band[]).map((b) => (
                             <span key={b} className="flex items-center gap-1">
                                 <Swatch band={b} /> {BAND_RULE[b]}
@@ -82,24 +77,24 @@ export default function Robustness({ kind, onKindChange }: RobustnessProps) {
                         ))}
                     </div>
                     {res.districts.length === 0 ? (
-                        <div className="mt-1 text-gray-600">No stored run opens a {res.kind}.</div>
+                        <div className="mt-1.5 text-ink2">No stored run opens a {res.kind}.</div>
                     ) : (
-                        <table className="mt-1 w-full text-sm" data-testid="robustness-table">
+                        <table className="mt-2 w-full text-base leading-snug" data-testid="robustness-table">
                             <thead>
-                                <tr className="text-left text-xs text-gray-600">
-                                    <th className="font-semibold">District</th>
-                                    <th className="text-right font-semibold">Runs with a {res.kind}</th>
-                                    <th className="pl-2 font-semibold">Band</th>
+                                <tr className="hair-b text-left text-sm text-ink2">
+                                    <th className="pb-1 font-medium">District</th>
+                                    <th className="pb-1 text-right font-medium">Runs with a {res.kind}</th>
+                                    <th className="pb-1 pl-3 font-medium">Band</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {res.districts.map((d) => (
-                                    <tr key={d.district} data-band={d.band ?? 'none'}>
-                                        <td>{d.district}</td>
+                                    <tr key={d.district} data-band={d.band ?? 'none'} className="hair-b last:border-b-0">
+                                        <td className="py-0.5">{d.district}</td>
                                         <td className="text-right font-semibold tabular-nums" data-testid="k-of-n">
                                             {d.k} of {d.n}
                                         </td>
-                                        <td className="pl-2">
+                                        <td className="pl-3 text-ink3">
                                             {d.band && (
                                                 <span className="flex items-center gap-1">
                                                     <Swatch band={d.band} />

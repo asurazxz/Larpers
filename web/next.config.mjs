@@ -7,6 +7,8 @@ const nextConfig = {
     // Production builds only: `next dev` does not hydrate with a relative prefix.
     assetPrefix: process.env.NODE_ENV === 'production' ? './' : undefined,
     images: { unoptimized: true },
+    // The dev 'N' indicator sits over the failure band.
+    devIndicators: false,
     trailingSlash: true,
 };
 
