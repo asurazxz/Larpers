@@ -20,10 +20,10 @@ from pydantic import BaseModel, ValidationError
 from api.auth import require_user
 from solver.contract import CAPEX_YEARS, FIXED_OPEX_SHARE, VARIABLE_OPEX_USD_T, ContractModel, Scenario, Solution
 
-DEFAULT_MODEL = "gemini-3.8-flash"
+DEFAULT_MODEL = "gemini-2.5-flash"
 # Asked once, only when the main model is overloaded (429/503); both are stable Flash models.
-FALLBACK_MODEL = "gemini-3.6-flash"
-BUSY_CODES = {429, 503}
+FALLBACK_MODEL = "gemini-flash-latest"
+BUSY_CODES = {429, 503, 504}
 TIMEOUT_MS = 25_000
 WITHHELD = "Explanation withheld: a number could not be verified against this run."
 NO_KEY = "Explanations unavailable: no Gemini API key on the solver host"
