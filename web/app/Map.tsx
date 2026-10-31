@@ -3,11 +3,12 @@
 // Client-only map. Load it with dynamic(() => import('./Map'), { ssr: false }).
 // Every marker and line comes from the run data; nothing is hard-coded except site coordinates
 // (sites.json, from data/raw) and the offline land layer (borneo.json).
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import L from 'leaflet';
-import { CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer } from 'react-leaflet';
+import { AttributionControl, CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer } from 'react-leaflet';
 import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
+import rawRoutes from '../data/routes.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
 import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
 import { isOsrmLeg } from '../lib/trace';
@@ -77,6 +78,29 @@ const EXCLUDED_ICON = L.divIcon({
 });
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+
+// OSRM car routes (web/data/routes.json, display only). Keys "A|B" with A < B, geometry from A to B.
+const ROUTES = rawRoutes as unknown as Record<string, [number, number][]>;
+const SNAP_GAP_M = 1000;
+type LatLon = [number, number];
+
+/**
+ * Line(s) to draw for one flow. With a stored route: the road geometry solid, plus dashed connectors where an end
+ * snapped more than 1 km to the road (offshore sites). Without one, or for the TRK barge: one dashed straight line.
+ */
+function flowPaths(f: Flow): { solid: LatLon[] | null; dashed: LatLon[][] } {
+    const from: LatLon = [f.from_lat, f.from_lon];
+    const to: LatLon = [f.to_lat, f.to_lon];
+    const forward = f.from < f.to;
+    const route = f.from === 'TRK' || f.to === 'TRK' ? undefined : ROUTES[forward ? `${f.from}|${f.to}` : `${f.to}|${f.from}`];
+    if (!route || route.length < 2) return { solid: null, dashed: [[from, to]] };
+    const road = forward ? route : [...route].reverse();
+    const gap = (a: LatLon, b: LatLon) => L.latLng(a).distanceTo(L.latLng(b)) > SNAP_GAP_M;
+    const dashed: LatLon[][] = [];
+    if (gap(from, road[0])) dashed.push([from, road[0]]);
+    if (gap(road[road.length - 1], to)) dashed.push([road[road.length - 1], to]);
+    return { solid: road, dashed };
+}
 
 function PopupRows({ title, rows }: { title: string; rows: [string, string][] }) {
     return (
@@ -157,10 +181,12 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             zoomSnap={0.25}
             preferCanvas
             renderer={renderer}
-            attributionControl={basemap !== 'none'}
+            attributionControl={false}
             style={{ height: '100%', width: '100%', background: SEA }}
         >
-            {/* OSM tile usage policy: attribution always shown, no prefetching, maxZoom 19. */}
+            {/* OSM tile usage policy: attribution always shown, no prefetching, maxZoom 19. MapContainer reads
+                attributionControl only once, so the control mounts with the tiles instead. */}
+            {basemap !== 'none' && <AttributionControl position="bottomright" prefix={false} />}
             {basemap === 'osm' && (
                 <TileLayer key="osm" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={OSM_ATTRIBUTION} maxZoom={19} />
             )}
@@ -180,23 +206,34 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                 />
             </Pane>
 
-            {/* Flows, coloured by leg; 0 km co-located flows are kept in the data but not drawn. */}
+            {/* Flows, coloured by leg, along OSRM car routes where stored (display only; dashed = straight line, snap
+                gap or TRK barge). 0 km co-located flows are kept in the data but not drawn. */}
             {flows.map((f, i) => {
                 if (!(f.km > 0) || (f.from_lat === f.to_lat && f.from_lon === f.to_lon)) return null;
                 const key = flowKey(f);
                 const d = dim(key);
+                const { solid, dashed } = flowPaths(f);
+                const weight = widthOf(f) + (hl && !d ? 2 : 0);
                 return (
+                    <Fragment key={`${key}#${i}`}>
+                    {solid &&
+                        dashed.map((p, j) => (
+                            <Polyline
+                                key={j}
+                                positions={p}
+                                interactive={false}
+                                pathOptions={{ color: LEG_COLOR[f.leg], weight: Math.max(1, weight - 1), opacity: d ? 0.15 : 0.7, dashArray: '3 5' }}
+                            />
+                        ))}
                     <Polyline
-                        key={`${key}#${i}`}
-                        positions={[
-                            [f.from_lat, f.from_lon],
-                            [f.to_lat, f.to_lon],
-                        ]}
+                        positions={solid ?? dashed[0]}
                         pathOptions={{
                             color: LEG_COLOR[f.leg],
-                            weight: widthOf(f) + (hl && !d ? 2 : 0),
+                            weight,
                             opacity: d ? 0.15 : 0.9,
                             lineCap: 'round',
+                            lineJoin: 'round',
+                            dashArray: solid ? undefined : '6 6',
                         }}
                         eventHandlers={{ click: () => onSelectFlow?.(f, i) }}
                     >
@@ -219,6 +256,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                             />
                         </Popup>
                     </Polyline>
+                    </Fragment>
                 );
             })}
 
