@@ -138,7 +138,7 @@ export function traceAll(solution: Solution | null | undefined): TraceSummary {
     return out;
 }
 
-/** Sum of flow costs by leg, to compare with logistics_by_leg_usd. */
+/** Sum of flow costs by leg (the contract has no per-leg split). */
 export function legSums(solution: Solution): Record<Leg, number> {
     const out: Record<Leg, number> = { supply_depot: 0, depot_refinery: 0, refinery_airport: 0 };
     for (const f of solution.flows) out[f.leg] += f.cost_usd;

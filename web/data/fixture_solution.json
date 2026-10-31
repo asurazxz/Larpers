@@ -1,26 +1,9 @@
 {
+ "schema_version": 1,
  "run_id": "fixture-0001",
  "source": "fixture",
  "data_hash": "fixture-not-a-real-hash",
  "scenario_hash": "fixture-not-a-real-hash",
- "scenario": {
-  "demand_kt": {
-   "PNK": 320,
-   "PKN": 50,
-   "BPN": 560,
-   "TRK": 70
-  },
-  "yield": 0.15,
-  "depot_retention": 1,
-  "road_factor": 1.9,
-  "horizon_years": 1,
-  "collection_policy": "optional",
-  "capacity_basis": "saf_output",
-  "excluded_ids": [
-   "KAL_SUP_41"
-  ],
-  "time_limit_s": 90
- },
  "status": "best_found",
  "primal": 1703231570.0939736,
  "bound": 1696077997.499579,
@@ -399,7 +382,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 11100
+   "trips": 11100,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -419,7 +403,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 11090
+   "trips": 11090,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -439,7 +424,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 11079
+   "trips": 11079,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -459,7 +445,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 11068
+   "trips": 11068,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -479,7 +466,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 765805.1647281279,
    "truck_t": 9,
-   "trips": 11057
+   "trips": 11057,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -499,7 +487,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 638009.7363517537,
    "truck_t": 9,
-   "trips": 11047
+   "trips": 11047,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -519,7 +508,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 3048152.28489461,
    "truck_t": 9,
-   "trips": 11025
+   "trips": 11025,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -539,7 +529,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 1426508.9930223157,
    "truck_t": 9,
-   "trips": 11004
+   "trips": 11004,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -559,7 +550,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10960
+   "trips": 10960,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -579,7 +571,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 127787.20787007007,
    "truck_t": 9,
-   "trips": 10917
+   "trips": 10917,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -599,7 +592,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 1016384.1346025948,
    "truck_t": 9,
-   "trips": 10799
+   "trips": 10799,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -619,7 +613,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 2994842.247717055,
    "truck_t": 9,
-   "trips": 10794
+   "trips": 10794,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -639,7 +634,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 294730.6612113235,
    "truck_t": 9,
-   "trips": 10775
+   "trips": 10775,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -659,7 +655,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10744
+   "trips": 10744,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -679,7 +676,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 853499.7929677084,
    "truck_t": 9,
-   "trips": 10739
+   "trips": 10739,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -699,7 +697,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 2469426.3438022803,
    "truck_t": 9,
-   "trips": 10734
+   "trips": 10734,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -719,7 +718,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 3568519.0302309915,
    "truck_t": 9,
-   "trips": 10725
+   "trips": 10725,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -739,7 +739,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 440705.535181595,
    "truck_t": 9,
-   "trips": 10716
+   "trips": 10716,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -759,7 +760,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 568075.5477966176,
    "truck_t": 9,
-   "trips": 10688
+   "trips": 10688,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -779,7 +781,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 719713.4575015194,
    "truck_t": 9,
-   "trips": 10673
+   "trips": 10673,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -799,7 +802,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10640
+   "trips": 10640,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -819,7 +823,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 1401483.51850244,
    "truck_t": 9,
-   "trips": 10506
+   "trips": 10506,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -839,7 +844,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 3617496.9095539744,
    "truck_t": 9,
-   "trips": 10455
+   "trips": 10455,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -859,7 +865,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 182092.7181483371,
    "truck_t": 9,
-   "trips": 10445
+   "trips": 10445,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -879,7 +886,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10430
+   "trips": 10430,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -899,7 +907,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 621018.6941638788,
    "truck_t": 9,
-   "trips": 10430
+   "trips": 10430,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -919,7 +928,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10429
+   "trips": 10429,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -939,7 +949,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 711436.9847993802,
    "truck_t": 9,
-   "trips": 10423
+   "trips": 10423,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -959,7 +970,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 2314531.081666419,
    "truck_t": 9,
-   "trips": 10362
+   "trips": 10362,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -979,7 +991,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 1014107.5747875453,
    "truck_t": 9,
-   "trips": 10348
+   "trips": 10348,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -999,7 +1012,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 622925.5801664453,
    "truck_t": 9,
-   "trips": 10335
+   "trips": 10335,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1019,7 +1033,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10322
+   "trips": 10322,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1039,7 +1054,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 713491.6778410432,
    "truck_t": 9,
-   "trips": 10315
+   "trips": 10315,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1059,7 +1075,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10313
+   "trips": 10313,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1079,7 +1096,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10304
+   "trips": 10304,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1099,7 +1117,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 1547739.7350124544,
    "truck_t": 9,
-   "trips": 10280
+   "trips": 10280,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1119,7 +1138,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 717706.1344030551,
    "truck_t": 9,
-   "trips": 10267
+   "trips": 10267,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1139,7 +1159,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 1106724.2844694655,
    "truck_t": 9,
-   "trips": 10240
+   "trips": 10240,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1159,7 +1180,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 766954.89237747,
    "truck_t": 9,
-   "trips": 10227
+   "trips": 10227,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1179,7 +1201,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 128058.36707640505,
    "truck_t": 9,
-   "trips": 10208
+   "trips": 10208,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1199,7 +1222,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 1318952.503660398,
    "truck_t": 9,
-   "trips": 10189
+   "trips": 10189,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1219,7 +1243,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10147
+   "trips": 10147,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1239,7 +1264,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10139
+   "trips": 10139,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1259,7 +1285,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 481684.96930903546,
    "truck_t": 9,
-   "trips": 10120
+   "trips": 10120,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1279,7 +1306,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 3681311.3844481166,
    "truck_t": 9,
-   "trips": 10073
+   "trips": 10073,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1299,7 +1327,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 2681979.005503881,
    "truck_t": 9,
-   "trips": 10064
+   "trips": 10064,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1319,7 +1348,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 1525588.3939445578,
    "truck_t": 9,
-   "trips": 10052
+   "trips": 10052,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1339,7 +1369,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 10014
+   "trips": 10014,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1359,7 +1390,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 531500.6313064853,
    "truck_t": 9,
-   "trips": 10004
+   "trips": 10004,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1379,7 +1411,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 9974
+   "trips": 9974,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1399,7 +1432,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 3106129.905187079,
    "truck_t": 9,
-   "trips": 9974
+   "trips": 9974,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1419,7 +1453,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 9942
+   "trips": 9942,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1439,7 +1474,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 1100772.940787969,
    "truck_t": 9,
-   "trips": 9934
+   "trips": 9934,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1459,7 +1495,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 3282381.811072441,
    "truck_t": 9,
-   "trips": 9923
+   "trips": 9923,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1479,7 +1516,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 9896
+   "trips": 9896,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1499,7 +1537,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 1697375.2107578625,
    "truck_t": 9,
-   "trips": 9889
+   "trips": 9889,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1519,7 +1558,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 880107.6778458235,
    "truck_t": 9,
-   "trips": 9884
+   "trips": 9884,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1539,7 +1579,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 9863
+   "trips": 9863,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1559,7 +1600,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 9845
+   "trips": 9845,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1579,7 +1621,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 2123090.2689334815,
    "truck_t": 9,
-   "trips": 9845
+   "trips": 9845,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1599,7 +1642,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 3319980.1745393523,
    "truck_t": 9,
-   "trips": 9824
+   "trips": 9824,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1619,7 +1663,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 3138110.807118322,
    "truck_t": 9,
-   "trips": 9814
+   "trips": 9814,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1639,7 +1684,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 521802.16771656164,
    "truck_t": 9,
-   "trips": 9808
+   "trips": 9808,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1659,7 +1705,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 0,
    "truck_t": 9,
-   "trips": 9789
+   "trips": 9789,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1679,7 +1726,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 981480.2513618788,
    "truck_t": 9,
-   "trips": 9778
+   "trips": 9778,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1699,7 +1747,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 673687.1656560329,
    "truck_t": 9,
-   "trips": 9774
+   "trips": 9774,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1719,7 +1768,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 439684.5113761145,
    "truck_t": 9,
-   "trips": 9768
+   "trips": 9768,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1739,7 +1789,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 3505970.8527401946,
    "truck_t": 9,
-   "trips": 9760
+   "trips": 9760,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1759,7 +1810,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 433191.7560243004,
    "truck_t": 9,
-   "trips": 9747
+   "trips": 9747,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1779,7 +1831,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 339929.142757332,
    "truck_t": 9,
-   "trips": 3994
+   "trips": 3994,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1799,7 +1852,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 394461.2202375164,
    "truck_t": 9,
-   "trips": 3789
+   "trips": 3789,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1819,7 +1873,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 134732.6785623907,
    "truck_t": 9,
-   "trips": 3617
+   "trips": 3617,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1839,7 +1894,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 237936.69651388773,
    "truck_t": 9,
-   "trips": 3444
+   "trips": 3444,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1859,7 +1915,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 126429.88634582533,
    "truck_t": 9,
-   "trips": 3260
+   "trips": 3260,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1879,7 +1936,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 229006.2720763118,
    "truck_t": 9,
-   "trips": 3088
+   "trips": 3088,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1899,7 +1957,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 161227.82111493225,
    "truck_t": 9,
-   "trips": 2926
+   "trips": 2926,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1919,7 +1978,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 231362.6411832453,
    "truck_t": 9,
-   "trips": 2786
+   "trips": 2786,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1939,7 +1999,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 228587.30541991006,
    "truck_t": 9,
-   "trips": 2625
+   "trips": 2625,
+   "road_km": null
   },
   {
    "leg": "supply_depot",
@@ -1959,7 +2020,8 @@
    "rate_usd_per_t_km": 0.1,
    "cost_usd": 200569.04777813275,
    "truck_t": 9,
-   "trips": 2538
+   "trips": 2538,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -1979,7 +2041,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 2264693.864228658,
    "truck_t": 30,
-   "trips": 9439
+   "trips": 9439,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -1999,7 +2062,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 1867850.4815678732,
    "truck_t": 30,
-   "trips": 8791
+   "trips": 8791,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2019,7 +2083,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 3024379.8775495915,
    "truck_t": 30,
-   "trips": 9669
+   "trips": 9669,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2039,7 +2104,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 1531173.8766423052,
    "truck_t": 30,
-   "trips": 9808
+   "trips": 9808,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2059,7 +2125,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 844740.4497929711,
    "truck_t": 30,
-   "trips": 9872
+   "trips": 9872,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2079,7 +2146,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 2998494.4926989665,
    "truck_t": 30,
-   "trips": 9184
+   "trips": 9184,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2099,7 +2167,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 3055826.833160635,
    "truck_t": 30,
-   "trips": 9960
+   "trips": 9960,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2119,7 +2188,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 2656190.476804163,
    "truck_t": 30,
-   "trips": 9600
+   "trips": 9600,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2139,7 +2209,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 2657868.251997017,
    "truck_t": 30,
-   "trips": 9934
+   "trips": 9934,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2159,7 +2230,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 2801987.882090932,
    "truck_t": 30,
-   "trips": 9952
+   "trips": 9952,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2179,7 +2251,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 2950980.1388251227,
    "truck_t": 30,
-   "trips": 9229
+   "trips": 9229,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2199,7 +2272,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 4059063.754334125,
    "truck_t": 30,
-   "trips": 9762
+   "trips": 9762,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2219,7 +2293,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 13264196.04080978,
    "truck_t": 30,
-   "trips": 9601
+   "trips": 9601,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2239,7 +2314,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 7847248.836326723,
    "truck_t": 30,
-   "trips": 3097
+   "trips": 3097,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2259,7 +2335,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 13738042.789556054,
    "truck_t": 30,
-   "trips": 9455
+   "trips": 9455,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2279,7 +2356,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 8375623.20094882,
    "truck_t": 30,
-   "trips": 7076
+   "trips": 7076,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2299,7 +2377,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 15268791.102481443,
    "truck_t": 30,
-   "trips": 9828
+   "trips": 9828,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2319,7 +2398,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 15647942.095415028,
    "truck_t": 30,
-   "trips": 9232
+   "trips": 9232,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2339,7 +2419,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 12708922.395078234,
    "truck_t": 30,
-   "trips": 9936
+   "trips": 9936,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2359,7 +2440,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 4417269.774495276,
    "truck_t": 30,
-   "trips": 2983
+   "trips": 2983,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2379,7 +2461,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 16310170.575550148,
    "truck_t": 30,
-   "trips": 9037
+   "trips": 9037,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2399,7 +2482,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 17938405.659420192,
    "truck_t": 30,
-   "trips": 9595
+   "trips": 9595,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2419,7 +2503,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 19420607.875557765,
    "truck_t": 30,
-   "trips": 9913
+   "trips": 9913,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2439,7 +2524,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 18872082.05348846,
    "truck_t": 30,
-   "trips": 9364
+   "trips": 9364,
+   "road_km": null
   },
   {
    "leg": "depot_refinery",
@@ -2459,7 +2545,8 @@
    "rate_usd_per_t_km": 0.12,
    "cost_usd": 27688998.88511773,
    "truck_t": 30,
-   "trips": 9158
+   "trips": 9158,
+   "road_km": null
   },
   {
    "leg": "refinery_airport",
@@ -2479,7 +2566,8 @@
    "rate_usd_per_t_km": 0.08,
    "cost_usd": 9887309.002566714,
    "truck_t": 32,
-   "trips": 10000
+   "trips": 10000,
+   "road_km": null
   },
   {
    "leg": "refinery_airport",
@@ -2499,7 +2587,8 @@
    "rate_usd_per_t_km": 0.08,
    "cost_usd": 1377817.5102967357,
    "truck_t": 32,
-   "trips": 1563
+   "trips": 1563,
+   "road_km": null
   },
   {
    "leg": "refinery_airport",
@@ -2519,7 +2608,8 @@
    "rate_usd_per_t_km": 0.08,
    "cost_usd": 4828445.429880213,
    "truck_t": 32,
-   "trips": 2188
+   "trips": 2188,
+   "road_km": null
   },
   {
    "leg": "refinery_airport",
@@ -2539,7 +2629,8 @@
    "rate_usd_per_t_km": 0.08,
    "cost_usd": 2060043.4641555662,
    "truck_t": 32,
-   "trips": 6764
+   "trips": 6764,
+   "road_km": null
   },
   {
    "leg": "refinery_airport",
@@ -2559,7 +2650,8 @@
    "rate_usd_per_t_km": 0.08,
    "cost_usd": 37759449.63101016,
    "truck_t": 32,
-   "trips": 10737
+   "trips": 10737,
+   "road_km": null
   }
  ],
  "stranded": [
@@ -2575,96 +2667,13 @@
  "surplus": [
   {
    "site_id": "KAL_SUP_15",
-   "label": "KAL_SUP_15, Ketapang",
-   "lat": -1.682,
-   "lon": 110.4027,
-   "kt": 5.588000000000079,
-   "reason": "SAF above airport demand, held at the refinery gate"
+   "kt": 5.588000000000079
   }
  ],
  "capex_usd": 1353000000,
  "logistics_annual_usd": 350231570.09397364,
- "logistics_by_leg_usd": {
-  "supply_depot": 72106953.3921262,
-  "depot_refinery": 222211551.66393805,
-  "refinery_airport": 55913065.03790939
- },
  "opex": "not_provided",
  "total_horizon_usd": 1703231570.0939736,
- "portfolios": [
-  {
-   "n_large": 0,
-   "n_small": 0,
-   "status": "skipped_capacity",
-   "reason": "No refinery capacity"
-  },
-  {
-   "n_large": 0,
-   "n_small": 1,
-   "status": "skipped_capacity",
-   "reason": "500 kt SAF is below required output"
-  },
-  {
-   "n_large": 1,
-   "n_small": 0,
-   "status": "best_found",
-   "capex_usd": 765000000,
-   "primal": 1708341264.8042555,
-   "bound": 1689605717.5332217,
-   "gap": 0.011,
-   "solve_seconds": 30.1
-  },
-  {
-   "n_large": 0,
-   "n_small": 2,
-   "status": "skipped_capex",
-   "reason": "CapEx plus depot floor exceeds best total"
-  },
-  {
-   "n_large": 1,
-   "n_small": 1,
-   "status": "best_found",
-   "capex_usd": 1245000000,
-   "primal": 1703231570.0939736,
-   "bound": 1696077997.499579,
-   "gap": 0.0042,
-   "solve_seconds": 42.7
-  }
- ],
- "airports": [
-  {
-   "id": "PNK",
-   "label": "PNK, Supadio Airport",
-   "lat": -0.15071099996566772,
-   "lon": 109.40399932861328,
-   "demand_kt": 320,
-   "delivered_kt": 320
-  },
-  {
-   "id": "PKN",
-   "label": "PKN, Iskandar Airport",
-   "lat": -2.70519995689,
-   "lon": 111.672996521,
-   "demand_kt": 50,
-   "delivered_kt": 50
-  },
-  {
-   "id": "BPN",
-   "label": "BPN, Sultan Aji Muhamad Sulaiman Airport",
-   "lat": -1.26827001572,
-   "lon": 116.893997192,
-   "demand_kt": 560,
-   "delivered_kt": 560
-  },
-  {
-   "id": "TRK",
-   "label": "TRK, Juwata Airport",
-   "lat": 3.326667,
-   "lon": 117.569444,
-   "demand_kt": 70,
-   "delivered_kt": 70
-  }
- ],
  "validation": {
   "passed": true,
   "max_residuals": {
@@ -2674,5 +2683,57 @@
    "demand_kt": 0
   },
   "failures": []
- }
+ },
+ "portfolios": [
+  {
+   "n_large": 0,
+   "n_small": 0,
+   "status": "skipped",
+   "primal": null,
+   "bound": null,
+   "gap": null,
+   "solve_seconds": 0,
+   "reason": "No refinery capacity"
+  },
+  {
+   "n_large": 0,
+   "n_small": 1,
+   "status": "skipped",
+   "primal": null,
+   "bound": null,
+   "gap": null,
+   "solve_seconds": 0,
+   "reason": "500 kt SAF is below required output"
+  },
+  {
+   "n_large": 1,
+   "n_small": 0,
+   "status": "best_found",
+   "primal": 1708341264.8042555,
+   "bound": 1689605717.5332217,
+   "gap": 0.011,
+   "solve_seconds": 30.1,
+   "reason": null
+  },
+  {
+   "n_large": 0,
+   "n_small": 2,
+   "status": "skipped",
+   "primal": null,
+   "bound": null,
+   "gap": null,
+   "solve_seconds": 0,
+   "reason": "CapEx plus depot floor exceeds best total"
+  },
+  {
+   "n_large": 1,
+   "n_small": 1,
+   "status": "best_found",
+   "primal": 1703231570.0939736,
+   "bound": 1696077997.499579,
+   "gap": 0.0042,
+   "solve_seconds": 42.7,
+   "reason": null
+  }
+ ]
 }

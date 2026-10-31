@@ -126,17 +126,16 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
     const strandedIds = new Set((solution?.stranded ?? []).map((s) => s.site_id));
     const siteById = useMemo(() => new Map(sites.map((s) => [s.id, s])), [sites]);
 
-    // Airports come from the run: solution.airports if present, else the refinery→airport flow ends.
+    // Airports come from the run's refinery→airport flow ends: the contract has no airport list.
     const airports = useMemo(() => {
-        const out = new Map<string, { id: string; label?: string; lat: number; lon: number; demand_kt?: number }>();
-        for (const a of solution?.airports ?? []) out.set(String(a.id), { ...a, id: String(a.id) });
+        const out = new Map<string, { id: string; label: string; lat: number; lon: number }>();
         for (const f of flows) {
             if (f.leg === 'refinery_airport' && !out.has(f.to)) {
                 out.set(f.to, { id: f.to, label: f.to_label, lat: f.to_lat, lon: f.to_lon });
             }
         }
         return [...out.values()];
-    }, [solution, flows]);
+    }, [flows]);
 
     const demandOf = (id: string): number | undefined => {
         const d = solution?.scenario?.demand_kt;
@@ -362,7 +361,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                             <PopupRows
                                 title={a.label ?? a.id}
                                 rows={[
-                                    ['Demand', kt(a.demand_kt ?? demandOf(a.id), 1)],
+                                    ['Demand', kt(demandOf(a.id), 1)],
                                     ['Delivered', kt(sum(inbound.map((x) => x.kt)), 2)],
                                     ['From refineries', inbound.map((x) => x.from_label ?? x.from).join('; ') || MISSING],
                                 ]}

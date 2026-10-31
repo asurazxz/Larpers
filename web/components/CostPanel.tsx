@@ -2,7 +2,7 @@
 
 // Cost, solver state, audit and baseline comparison. Every value is read from the run; anything the run
 // does not carry shows "not in this run". Bars are plain divs, no chart library.
-import type { Leg, Portfolio, Solution, SolveStatus } from '../lib/contract';
+import type { Leg, Portfolio, Solution } from '../lib/contract';
 import { bundle, solutionOf } from '../lib/bundle';
 import { LEG_LABEL, MISSING, orMissing, pct, seconds, statusLabel, usd } from '../lib/format';
 import { legSums } from '../lib/trace';
@@ -62,8 +62,8 @@ function Sub({ children }: { children: React.ReactNode }) {
 }
 
 function portfolioStatus(p: Portfolio): string {
-    if (p.status === 'optimal' || p.status === 'best_found' || p.status === 'infeasible') {
-        return statusLabel({ status: p.status as SolveStatus, gap: p.gap ?? null, n_candidates: undefined });
+    if (p.status !== 'skipped') {
+        return statusLabel({ status: p.status, gap: p.gap ?? null });
     }
     return p.status.replace(/_/g, ' ');
 }
@@ -72,6 +72,7 @@ function AuditBlock({ s }: { s: Solution }) {
     const v = s.validation;
     if (!v) return <div className="text-gray-600">Audit: {MISSING}</div>;
     const residuals = Object.entries(v.max_residuals ?? {});
+    const failures = v.failures ?? [];
     return (
         <div
             id="audit-result"
@@ -81,7 +82,7 @@ function AuditBlock({ s }: { s: Solution }) {
             <div className="flex items-center justify-between gap-2">
                 <span className="font-bold">Independent audit</span>
                 <span className={`font-bold ${v.passed ? 'text-blue-800' : 'text-orange-800'}`}>
-                    {v.passed ? 'PASSED' : `FAILED (${v.failures.length})`}
+                    {v.passed ? 'PASSED' : `FAILED (${failures.length})`}
                 </span>
             </div>
             {residuals.length > 0 ? (
@@ -97,9 +98,9 @@ function AuditBlock({ s }: { s: Solution }) {
             ) : (
                 <div className="text-xs text-gray-700">Max residuals: {MISSING}</div>
             )}
-            {v.failures.length > 0 && (
+            {failures.length > 0 && (
                 <ul className="mt-1 list-disc pl-4 text-xs text-orange-900">
-                    {v.failures.map((f) => (
+                    {failures.map((f) => (
                         <li key={f}>{f}</li>
                     ))}
                 </ul>
@@ -124,9 +125,11 @@ export default function CostPanel({ solution, baseline }: { solution: Solution |
     const capexRef = sum(facilities.filter((f) => f.type === 'refinery').map((f) => f.capex_usd ?? 0));
     const capexDepot = sum(facilities.filter((f) => f.type === 'depot').map((f) => f.capex_usd ?? 0));
     const hasFacilityCapex = facilities.some((f) => finite(f.capex_usd));
-    const byLeg = s.logistics_by_leg_usd;
-    const flowLeg = legSums(s);
-    const maxLeg = Math.max(1, ...LEGS.map((l) => (byLeg && finite(byLeg[l]) ? (byLeg[l] as number) : 0)));
+    // The contract has no per-leg split: it is summed from the run's flows and checked against logistics / year.
+    const byLeg = legSums(s);
+    const legTotal = sum(LEGS.map((l) => byLeg[l]));
+    const legsMatch = logistics !== null ? Math.abs(legTotal - logistics) <= Math.max(1, 1e-6 * Math.abs(logistics)) : null;
+    const maxLeg = Math.max(1, ...LEGS.map((l) => byLeg[l]));
     const nLarge = facilities.filter((f) => f.type === 'refinery' && f.size === 'large').length;
     const nSmall = facilities.filter((f) => f.type === 'refinery' && f.size === 'small').length;
 
@@ -142,28 +145,25 @@ export default function CostPanel({ solution, baseline }: { solution: Solution |
                 </div>
             )}
             <Line k="Logistics / year" v={usd(logistics)} />
-            {byLeg ? (
+            {s.flows.length > 0 ? (
                 <div className="mb-1 space-y-0.5 pl-3 text-xs">
                     {LEGS.map((l) => {
                         const v = byLeg[l];
-                        const flowMatch = finite(v) && Math.abs(flowLeg[l] - v) <= Math.max(1, 1e-6 * Math.abs(v));
                         return (
                             <div key={l}>
                                 <div className="flex justify-between gap-2">
                                     <span className="text-gray-600">{LEG_LABEL[l]}</span>
-                                    <span title={`Sum of ${l} flow costs: ${usd(flowLeg[l])}`}>
-                                        {usd(v)}
-                                        {finite(v) && (
-                                            <span className={flowMatch ? 'text-blue-800' : 'font-bold text-orange-800'}>
-                                                {flowMatch ? ' = Σ flows' : ` ≠ Σ flows ${usd(flowLeg[l])}`}
-                                            </span>
-                                        )}
-                                    </span>
+                                    <span title={`Sum of ${l} flow costs`}>{usd(v)}</span>
                                 </div>
-                                <Bar frac={finite(v) ? v / maxLeg : 0} color={LEG_BAR[l]} label={LEG_LABEL[l]} />
+                                <Bar frac={v / maxLeg} color={LEG_BAR[l]} label={LEG_LABEL[l]} />
                             </div>
                         );
                     })}
+                    {legsMatch !== null && (
+                        <div className={legsMatch ? 'text-blue-800' : 'font-bold text-orange-800'}>
+                            {legsMatch ? 'Σ flows = logistics / year' : `Σ flows ${usd(legTotal)} ≠ logistics / year`}
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="pl-3 text-xs text-gray-600">Per-leg breakdown: {MISSING}</div>
@@ -241,7 +241,7 @@ export default function CostPanel({ solution, baseline }: { solution: Solution |
                                     <div className="text-gray-600">{p.reason}</div>
                                 ) : (
                                     <div className="text-gray-700">
-                                        CapEx {usd(p.capex_usd)} · primal {usd(p.primal)} · bound {usd(p.bound)} · gap{' '}
+                                        Primal {usd(p.primal)} · bound {usd(p.bound)} · gap{' '}
                                         {pct(p.gap, 2)} · {seconds(p.solve_seconds)}
                                     </div>
                                 )}

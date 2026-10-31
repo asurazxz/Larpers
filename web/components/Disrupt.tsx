@@ -93,8 +93,9 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
         const baseScenario: Scenario = { ...DEFAULT_SCENARIO, ...(base.scenario ?? {}) };
         const excluded_ids = [...new Set([...(baseScenario.excluded_ids ?? []), siteId])];
         try {
-            const s = await solve({ ...baseScenario, excluded_ids }, { signal: ctrl.signal });
-            onSelect(disruptView(liveDisruptSlug([siteId], s.run_id), [siteId], true), s);
+            const scenario = { ...baseScenario, excluded_ids };
+            const s = await solve(scenario, { signal: ctrl.signal });
+            onSelect(disruptView(liveDisruptSlug([siteId], s.run_id), [siteId], true), s.scenario ? s : { ...s, scenario });
         } catch (e) {
             if (e instanceof AuthRequiredError) {
                 setAuthNeeded(true);

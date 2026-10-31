@@ -261,10 +261,12 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         },
 
         async validate(scenario: ScenarioInput, solution: Solution, opts: RequestOptions = {}): Promise<AuditReport> {
+            // The UI-attached `scenario` is not in the contract, and the API's Solution forbids unknown keys.
+            const { scenario: _attached, ...wire } = solution;
             const res = await send(
                 'POST',
                 '/api/validate',
-                { scenario: buildScenario(scenario), solution },
+                { scenario: buildScenario(scenario), solution: wire },
                 null,
                 opts.timeoutMs ?? defaultTimeoutMs,
                 opts.signal,
