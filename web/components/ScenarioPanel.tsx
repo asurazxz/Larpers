@@ -18,6 +18,8 @@ import {
 } from '../lib/contract';
 import { runIndex } from '../lib/robustness';
 import { MISSING, orMissing, statusLabel } from '../lib/format';
+import Select from './Select';
+import InfoTip, { INPUT_HELP } from './InfoTip';
 import {
     asScenarioForm,
     buildScenarioFromForm,
@@ -34,6 +36,7 @@ import {
     type ScenarioForm,
     type SolverHealth,
 } from '../lib/useLive';
+import type { SolveFeed } from '../lib/solveProgress';
 import type { View } from '../lib/view';
 
 export interface ScenarioPanelProps {
@@ -47,6 +50,8 @@ export interface ScenarioPanelProps {
     onLiveRun: (run: LiveRun) => void;
     /** Last map click (site id) with a counter, so clicking the same site twice toggles twice. */
     pickedNode?: { id: string; seq: number } | null;
+    /** Receives the solver's progress while a run is live. */
+    feed: SolveFeed;
 }
 
 /** Organisers' base (challenge3_parameters.xlsx, 12:45 update): the form default when a run echoes no scenario. */
@@ -65,6 +70,8 @@ const ORGANISER_YIELDS = [0.15, 0.2, 0.25];
 const ROAD_OPTIONS = [1.3, 1.9];
 
 const formFor = (sc: Scenario | undefined | null): ScenarioForm => formFromScenario(sc ?? ORGANISER_SCENARIO);
+/** Stored runs predate the 12:45 update, so the live form starts from the organisers' basis unless a live run is showing. */
+const seedForm = (sol: Solution | null, live: boolean): ScenarioForm => formFor(live ? sol?.scenario : null);
 
 function storedYields(): number[] {
     const out = [...ORGANISER_YIELDS];
@@ -145,16 +152,24 @@ function StoredRuns({ solution, isLive, onPick, name }: { solution: Solution | n
     );
 }
 
-export default function ScenarioPanel({ solution, health, isLive, setSolution, setView, onLiveRun, pickedNode }: ScenarioPanelProps) {
+function runningLabel(feed: SolveFeed): string {
+    const p = feed.get();
+    if (!p || p.phase === 'starting') return 'Starting the solver…';
+    if (p.phase === 'polish') return 'Polishing the winning network…';
+    if (p.phase === 'audit') return 'Auditing the result…';
+    return p.total > 0 ? `Settled ${p.settled} of ${p.total} refinery mixes…` : 'Building the portfolio…';
+}
+
+export default function ScenarioPanel({ solution, health, isLive, setSolution, setView, onLiveRun, pickedNode, feed }: ScenarioPanelProps) {
     const session = useSession();
-    const [form, setForm] = useState<ScenarioForm>(() => formFor(solution?.scenario));
+    const [form, setForm] = useState<ScenarioForm>(() => seedForm(solution, isLive));
     const yieldOptions = useMemo(storedYields, []);
     const [note, setNote] = useState<string | null>(null);
     const [pickMode, setPickMode] = useState(false);
     const [signInError, setSignInError] = useState<string | null>(null);
     const syncedRunId = useRef<string | null>(solution?.run_id ?? null);
 
-    const runner = useLiveRunner(onLiveRun);
+    const runner = useLiveRunner(onLiveRun, feed);
     const running = runner.state.phase === 'running';
     const liveMode = liveEnabled && (health.state === 'up' || running);
 
@@ -167,13 +182,13 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
         }
     }, []);
 
-    // Default the inputs to the displayed run's echoed scenario whenever the displayed run changes.
+    // Re-seed the inputs whenever the displayed run changes: the live run's scenario, else the organisers' basis.
     useEffect(() => {
         const id = solution?.run_id ?? null;
         if (id === syncedRunId.current) return;
         syncedRunId.current = id;
-        setForm(formFor(solution?.scenario));
-    }, [solution]);
+        setForm(seedForm(solution, isLive));
+    }, [solution, isLive]);
 
     useEffect(() => {
         setCurrentForm(form);
@@ -234,12 +249,12 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
 
     // Run status, including the sign-in prompt. In live mode it sits right under the Run button.
     const statusBlock = (
-        <div aria-live="polite" data-testid="run-status" className="empty:hidden">
+        <div id="run-status-block" aria-live="polite" data-testid="run-status" className="empty:hidden">
             {running && (
                 <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-1.5 text-blue-900">
                     <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden="true" />
                     <span>
-                        Solving and running the baseline… <span className="num font-medium">{st.elapsedS.toFixed(1)} s</span>
+                        {runningLabel(feed)} <span className="num font-medium">{st.elapsedS.toFixed(1)} s</span>
                     </span>
                 </div>
             )}
@@ -258,7 +273,7 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
             )}
             {st.phase === 'error' && (
                 <div role="alert" className="rounded-xl bg-red-50 px-3 py-1.5 text-red-800">
-                    {st.message}
+                    {st.message?.replace(/^Solver API error 422: /, 'Solver refused: ')}
                 </div>
             )}
             {st.phase === 'auth' && (
@@ -348,7 +363,10 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                     {showing}
                     <fieldset disabled={running} className="space-y-2.5">
                         <div>
-                            <span className={labelClass}>Demand, kt/yr (blank = full-production preset)</span>
+                            <span className={labelClass}>
+                                Demand, kt/yr (blank = solver default)
+                                <InfoTip label="Airport demand">{INPUT_HELP.demand}</InfoTip>
+                            </span>
                             <div className="grid grid-cols-4 gap-1.5">
                                 {AIRPORTS.map((a) => (
                                     <label key={a} className="text-base text-ink2">
@@ -369,34 +387,43 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
 
                         <div className="grid grid-cols-3 gap-2">
                             <label>
-                                <span className={labelClass}>Yield</span>
-                                <select className={fieldClass} name="yield" value={form.yieldValue} onChange={(e) => setForm((f) => ({ ...f, yieldValue: e.target.value }))}>
-                                    {withCurrent(yieldOptions, form.yieldValue).map((v) => (
-                                        <option key={v} value={String(v)}>
-                                            {pctLabel(v)}
-                                        </option>
-                                    ))}
-                                </select>
+                                <span className={labelClass}>
+                                    Yield
+                                    <InfoTip label="Yield">{INPUT_HELP.yield}</InfoTip>
+                                </span>
+                                <Select
+                                    name="yield"
+                                    ariaLabel="Yield"
+                                    value={form.yieldValue}
+                                    onValueChange={(v) => setForm((f) => ({ ...f, yieldValue: v }))}
+                                    options={withCurrent(yieldOptions, form.yieldValue).map((v) => ({ value: String(v), label: pctLabel(v) }))}
+                                />
                             </label>
                             <label>
-                                <span className={labelClass}>Road factor</span>
-                                <select className={fieldClass} name="road_factor" value={form.roadFactor} onChange={(e) => setForm((f) => ({ ...f, roadFactor: e.target.value }))}>
-                                    {withCurrent(ROAD_OPTIONS, form.roadFactor).map((v) => (
-                                        <option key={v} value={String(v)}>
-                                            {v}
-                                        </option>
-                                    ))}
-                                </select>
+                                <span className={labelClass}>
+                                    Road factor
+                                    <InfoTip label="Road factor">{INPUT_HELP.road}</InfoTip>
+                                </span>
+                                <Select
+                                    name="road_factor"
+                                    ariaLabel="Road factor"
+                                    value={form.roadFactor}
+                                    onValueChange={(v) => setForm((f) => ({ ...f, roadFactor: v }))}
+                                    options={withCurrent(ROAD_OPTIONS, form.roadFactor).map((v) => ({ value: String(v), label: String(v) }))}
+                                />
                             </label>
                             <label>
-                                <span className={labelClass}>Horizon (yr)</span>
-                                <select className={fieldClass} name="horizon" value={form.horizon} onChange={(e) => setForm((f) => ({ ...f, horizon: e.target.value }))}>
-                                    {withCurrent(HORIZON_OPTIONS, form.horizon).map((v) => (
-                                        <option key={v} value={String(v)}>
-                                            {v} yr
-                                        </option>
-                                    ))}
-                                </select>
+                                <span className={labelClass}>
+                                    Horizon (yr)
+                                    <InfoTip label="Horizon">{INPUT_HELP.horizon}</InfoTip>
+                                </span>
+                                <Select
+                                    name="horizon"
+                                    ariaLabel="Horizon (yr)"
+                                    value={form.horizon}
+                                    onValueChange={(v) => setForm((f) => ({ ...f, horizon: v }))}
+                                    options={withCurrent(HORIZON_OPTIONS, form.horizon).map((v) => ({ value: String(v), label: `${v} yr` }))}
+                                />
                             </label>
                         </div>
                         <div className="text-base text-ink2" data-testid="cost-basis">
@@ -408,33 +435,44 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
 
                         <div className="grid grid-cols-2 gap-2">
                             <label>
-                                <span className={labelClass}>Collection</span>
-                                <select
-                                    className={fieldClass}
+                                <span className={labelClass}>
+                                    Collection
+                                    <InfoTip label="Collection">{INPUT_HELP.collection}</InfoTip>
+                                </span>
+                                <Select
                                     name="collection"
+                                    ariaLabel="Collection"
                                     value={form.collection}
-                                    onChange={(e) => setForm((f) => ({ ...f, collection: e.target.value as CollectionPolicy }))}
-                                >
-                                    <option value="all">all biomass</option>
-                                    <option value="optional">optional</option>
-                                </select>
+                                    onValueChange={(v) => setForm((f) => ({ ...f, collection: v as CollectionPolicy }))}
+                                    options={[
+                                        { value: 'all', label: 'all biomass' },
+                                        { value: 'optional', label: 'optional' },
+                                    ]}
+                                />
                             </label>
                             <label>
-                                <span className={labelClass}>Capacity basis</span>
-                                <select
-                                    className={fieldClass}
+                                <span className={labelClass}>
+                                    Capacity basis
+                                    <InfoTip label="Capacity basis">{INPUT_HELP.capacity}</InfoTip>
+                                </span>
+                                <Select
                                     name="capacity_basis"
+                                    ariaLabel="Capacity basis"
                                     value={form.capacityBasis}
-                                    onChange={(e) => setForm((f) => ({ ...f, capacityBasis: e.target.value as CapacityBasis }))}
-                                >
-                                    <option value="saf_output">SAF output</option>
-                                    <option value="biomass_input">biomass input</option>
-                                </select>
+                                    onValueChange={(v) => setForm((f) => ({ ...f, capacityBasis: v as CapacityBasis }))}
+                                    options={[
+                                        { value: 'saf_output', label: 'SAF output' },
+                                        { value: 'biomass_input', label: 'biomass input' },
+                                    ]}
+                                />
                             </label>
                         </div>
 
                         <div>
-                            <span className={labelClass}>Excluded facility sites (unavailable at design stage)</span>
+                            <span className={labelClass}>
+                                Excluded facility sites (unavailable at design stage)
+                                <InfoTip label="Excluded sites">{INPUT_HELP.excluded}</InfoTip>
+                            </span>
                             <div className="flex flex-wrap gap-1.5" data-testid="excluded-list">
                                 {form.excluded.length === 0 && <span className="text-base text-ink2">none</span>}
                                 {form.excluded.map((id) => (
@@ -450,22 +488,16 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                 ))}
                             </div>
                             <div className="mt-1.5 flex items-center gap-2">
-                                <select
-                                    className={fieldClass}
+                                <Select
                                     name="exclude-add"
+                                    ariaLabel="Exclude a site"
                                     value=""
-                                    onChange={(e) => {
-                                        const id = e.target.value;
+                                    placeholder="Exclude a site…"
+                                    onValueChange={(id) => {
                                         if (id) setForm((f) => (f.excluded.includes(id) ? f : { ...f, excluded: [...f.excluded, id] }));
                                     }}
-                                >
-                                    <option value="">Exclude a site…</option>
-                                    {candidatesLeft.map((id) => (
-                                        <option key={id} value={id}>
-                                            {siteById(id)?.label ?? id}
-                                        </option>
-                                    ))}
-                                </select>
+                                    options={candidatesLeft.map((id) => ({ value: id, label: siteById(id)?.label ?? id }))}
+                                />
                                 <label className="flex shrink-0 items-center gap-1.5 text-base text-ink3">
                                     <input type="checkbox" checked={pickMode} onChange={(e) => setPickMode(e.target.checked)} />
                                     pick on map

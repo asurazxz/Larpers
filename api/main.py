@@ -1,9 +1,13 @@
 """Thin local solver API. Start with uvicorn api.main:app --port 8000."""
 
+import asyncio
 import importlib
 from importlib.metadata import PackageNotFoundError, version
+import json
 import logging
 import os
+import threading
+import time
 from typing import Annotated
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -11,10 +15,12 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.auth import require_user
+from api.explain import router as explain_router
+from api.plain_english import ExplainRequest, ExplainResponse, allow_call, plain_english
 from solver.audit import audit
 from solver.baseline import baseline
 from solver.contract import AuditReport, ContractModel, Scenario, Solution
@@ -35,6 +41,18 @@ def load_resolver():
 
 
 resolve, SOLVER_AVAILABLE, SOLVER_VERSION = load_resolver()
+KEEPALIVE_S = 2.0
+# Each run takes 5 worker processes. Two, so that cancelling and re-running is not refused while the old run ends.
+MAX_LIVE_SOLVES = 2
+live_solves = threading.BoundedSemaphore(MAX_LIVE_SOLVES)
+
+
+class SolveCancelled(Exception):
+    """Stands in for solver.model.SolveCancelled when only the stub resolver loaded."""
+
+
+if SOLVER_AVAILABLE:
+    from solver.model import SolveCancelled
 
 
 def load_precheck():
@@ -86,6 +104,67 @@ def refuse_infeasible(scenario: Scenario, inputs: Inputs):
     """Answer at once with the reason when the inputs rule out every network, instead of starting a run."""
     if reason := precheck(scenario, inputs):
         raise HTTPException(422, reason)
+
+
+def finish_run(result, scenario: Scenario, run_id: str, inputs: Inputs) -> Solution:
+    result = Solution.model_validate(result).model_copy(deep=True)
+    result.run_id = run_id
+    result.validation = audit(scenario, result, inputs=inputs)
+    return result
+
+
+def resolve_live(scenario: Scenario, on_event, stop: threading.Event):
+    if SOLVER_AVAILABLE:
+        return resolve(scenario, on_event=on_event, stop=stop)
+    return resolve(scenario)
+
+
+def stream_solve(scenario: Scenario, run_id: str, inputs: Inputs):
+    """Start a run holding a live_solves slot and return its NDJSON lines, ending in one result or error line.
+
+    The work starts here and not in the generator, so a client that leaves before reading cannot strand the slot.
+    A client that leaves while reading ends the solve.
+    """
+    loop = asyncio.get_running_loop()
+    lines: asyncio.Queue[str | None] = asyncio.Queue()
+    stop = threading.Event()
+    started = time.monotonic()
+
+    def post(event: dict) -> None:
+        line = json.dumps({**event, "t": round(time.monotonic() - started, 3)}, separators=(",", ":"), allow_nan=False)
+        loop.call_soon_threadsafe(lines.put_nowait, line)
+
+    def work() -> None:
+        try:
+            result = resolve_live(scenario, post, stop)
+            post({"type": "phase", "phase": "audit"})
+            solution = finish_run(result, scenario, run_id, inputs)
+            post({"type": "result", "solution": solution.model_dump(mode="json", by_alias=True)})
+        except SolveCancelled:
+            pass
+        except Exception as exc:
+            logging.getLogger(__name__).error("Run %s failed (%s)", run_id, type(exc).__name__)
+            post({"type": "error", "run_id": run_id, "detail": "Run failed; see server logs using this run_id"})
+        finally:
+            live_solves.release()
+            loop.call_soon_threadsafe(lines.put_nowait, None)
+
+    async def read():
+        try:
+            while True:
+                try:
+                    line = await asyncio.wait_for(lines.get(), KEEPALIVE_S)
+                except TimeoutError:
+                    yield '{"type":"tick"}\n'
+                    continue
+                if line is None:
+                    return
+                yield line + "\n"
+        finally:
+            stop.set()
+
+    threading.Thread(target=work, daemon=True).start()
+    return read()
 
 
 def create_app() -> FastAPI:
@@ -154,11 +233,18 @@ def create_app() -> FastAPI:
     @protected.post("/solve")
     def solve(scenario: Scenario, request: Request, inputs: InputsDep) -> Solution:
         validate_scenario(scenario, inputs)
+        validate_scenario(scenario, inputs)
         refuse_infeasible(scenario, inputs)
-        result = Solution.model_validate(resolve(scenario)).model_copy(deep=True)
-        result.run_id = request.state.run_id
-        result.validation = audit(scenario, result, inputs=inputs)
-        return result
+        return finish_run(resolve(scenario), scenario, request.state.run_id, inputs)
+
+    @protected.post("/solve/stream")
+    async def solve_stream(scenario: Scenario, request: Request, inputs: InputsDep) -> StreamingResponse:
+        validate_scenario(scenario, inputs)
+        refuse_infeasible(scenario, inputs)
+        if not live_solves.acquire(blocking=False):
+            raise HTTPException(429, "The solver is busy with another run. Try again when it finishes")
+        return StreamingResponse(stream_solve(scenario, request.state.run_id, inputs), media_type="application/x-ndjson",
+                                 headers={"X-Accel-Buffering": "no"})
 
     @protected.post("/baseline")
     def greedy(scenario: Scenario, request: Request, inputs: InputsDep) -> Solution:
@@ -168,8 +254,14 @@ def create_app() -> FastAPI:
         result.run_id = request.state.run_id
         return result
 
+    @protected.post("/plain-english")
+    def plain_english_route(body: ExplainRequest, request: Request) -> ExplainResponse:
+        text, model = plain_english(body.kind, body.facts) if allow_call() else (None, None)
+        return ExplainResponse(run_id=request.state.run_id, text=text, model=model)
+
     app.include_router(public)
     app.include_router(protected)
+    app.include_router(explain_router)
     return app
 
 

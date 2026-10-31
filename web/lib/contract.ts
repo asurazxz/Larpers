@@ -49,7 +49,7 @@ export const DEFAULT_SCENARIO: Scenario = {
     time_limit_s: 90,
 };
 
-export type SolveStatus = 'optimal' | 'best_found' | 'infeasible' | 'heuristic';
+export type SolveStatus = 'optimal' | 'best_found' | 'infeasible' | 'heuristic' | 'no_solution';
 export type PortfolioStatus = SolveStatus | 'skipped';
 export type SolutionSource = 'live' | 'stored' | 'fixture' | 'baseline';
 
@@ -157,7 +157,7 @@ export interface Solution {
     surplus: Surplus[];
     capex_usd: number;
     logistics_annual_usd: number;
-    opex?: 'not_provided';
+    opex?: 'not_provided' | 'included';
     total_horizon_usd: number;
     /** Organisers' annual cost basis (12:45 update): proposed fields, absent from older runs. */
     annualised_capex_usd?: number | null;

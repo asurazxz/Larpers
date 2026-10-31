@@ -7,6 +7,13 @@ import { bundle, solutionOf } from '../lib/bundle';
 import { MISSING, pct, seconds } from '../lib/format';
 import { traceAll } from '../lib/trace';
 
+// Client time a live result was first shown, by run ID (the API does not echo solved_at).
+const liveSeen = new Map<string, string>();
+const liveSeenAt = (runId: string) => {
+    if (!liveSeen.has(runId)) liveSeen.set(runId, new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    return liveSeen.get(runId) as string;
+};
+
 const short = (h: string | null | undefined) => (h ? (h.length > 10 ? `${h.slice(0, 8)}…` : h) : MISSING);
 
 function Item({
@@ -80,7 +87,12 @@ export default function Provenance({ solution, entry, live }: ProvenanceProps) {
             </span>
             <Item id="provenance-gap" k="gap" v={pct(solution.gap, 2)} />
             <Item k="source" v={solution.source} minor fixed wide />
-            <Item k="solved" v={solvedAt ? solvedAt.slice(0, 16).replace('T', ' ') : MISSING} title={solvedAt} minor />
+            <Item
+                k="solved"
+                v={solvedAt ? solvedAt.slice(0, 16).replace('T', ' ') : isLive ? `live, ${liveSeenAt(solution.run_id)}` : MISSING}
+                title={solvedAt ?? (isLive ? 'Live result: local time it arrived in this browser' : undefined)}
+                minor
+            />
             <Item k="solve" v={seconds(solution.solve_seconds)} minor fixed />
             <Item k="data" v={short(solution.data_hash)} title={solution.data_hash} minor />
             <Item k="scenario" v={short(solution.scenario_hash)} title={solution.scenario_hash} minor />
