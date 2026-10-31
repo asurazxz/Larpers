@@ -1,6 +1,7 @@
 """API boundary checks using real signatures and a local JWKS-client substitute."""
 
 import importlib
+import ssl
 import time
 from types import SimpleNamespace
 
@@ -97,6 +98,14 @@ def test_auth_jwks_client_caches_by_url():
     first = get_jwks_client(SUPABASE_URL)
     assert first is get_jwks_client(SUPABASE_URL)
     assert first.uri == SUPABASE_URL+"/auth/v1/.well-known/jwks.json"
+
+
+def test_auth_jwks_client_verifies_tls_against_a_ca_bundle():
+    from api.auth import get_jwks_client
+    context = get_jwks_client(SUPABASE_URL).ssl_context
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname
+    assert context.get_ca_certs()
 
 
 def test_public_endpoints(api_client):

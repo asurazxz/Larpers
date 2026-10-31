@@ -1,10 +1,12 @@
 """Verify Supabase access tokens; never read a private key or a dotenv file."""
 
 import os
+import ssl
 from functools import lru_cache
 from typing import Annotated
 from urllib.parse import urlsplit
 
+import certifi
 import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -18,6 +20,8 @@ def get_jwks_client(supabase_url: str) -> jwt.PyJWKClient:
     return jwt.PyJWKClient(
         supabase_url.rstrip("/") + "/auth/v1/.well-known/jwks.json",
         cache_jwk_set=True, lifespan=300, cache_keys=True, timeout=5,
+        # python.org builds have no CA bundle by default, and a failed fetch reads as a 401.
+        ssl_context=ssl.create_default_context(cafile=certifi.where()),
     )
 
 
