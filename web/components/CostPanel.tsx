@@ -8,6 +8,7 @@ import { LEG_LABEL, MISSING, orMissing, pct, seconds, statusLabel, usd } from '.
 import { legSums } from '../lib/trace';
 import { annualCost, CAPEX_YEARS, FIXED_OPEX_SHARE, type AnnualCost } from '../lib/annual';
 import { Tween } from './motion';
+import { Factory, ShieldCheck, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 
 const LEGS: Leg[] = ['supply_depot', 'depot_refinery', 'refinery_airport'];
 const LEG_BAR: Record<Leg, string> = {
@@ -167,30 +168,78 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
     const s = solution;
     const { H, capex, horizonTotal, annual, total, baseTotal, saving } = derive(s, baseline);
     const failures = s.validation?.failures ?? [];
+    const refineries = (s.facilities ?? []).filter((f) => f.type === 'refinery').length;
+    const depots = (s.facilities ?? []).filter((f) => f.type === 'depot').length;
     return (
         <div id="cost-summary" className="text-base leading-snug" data-run-id={s.run_id} data-annual-source={annual.fromSolver ? 'solver' : 'recomputed'}>
-            <div className="flex items-center justify-between gap-3">
-                <span className="eyebrow">Total annual cost</span>
-                <AuditBadge s={s} />
-            </div>
-            <div className="mt-0.5 flex items-baseline justify-between gap-3">
-                <span className="flex items-baseline gap-1.5">
-                    <Tween id="cost-total" className="figure-xl" value={total} format={usd} />
-                    {total !== null && <span className="text-base text-ink2">/ yr</span>}
-                </span>
-                <span id="cost-status" className="text-right font-semibold">
-                    {statusLabel(s)}
-                </span>
-            </div>
-            <div id="annual-rows" className="mt-1 grid grid-cols-2 gap-x-5 gap-y-0.5">
-                {ANNUAL_ROWS(annual).map(([id, k, v]) => (
-                    <div key={id} id={id} className="flex items-baseline justify-between gap-2">
-                        <span className="text-ink2">{k}</span>
-                        <Tween className="num font-medium" value={v} format={usd} />
+            <div className="grid grid-cols-2 gap-2">
+                <div className="tile col-span-2" data-kpi="total">
+                    <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-brand-emerald via-brand-teal to-[#22d3ee]" />
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-2">
+                            <span className="tile-icon bg-brand-mint text-accent" aria-hidden="true">
+                                <Wallet size={16} strokeWidth={2.25} />
+                            </span>
+                            <span className="eyebrow">Total annual cost</span>
+                        </span>
+                        <span id="cost-status" className="badge bg-brand-ink text-white">
+                            {statusLabel(s)}
+                        </span>
                     </div>
-                ))}
+                    <div className="mt-1 flex items-baseline gap-1.5">
+                        <Tween id="cost-total" className="figure-xl text-brand-ink" value={total} format={usd} />
+                        {total !== null && <span className="text-base text-ink2">/ yr</span>}
+                    </div>
+                    <div id="annual-rows" className="mt-1 grid grid-cols-2 gap-x-5 gap-y-0.5">
+                        {ANNUAL_ROWS(annual).map(([id, k, v]) => (
+                            <div key={id} id={id} className="flex items-baseline justify-between gap-2">
+                                <span className="text-ink2">{k}</span>
+                                <Tween className="num font-medium" value={v} format={usd} />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                {baseline && baseTotal !== null && total !== null ? (
+                    <div id="baseline-compare" className="tile col-span-2 flex items-center justify-between gap-3 py-2" data-kpi="saving">
+                        <span className="flex items-center gap-2 text-ink2">
+                            <span
+                                className={`tile-icon ${saving !== null && saving >= 0 ? 'bg-brand-mint text-accent' : 'bg-brand-sand text-[#b45309]'}`}
+                                aria-hidden="true"
+                            >
+                                {saving !== null && saving >= 0 ? <TrendingDown size={16} strokeWidth={2.25} /> : <TrendingUp size={16} strokeWidth={2.25} />}
+                            </span>
+                            {saving !== null && saving >= 0 ? 'Saving vs greedy baseline' : 'Greedy baseline cheaper by'}
+                        </span>
+                        <span className="num font-semibold text-brand-ink">
+                            <Tween value={saving !== null ? Math.abs(saving) : null} format={usd} />/yr (
+                            {pct(saving !== null && baseTotal ? Math.abs(saving) / baseTotal : null, 1)})
+                        </span>
+                    </div>
+                ) : (
+                    <div id="baseline-compare" className="tile col-span-2 flex items-center gap-2 py-2 text-ink2" data-kpi="saving">
+                        <span className="tile-icon bg-track text-ink3" aria-hidden="true">
+                            <TrendingDown size={16} strokeWidth={2.25} />
+                        </span>
+                        {baseline ? 'Greedy baseline annual total: not in this run' : 'Greedy baseline not in this run'}
+                    </div>
+                )}
+                <div className="tile flex items-center justify-between gap-2 py-2" data-kpi="audit">
+                    <span className="tile-icon bg-[#e6eef7] text-brand-navy" aria-hidden="true">
+                        <ShieldCheck size={16} strokeWidth={2.25} />
+                    </span>
+                    <AuditBadge s={s} />
+                </div>
+                <div className="tile flex items-center justify-between gap-2 py-2" data-kpi="network" title="Refineries and depots opened in this run">
+                    <span className="tile-icon bg-brand-sand text-[#b45309]" aria-hidden="true">
+                        <Factory size={16} strokeWidth={2.25} />
+                    </span>
+                    <span className="sr-only">Network</span>
+                    <span id="network-size" className="num whitespace-nowrap font-semibold text-brand-ink">
+                        {s.facilities ? `${refineries} ref · ${depots} depots` : MISSING}
+                    </span>
+                </div>
             </div>
-            <div className="mt-1 leading-tight text-ink2" id="objective-note">
+            <div className="mt-1.5 px-1 leading-tight text-ink2" id="objective-note">
                 Organisers&apos; basis
                 {!annual.fromSolver && (
                     <span className="font-medium text-ink3" title="Recomputed in the browser from this run's facilities and costs (lib/annual.ts), like the arc trace.">
@@ -206,21 +255,6 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
                         <li key={f}>{f}</li>
                     ))}
                 </ul>
-            )}
-            {baseline && baseTotal !== null && total !== null ? (
-                <div id="baseline-compare" className="hair-t mt-1.5 flex items-baseline justify-between gap-3 pt-1.5">
-                    <span className="text-ink2">
-                        {saving !== null && saving >= 0 ? 'Saving vs greedy baseline' : 'Greedy baseline cheaper by'}
-                    </span>
-                    <span className="num font-semibold">
-                        <Tween value={saving !== null ? Math.abs(saving) : null} format={usd} />/yr (
-                        {pct(saving !== null && baseTotal ? Math.abs(saving) / baseTotal : null, 1)})
-                    </span>
-                </div>
-            ) : (
-                <div id="baseline-compare" className="hair-t mt-1.5 pt-1.5 text-ink2">
-                    {baseline ? 'Greedy baseline annual total: not in this run' : 'Greedy baseline not in this run'}
-                </div>
             )}
         </div>
     );

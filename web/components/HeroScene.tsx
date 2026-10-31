@@ -1,15 +1,15 @@
 'use client';
 
-// Landing hero: the stored base network in three.js. Loaded with next/dynamic so the planner never ships three.
+// Landing hero: the stored base network in three.js, as ground transport: flat road legs with trucks, a barge to Tarakan. Loaded with next/dynamic so the planner never ships three.
 // No WebGL: a static SVG of the same network. Reduced motion: one still frame.
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { Leg } from '../lib/contract';
-import { arcHeight, heroNetwork, LEG_GLOW, type HeroArc, type XY } from './heroNetwork';
+import { heroNetwork, LEG_GLOW, type HeroArc, type XY } from './heroNetwork';
 import { reducedMotion } from './motion';
 
 const LEGS: Leg[] = ['supply_depot', 'depot_refinery', 'refinery_airport'];
-const SEG = 28;
+const ROAD_Z = 0.008;
 
 function hasWebGL(): boolean {
     try {
@@ -20,12 +20,10 @@ function hasWebGL(): boolean {
     }
 }
 
-function bezier(arc: HeroArc, t: number, out: THREE.Vector3): THREE.Vector3 {
+function along(arc: HeroArc, t: number, out: THREE.Vector3): THREE.Vector3 {
     const [ax, ay] = arc.a;
     const [bx, by] = arc.b;
-    const h = arcHeight(arc.a, arc.b);
-    const u = 1 - t;
-    return out.set(u * ax + t * bx, u * ay + t * by, 2 * u * t * h * 2);
+    return out.set(ax + (bx - ax) * t, ay + (by - ay) * t, ROAD_Z);
 }
 
 function dotTexture(): THREE.Texture {
@@ -107,28 +105,30 @@ export default function HeroScene({ className = '' }: { className?: string }) {
         dots(net.refineries, 0x4da3ff, 0.32, 1);
         dots(net.airports, 0x22d3ee, 0.36, 1);
 
-        // Arcs (one LineSegments per leg) and particles flowing along them.
+        // Straight road legs on the land plane (one LineSegments per leg); the Tarakan barge leg is dashed.
+        // Trucks (and the barge) are small boxes moving along them, with a soft glow underneath.
         const tmp = new THREE.Vector3();
-        const flows: { arcs: HeroArc[]; phase: number[]; speed: number[]; attr: THREE.BufferAttribute }[] = [];
+        const dummy = new THREE.Object3D();
+        const flows: { arcs: HeroArc[]; phase: number[]; speed: number[]; attr: THREE.BufferAttribute; trucks: THREE.InstancedMesh }[] = [];
         for (const leg of LEGS) {
             const arcs = net.arcs.filter((a) => a.leg === leg);
             if (!arcs.length) continue;
             const color = new THREE.Color(LEG_GLOW[leg]);
-            const seg: number[] = [];
-            for (const arc of arcs) {
-                for (let i = 0; i < SEG; i++) {
-                    bezier(arc, i / SEG, tmp);
-                    seg.push(tmp.x, tmp.y, tmp.z);
-                    bezier(arc, (i + 1) / SEG, tmp);
-                    seg.push(tmp.x, tmp.y, tmp.z);
-                }
+            for (const sea of [false, true]) {
+                const group = arcs.filter((a) => a.sea === sea);
+                if (!group.length) continue;
+                const seg = group.flatMap((a) => [a.a[0], a.a[1], ROAD_Z, a.b[0], a.b[1], ROAD_Z]);
+                const lg = own(new THREE.BufferGeometry());
+                lg.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3));
+                const lm = own(
+                    sea
+                        ? new THREE.LineDashedMaterial({ color, dashSize: 0.09, gapSize: 0.07, transparent: true, opacity: 0.85, depthWrite: false })
+                        : new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
+                );
+                const line = new THREE.LineSegments(lg, lm);
+                if (sea) line.computeLineDistances();
+                spin.add(line);
             }
-            const lg = own(new THREE.BufferGeometry());
-            lg.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3));
-            const lm = own(
-                new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.42, depthWrite: false, blending: THREE.AdditiveBlending }),
-            );
-            spin.add(new THREE.LineSegments(lg, lm));
 
             const pArcs: HeroArc[] = [];
             const phase: number[] = [];
@@ -147,22 +147,33 @@ export default function HeroScene({ className = '' }: { className?: string }) {
             attr.setUsage(THREE.DynamicDrawUsage);
             pg.setAttribute('position', attr);
             const pm = own(
-                new THREE.PointsMaterial({ color, size: 0.15, map: sprite, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+                new THREE.PointsMaterial({ color, size: 0.2, map: sprite, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
             );
             spin.add(new THREE.Points(pg, pm));
-            flows.push({ arcs: pArcs, phase, speed, attr });
+            const box = own(new THREE.BoxGeometry(0.13, 0.06, 0.055));
+            const bm = own(new THREE.MeshBasicMaterial({ color }));
+            const trucks = new THREE.InstancedMesh(box, bm, pArcs.length);
+            trucks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            spin.add(trucks);
+            flows.push({ arcs: pArcs, phase, speed, attr, trucks });
         }
 
         const place = (t: number) => {
             for (const f of flows) {
                 const arr = f.attr.array as Float32Array;
                 for (let i = 0; i < f.arcs.length; i++) {
-                    bezier(f.arcs[i], (f.phase[i] + t * f.speed[i]) % 1, tmp);
+                    const arc = f.arcs[i];
+                    along(arc, (f.phase[i] + t * f.speed[i]) % 1, tmp);
                     arr[i * 3] = tmp.x;
                     arr[i * 3 + 1] = tmp.y;
                     arr[i * 3 + 2] = tmp.z;
+                    dummy.position.set(tmp.x, tmp.y, tmp.z + 0.04);
+                    dummy.rotation.set(0, 0, Math.atan2(arc.b[1] - arc.a[1], arc.b[0] - arc.a[0]));
+                    dummy.updateMatrix();
+                    f.trucks.setMatrixAt(i, dummy.matrix);
                 }
                 f.attr.needsUpdate = true;
+                f.trucks.instanceMatrix.needsUpdate = true;
             }
         };
 
@@ -280,20 +291,20 @@ export function NetworkSvg() {
             {net.land.map((r, i) => (
                 <path key={i} d={path(r)} fill="#1a1d24" stroke="rgba(255,255,255,0.22)" strokeWidth={2} />
             ))}
-            {net.arcs.map((a, i) => {
-                const [ax, ay, bx, by] = [X(a.a[0]), Y(a.a[1]), X(a.b[0]), Y(a.b[1])];
-                const lift = arcHeight(a.a, a.b) * S * 1.6;
-                return (
-                    <path
-                        key={i}
-                        d={`M${ax},${ay}Q${(ax + bx) / 2},${(ay + by) / 2 - lift} ${bx},${by}`}
-                        fill="none"
-                        stroke={LEG_GLOW[a.leg]}
-                        strokeOpacity={0.55}
-                        strokeWidth={2.5}
-                    />
-                );
-            })}
+            {net.arcs.map((a, i) => (
+                <line
+                    key={i}
+                    x1={X(a.a[0])}
+                    y1={Y(a.a[1])}
+                    x2={X(a.b[0])}
+                    y2={Y(a.b[1])}
+                    stroke={LEG_GLOW[a.leg]}
+                    strokeOpacity={a.sea ? 0.9 : 0.6}
+                    strokeWidth={2.5}
+                    strokeDasharray={a.sea ? '10 8' : undefined}
+                    strokeLinecap="round"
+                />
+            ))}
             {net.sites.map((p, i) => (
                 <circle key={`s${i}`} cx={X(p[0])} cy={Y(p[1])} r={4} fill="rgba(255,255,255,0.4)" />
             ))}

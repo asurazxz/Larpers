@@ -18,6 +18,7 @@ import {
 } from '../lib/contract';
 import { runIndex } from '../lib/robustness';
 import { MISSING, orMissing, statusLabel } from '../lib/format';
+import Select from './Select';
 import InfoTip, { INPUT_HELP } from './InfoTip';
 import {
     asScenarioForm,
@@ -377,39 +378,39 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                     Yield
                                     <InfoTip label="Yield">{INPUT_HELP.yield}</InfoTip>
                                 </span>
-                                <select className={fieldClass} name="yield" value={form.yieldValue} onChange={(e) => setForm((f) => ({ ...f, yieldValue: e.target.value }))}>
-                                    {withCurrent(yieldOptions, form.yieldValue).map((v) => (
-                                        <option key={v} value={String(v)}>
-                                            {pctLabel(v)}
-                                        </option>
-                                    ))}
-                                </select>
+                                <Select
+                                    name="yield"
+                                    ariaLabel="Yield"
+                                    value={form.yieldValue}
+                                    onValueChange={(v) => setForm((f) => ({ ...f, yieldValue: v }))}
+                                    options={withCurrent(yieldOptions, form.yieldValue).map((v) => ({ value: String(v), label: pctLabel(v) }))}
+                                />
                             </label>
                             <label>
                                 <span className={labelClass}>
                                     Road factor
                                     <InfoTip label="Road factor">{INPUT_HELP.road}</InfoTip>
                                 </span>
-                                <select className={fieldClass} name="road_factor" value={form.roadFactor} onChange={(e) => setForm((f) => ({ ...f, roadFactor: e.target.value }))}>
-                                    {withCurrent(ROAD_OPTIONS, form.roadFactor).map((v) => (
-                                        <option key={v} value={String(v)}>
-                                            {v}
-                                        </option>
-                                    ))}
-                                </select>
+                                <Select
+                                    name="road_factor"
+                                    ariaLabel="Road factor"
+                                    value={form.roadFactor}
+                                    onValueChange={(v) => setForm((f) => ({ ...f, roadFactor: v }))}
+                                    options={withCurrent(ROAD_OPTIONS, form.roadFactor).map((v) => ({ value: String(v), label: String(v) }))}
+                                />
                             </label>
                             <label>
                                 <span className={labelClass}>
                                     Horizon (yr)
                                     <InfoTip label="Horizon">{INPUT_HELP.horizon}</InfoTip>
                                 </span>
-                                <select className={fieldClass} name="horizon" value={form.horizon} onChange={(e) => setForm((f) => ({ ...f, horizon: e.target.value }))}>
-                                    {withCurrent(HORIZON_OPTIONS, form.horizon).map((v) => (
-                                        <option key={v} value={String(v)}>
-                                            {v} yr
-                                        </option>
-                                    ))}
-                                </select>
+                                <Select
+                                    name="horizon"
+                                    ariaLabel="Horizon (yr)"
+                                    value={form.horizon}
+                                    onValueChange={(v) => setForm((f) => ({ ...f, horizon: v }))}
+                                    options={withCurrent(HORIZON_OPTIONS, form.horizon).map((v) => ({ value: String(v), label: `${v} yr` }))}
+                                />
                             </label>
                         </div>
                         <div className="text-base text-ink2" data-testid="cost-basis">
@@ -425,30 +426,32 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                     Collection
                                     <InfoTip label="Collection">{INPUT_HELP.collection}</InfoTip>
                                 </span>
-                                <select
-                                    className={fieldClass}
+                                <Select
                                     name="collection"
+                                    ariaLabel="Collection"
                                     value={form.collection}
-                                    onChange={(e) => setForm((f) => ({ ...f, collection: e.target.value as CollectionPolicy }))}
-                                >
-                                    <option value="all">all biomass</option>
-                                    <option value="optional">optional</option>
-                                </select>
+                                    onValueChange={(v) => setForm((f) => ({ ...f, collection: v as CollectionPolicy }))}
+                                    options={[
+                                        { value: 'all', label: 'all biomass' },
+                                        { value: 'optional', label: 'optional' },
+                                    ]}
+                                />
                             </label>
                             <label>
                                 <span className={labelClass}>
                                     Capacity basis
                                     <InfoTip label="Capacity basis">{INPUT_HELP.capacity}</InfoTip>
                                 </span>
-                                <select
-                                    className={fieldClass}
+                                <Select
                                     name="capacity_basis"
+                                    ariaLabel="Capacity basis"
                                     value={form.capacityBasis}
-                                    onChange={(e) => setForm((f) => ({ ...f, capacityBasis: e.target.value as CapacityBasis }))}
-                                >
-                                    <option value="saf_output">SAF output</option>
-                                    <option value="biomass_input">biomass input</option>
-                                </select>
+                                    onValueChange={(v) => setForm((f) => ({ ...f, capacityBasis: v as CapacityBasis }))}
+                                    options={[
+                                        { value: 'saf_output', label: 'SAF output' },
+                                        { value: 'biomass_input', label: 'biomass input' },
+                                    ]}
+                                />
                             </label>
                         </div>
 
@@ -472,22 +475,16 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                                 ))}
                             </div>
                             <div className="mt-1.5 flex items-center gap-2">
-                                <select
-                                    className={fieldClass}
+                                <Select
                                     name="exclude-add"
+                                    ariaLabel="Exclude a site"
                                     value=""
-                                    onChange={(e) => {
-                                        const id = e.target.value;
+                                    placeholder="Exclude a site…"
+                                    onValueChange={(id) => {
                                         if (id) setForm((f) => (f.excluded.includes(id) ? f : { ...f, excluded: [...f.excluded, id] }));
                                     }}
-                                >
-                                    <option value="">Exclude a site…</option>
-                                    {candidatesLeft.map((id) => (
-                                        <option key={id} value={id}>
-                                            {siteById(id)?.label ?? id}
-                                        </option>
-                                    ))}
-                                </select>
+                                    options={candidatesLeft.map((id) => ({ value: id, label: siteById(id)?.label ?? id }))}
+                                />
                                 <label className="flex shrink-0 items-center gap-1.5 text-base text-ink3">
                                     <input type="checkbox" checked={pickMode} onChange={(e) => setPickMode(e.target.checked)} />
                                     pick on map

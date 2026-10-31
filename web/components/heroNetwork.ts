@@ -27,6 +27,8 @@ export interface HeroArc {
     a: XY;
     b: XY;
     kt: number;
+    /** Tarakan is an island: its last leg goes by barge. */
+    sea: boolean;
 }
 
 export interface HeroNetwork {
@@ -68,10 +70,13 @@ export function heroNetwork(): HeroNetwork {
         depots: facilities.filter((f) => f.type === 'depot').map((f) => project(f.lat, f.lon)),
         refineries: facilities.filter((f) => f.type === 'refinery').map((f) => project(f.lat, f.lon)),
         airports: [...airports.values()],
-        arcs: flows.map((f) => ({ leg: f.leg, a: project(f.from_lat, f.from_lon), b: project(f.to_lat, f.to_lon), kt: f.kt })),
+        arcs: flows.map((f) => ({
+            leg: f.leg,
+            a: project(f.from_lat, f.from_lon),
+            b: project(f.to_lat, f.to_lon),
+            kt: f.kt,
+            sea: f.leg === 'refinery_airport' && f.to === 'TRK',
+        })),
     };
     return cached;
 }
-
-/** Arc lift: longer legs arc higher. */
-export const arcHeight = (a: XY, b: XY) => 0.12 + 0.22 * Math.hypot(b[0] - a[0], b[1] - a[1]);

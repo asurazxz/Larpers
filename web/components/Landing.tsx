@@ -1,6 +1,7 @@
 'use client';
 
 // Front page (#home). Wording from docs/PITCH.md; every number is read from the stored bundle at runtime.
+import Logo from './Logo';
 import { animate, stagger } from 'animejs';
 import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
@@ -104,11 +105,11 @@ export default function Landing() {
                 <div className="absolute inset-0 -z-10 bg-[radial-gradient(120%_80%_at_50%_100%,#0d1a2e_0%,#05070b_55%,#000_100%)]" />
                 <HeroScene className="!absolute inset-0 -z-10" />
                 <nav className="flex items-center justify-between px-6 py-4 text-base text-white/70 md:px-10">
-                    <span className="font-semibold text-white">Larpers</span>
+                    <Logo size={32} tone="light" />
                     <span>Airbus Challenge #3</span>
                 </nav>
                 <div ref={hero} className="mx-auto mt-[6vh] max-w-4xl px-6 text-center">
-                    <p data-hero className="text-lg font-semibold text-[#4da3ff]">
+                    <p data-hero className="text-lg font-semibold text-[#5eead4]">
                         Kalimantan SAF Network Planner
                     </p>
                     <h1 data-hero className="mt-3 text-[2.6rem] font-semibold leading-[1.04] tracking-[-0.035em] md:text-[4.2rem]">
@@ -133,9 +134,9 @@ export default function Landing() {
                                 e.preventDefault();
                                 document.getElementById('how')?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth' });
                             }}
-                            className="text-lg text-[#4da3ff] hover:underline"
+                            className="text-lg text-[#5eead4] hover:underline"
                         >
-                            How it works ›
+                            How it works â€º
                         </a>
                     </div>
                 </div>
@@ -144,9 +145,9 @@ export default function Landing() {
                     <span className="flex flex-wrap gap-4">
                         {(
                             [
-                                ['supply_depot', 'Site → depot'],
-                                ['depot_refinery', 'Depot → refinery'],
-                                ['refinery_airport', 'Refinery → airport'],
+                                ['supply_depot', 'Site â†’ depot'],
+                                ['depot_refinery', 'Depot â†’ refinery'],
+                                ['refinery_airport', 'Refinery â†’ airport'],
                             ] as const
                         ).map(([leg, label]) => (
                             <span key={leg} className="inline-flex items-center gap-2">
