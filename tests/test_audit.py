@@ -203,6 +203,34 @@ def test_numerical_tolerances():
     assert not run_audit(scenario, solution, inputs).passed
 
 
+def test_refinery_may_be_at_an_airport():
+    inputs, scenario, solution = tiny_case()
+    solution.facilities[1].site_id = "BPN"
+    solution.flows[2].to = "BPN"
+    for flow in solution.flows[3:]:
+        flow.from_id = "BPN"
+    report = run_audit(scenario, solution, inputs)
+    assert report.passed, report.failures
+
+
+@pytest.mark.parametrize("basis", ["saf_output", "biomass_input"])
+def test_refinery_capacity_rejects_excess_on_selected_basis(basis):
+    inputs, _, solution = tiny_case()
+    scenario = Scenario(capacity_basis=basis)
+    solution.scenario_hash = scenario.scenario_hash()
+    refinery = solution.facilities[1]
+    refinery.size = "small"
+    refinery.capacity_kt = 500
+    refinery.capex_usd = 480_000_000
+    refinery.capacity_basis = "saf_out" if basis == "saf_output" else "biomass_in"
+    if basis == "saf_output":
+        solution.flows[3].kt = 501
+    else:
+        solution.flows[2].kt = 501
+    report = run_audit(scenario, solution, inputs)
+    assert any(f.startswith("capacity:") for f in report.failures)
+
+
 def test_audit_does_not_import_optimizer():
     path = Path(__file__).resolve().parents[1] / "solver" / "audit.py"
     tree = ast.parse(path.read_text())
