@@ -68,7 +68,17 @@ export default function Header({ solution, view, health, isLive }: HeaderProps) 
     return (
         <header id="header" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pb-1 pt-1.5 md:flex-nowrap">
             <div className="min-w-0">
-                <h1 className="text-[1.25rem] font-semibold leading-tight tracking-[-0.02em]">Kalimantan SAF Network Planner</h1>
+                <h1 className="flex items-baseline gap-3 text-[1.25rem] font-semibold leading-tight tracking-[-0.02em]">
+                    <a
+                        href="#home"
+                        id="home-link"
+                        className="shrink-0 rounded-full text-base font-medium text-accent transition-opacity hover:opacity-70"
+                        title="Back to the front page"
+                    >
+                        ← Home
+                    </a>
+                    <span>Kalimantan SAF Network Planner</span>
+                </h1>
                 {/* Status, solve time and run ID live in the provenance strip and the summary. */}
                 <div
                     id="run-label"
@@ -84,11 +94,11 @@ export default function Header({ solution, view, health, isLive }: HeaderProps) 
                     <div
                         id="header-badge"
                         data-badge={isLive && health.state === 'up' ? 'live' : health.state === 'down' ? 'offline' : 'stored'}
-                        className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-base font-semibold tracking-[0.01em] ${style.pill}`}
+                        className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-base font-semibold tracking-[0.01em] transition-[background-color,color,box-shadow] duration-500 ease-out ${style.pill}`}
                         title={badge.title}
                         aria-live="polite"
                     >
-                        <span aria-hidden="true" className={`inline-block h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
+                        <span aria-hidden="true" className={`inline-block h-2 w-2 shrink-0 rounded-full transition-colors duration-500 ${style.dot}`} />
                         {badge.text}
                     </div>
                 </div>

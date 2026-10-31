@@ -7,6 +7,7 @@ import { bundle, solutionOf } from '../lib/bundle';
 import { LEG_LABEL, MISSING, orMissing, pct, seconds, statusLabel, usd } from '../lib/format';
 import { legSums } from '../lib/trace';
 import { annualCost, CAPEX_YEARS, FIXED_OPEX_SHARE, type AnnualCost } from '../lib/annual';
+import { Tween } from './motion';
 
 const LEGS: Leg[] = ['supply_depot', 'depot_refinery', 'refinery_airport'];
 const LEG_BAR: Record<Leg, string> = {
@@ -174,9 +175,7 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
             </div>
             <div className="mt-0.5 flex items-baseline justify-between gap-3">
                 <span className="flex items-baseline gap-1.5">
-                    <span id="cost-total" className="figure-xl">
-                        {usd(total)}
-                    </span>
+                    <Tween id="cost-total" className="figure-xl" value={total} format={usd} />
                     {total !== null && <span className="text-base text-ink2">/ yr</span>}
                 </span>
                 <span id="cost-status" className="text-right font-semibold">
@@ -187,7 +186,7 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
                 {ANNUAL_ROWS(annual).map(([id, k, v]) => (
                     <div key={id} id={id} className="flex items-baseline justify-between gap-2">
                         <span className="text-ink2">{k}</span>
-                        <span className="num font-medium">{usd(v)}</span>
+                        <Tween className="num font-medium" value={v} format={usd} />
                     </div>
                 ))}
             </div>
@@ -214,7 +213,7 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
                         {saving !== null && saving >= 0 ? 'Saving vs greedy baseline' : 'Greedy baseline cheaper by'}
                     </span>
                     <span className="num font-semibold">
-                        {usd(saving !== null ? Math.abs(saving) : null)}/yr (
+                        <Tween value={saving !== null ? Math.abs(saving) : null} format={usd} />/yr (
                         {pct(saving !== null && baseTotal ? Math.abs(saving) / baseTotal : null, 1)})
                     </span>
                 </div>

@@ -4,7 +4,8 @@
 // #header-badge, #auth-slot, #map-slot, #trace-slot, #panel-scenario, #panel-cost,
 // #panel-assumptions, #panel-disrupt, #panel-robustness, #failure-band.
 import dynamic from 'next/dynamic';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { animate, stagger } from 'animejs';
 import type { Flow, Solution } from '../lib/contract';
 import { baseEntry, sites, solutionOf } from '../lib/bundle';
 import { DEFAULT_VIEW, flowKey, type View } from '../lib/view';
@@ -19,6 +20,8 @@ import CostPanel, { CostSummary, storedBaselineFor } from '../components/CostPan
 import Provenance from '../components/Provenance';
 import FailureBand from '../components/FailureBand';
 import Trace from '../components/Trace';
+import Landing from '../components/Landing';
+import { reducedMotion } from '../components/motion';
 
 const SafMap = dynamic(() => import('./Map'), {
     ssr: false,
@@ -37,7 +40,19 @@ function Section({ id, title, aside, children }: { id: string; title: string; as
     );
 }
 
+// Landing vs planner is a hash, not a route: static export with a relative assetPrefix only works at the root.
+const onHash = (cb: () => void) => {
+    window.addEventListener('hashchange', cb);
+    return () => window.removeEventListener('hashchange', cb);
+};
+
 export default function Page() {
+    const hash = useSyncExternalStore(onHash, () => window.location.hash, () => null);
+    if (hash === null) return <div className="min-h-screen bg-canvas" />;
+    return hash === '#planner' ? <Planner /> : <Landing />;
+}
+
+function Planner() {
     const entry = baseEntry();
     const [view, setView] = useState<View>(DEFAULT_VIEW);
     const [solution, setSolution] = useState<Solution | null>(solutionOf(entry) ?? null);
@@ -69,6 +84,22 @@ export default function Page() {
     );
     const costBaseline = view.kind === 'disrupt' ? null : (baselineSolution ?? storedBaselineFor(solution));
     const bandFor = useMemo(() => siteBandFn(robustKind === 'off' ? null : robustness(robustKind)), [robustKind]);
+
+    useEffect(() => {
+        window.scrollTo(0, 0);
+        if (reducedMotion()) return;
+        const anim = animate('#map-slot, #panel-summary > .card, #right-column section.card, #failure-band', {
+            opacity: { from: 0, to: 1 },
+            translateY: { from: 14, to: 0 },
+            duration: 650,
+            delay: stagger(70),
+            ease: 'outCubic',
+            onComplete: (a) => a.revert(),
+        });
+        return () => {
+            anim.revert();
+        };
+    }, []);
 
     return (
         <div className="flex min-h-screen flex-col bg-canvas text-ink md:h-screen md:overflow-hidden" data-view={view.kind}>
