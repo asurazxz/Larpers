@@ -11,6 +11,7 @@ import { Tween } from './motion';
 import { preUpdateBasis } from '../lib/basis';
 import { explainInput, fixedText, hasNoNetwork, plainReason } from '../lib/explain';
 import ExplainButton from './ExplainButton';
+import { explanationFor } from '../lib/explanations';
 import { Factory, ShieldCheck, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 
 const LEGS: Leg[] = ['supply_depot', 'depot_refinery', 'refinery_airport'];
@@ -259,7 +260,7 @@ export function CostSummary({ solution, baseline, hold = false }: { solution: So
                     </span>
                 </div>
             </div>
-            {explanation && <ExplainButton key={s.run_id} id="explain" input={explanation} fixedText={fixedText(explanation)} />}
+            {explanation && <ExplainButton key={s.run_id} id="explain" input={explanation} fixedText={fixedText(explanation)} stored={explanationFor(s)} />}
             {!noNetwork && (
             <div className="mt-1.5 px-1 leading-tight text-ink2" id="objective-note">
                 {preUpdate ? (
