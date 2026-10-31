@@ -10,7 +10,7 @@ import { pct, statusLabel, usd } from '../lib/format';
 const LEAVE_MS = 260;
 const CHART_W = 260;
 const CHART_H = 78;
-const GAP_LINE = '#0071e3';
+const GAP_LINE = '#0f766e';
 
 const CELL_CLASS: Record<MixState, string> = {
     not_run: 'bg-[#d2d2d7]',
@@ -170,7 +170,7 @@ export default function SolvePanel({ feed }: { feed: SolveFeed }) {
             data-phase={p.phase}
             data-testid="solve-panel"
             aria-label="Live solver progress"
-            className={`solve-panel absolute inset-0 z-10 flex flex-col rounded-card bg-white px-5 py-3 text-base leading-snug ${leaving ? 'solve-panel-out' : ''}`}
+            className={`solve-panel absolute inset-0 z-10 flex flex-col rounded-card bg-gradient-to-b from-white to-[#f6faf9] px-3.5 py-3 text-base leading-snug ${leaving ? 'solve-panel-out' : ''}`}
         >
             <div className="flex items-center justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2 font-semibold">

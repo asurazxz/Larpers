@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.auth import require_user
+from api.explain import router as explain_router
 from solver.audit import audit
 from solver.baseline import baseline
 from solver.contract import AuditReport, ContractModel, Scenario, Solution
@@ -254,6 +255,7 @@ def create_app() -> FastAPI:
 
     app.include_router(public)
     app.include_router(protected)
+    app.include_router(explain_router)
     return app
 
 

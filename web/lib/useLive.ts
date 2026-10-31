@@ -352,7 +352,7 @@ export function useLiveRunner(onResult: (run: LiveRun) => void, feed: SolveFeed,
         feedRef.current.end(RESULT_LINGER_MS);
         resultRef.current({
             solution,
-            baseline: base.status === 'fulfilled' ? base.value : null,
+            baseline: base.status === 'fulfilled' ? (base.value && !base.value.scenario ? { ...base.value, scenario } : base.value) : null,
             baselineError,
             scenario,
             finishedAt: Date.now(),
