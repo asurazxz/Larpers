@@ -176,7 +176,7 @@ export default function FlowSankey({ solution, className = '' }: { solution: Sol
             {hover && (
                 <div
                     className="num pointer-events-none absolute z-10 rounded-md border border-line bg-white px-2.5 py-1 text-base text-ink"
-                    style={{ left: Math.max(4, Math.min(hover.x + 10, w - 444)), top: hover.y + 16, maxWidth: 440 }}
+                    style={{ left: Math.max(4, Math.min(hover.x + 10, w - 444)), top: hover.y > h - 90 ? hover.y - 72 : hover.y + 16, maxWidth: 440 }}
                     role="status"
                 >
                     {hover.text}
