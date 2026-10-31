@@ -64,7 +64,7 @@ export default function DemandSupplyStep({
                 bodyClass="p-4"
             >
                 <div className="flex flex-wrap items-end gap-3">
-                    <div className="grid min-w-0 flex-1 grid-cols-4 gap-3">
+                    <div className="grid min-w-0 flex-1 grid-cols-2 gap-3 xl:grid-cols-4">
                         {AIRPORTS.map((a) => (
                             <div key={a}>
                                 <div className="mb-1 flex items-center gap-1.5">
@@ -101,7 +101,7 @@ export default function DemandSupplyStep({
                     active={tab}
                     onChange={setTab}
                 />
-                <div className="mt-3 grid gap-4 lg:grid-cols-[1fr_260px]">
+                <div className="mt-3 grid gap-4 xl:grid-cols-[1fr_260px]">
                     <div className="max-h-[210px] overflow-auto rounded-lg border border-line">
                         {tab === 'region' ? (
                             <table className="tbl w-full text-sm">
