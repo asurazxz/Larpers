@@ -1,0 +1,46 @@
+# Fetches the OSRM road geometry the map is missing, rebuilds web/data/routes.json and commits both files back.
+# Runs on GitHub's servers because the public OSRM demo server needs open internet.
+name: OSRM routes
+
+on:
+    push:
+        branches: [claude/osrm-supply-depot-routes]
+        paths: [data/fetch_osrm_routes.py, .github/workflows/osrm-routes.yml]
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+concurrency:
+    group: osrm-routes-${{ github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    routes:
+        runs-on: ubuntu-latest
+        timeout-minutes: 40
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+                  cache: pip
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+            - run: pip install -r requirements.txt
+            - run: python data/prepare.py
+            - name: Fetch missing routes (second pass retries any failures)
+              run: |
+                  python data/fetch_osrm_routes.py
+                  python data/fetch_osrm_routes.py
+            - run: node web/scripts/make-routes.mjs
+            - run: python -m pytest tests/test_routes.py -q
+            - name: Commit the routes
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git add data/reference/osrm_routes.json web/data/routes.json
+                  git diff --cached --quiet && { echo "No new routes"; exit 0; }
+                  git commit -m "Add OSRM routes for every supply-depot pair within the haul limit"
+                  git push
