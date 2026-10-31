@@ -26,6 +26,7 @@ import Landing from '../components/Landing';
 import Explanation from '../components/Explanation';
 import { reducedMotion } from '../components/motion';
 import { AppProvider, parseWorkspaceHash } from '../lib/store';
+import { finishOAuthReturn } from '../lib/auth';
 import AppShell from '../components/layout/AppShell';
 import OverviewPage from '../components/pages/OverviewPage';
 import NetworkExplorerPage from '../components/pages/NetworkExplorerPage';
@@ -65,6 +66,10 @@ const onHash = (cb: () => void) => {
 
 export default function Page() {
     const hash = useSyncExternalStore(onHash, () => window.location.hash, () => null);
+    // Finish a Google sign-in on whatever page the redirect lands on, then return to the page it started from.
+    useEffect(() => {
+        finishOAuthReturn().catch(() => {});
+    }, []);
     if (hash === null) return <div className="min-h-screen bg-canvas" />;
     if (hash === '#planner') return <Planner />;
     // Five-page workspace (#overview, #network, #scenarios, #results, #reliability, each with an optional /tab).

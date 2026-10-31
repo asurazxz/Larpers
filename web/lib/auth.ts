@@ -26,6 +26,7 @@ export interface SessionState {
 const CALLBACK_PARAMS = ['code', 'sb_flow_id', 'state', 'error', 'error_code', 'error_description'];
 
 const PENDING_KEY = 'larpers.pendingScenario.v1';
+const RETURN_HASH_KEY = 'larpers.returnHash.v1';
 const PENDING_MAX_AGE_MS = 60 * 60 * 1000;
 
 
@@ -143,6 +144,12 @@ export async function signInWithGoogle(pendingInputs?: unknown): Promise<void> {
     if (pendingInputs !== undefined) {
         savePendingInputs(pendingInputs);
     }
+    // The return URL carries no hash, so remember which page to come back to.
+    try {
+        window.sessionStorage.setItem(RETURN_HASH_KEY, window.location.hash || '#overview');
+    } catch {
+        // Storage blocked: the user lands on the landing page, still signed in.
+    }
     const redirectTo = window.location.origin + window.location.pathname;
     const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -162,6 +169,40 @@ export async function signOut(): Promise<void> {
     const { error } = await supabase.auth.signOut({ scope: 'local' });
     if (error) {
         throw error;
+    }
+}
+
+// Google returns to the bare URL (?code=..., no hash), which renders the landing page.
+// The landing page never starts Supabase, so the code was never exchanged and sign-in
+// silently failed. Called once at the root: exchange the code, then go back to the page
+// the user signed in from.
+export async function finishOAuthReturn(): Promise<void> {
+    if (typeof window === 'undefined' || !authEnabled) {
+        return;
+    }
+    const params = new URL(window.location.href).searchParams;
+    if (!params.has('code') && !params.has('error')) {
+        return;
+    }
+    let target: string | null = null;
+    try {
+        target = window.sessionStorage.getItem(RETURN_HASH_KEY);
+        window.sessionStorage.removeItem(RETURN_HASH_KEY);
+    } catch {
+        // ignore
+    }
+    try {
+        const supabase = await getSupabase();
+        if (supabase) {
+            await supabase.auth.initialize();
+        }
+    } finally {
+        if (params.has('code')) {
+            cleanAuthParamsFromUrl();
+        }
+        if (target && target !== window.location.hash) {
+            window.location.hash = target;
+        }
     }
 }
 
