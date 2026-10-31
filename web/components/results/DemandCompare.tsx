@@ -70,8 +70,8 @@ export function Demand({ solution }: { solution: Solution }) {
     );
 }
 
-interface Metrics { total: number | null; capex: number; logistics: number; refs: number; deps: number; gap: number | null; status: string; served: number; delivered: number }
-function metricsOf(s: Solution): Metrics {
+export interface Metrics { total: number | null; capex: number; logistics: number; refs: number; deps: number; gap: number | null; status: string; served: number; delivered: number }
+export function metricsOf(s: Solution): Metrics {
     const a = annualCost(s);
     const sa = s.flows.filter((f) => f.leg === 'refinery_airport');
     return {

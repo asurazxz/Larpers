@@ -1,45 +1,57 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import NetworkMap from '../map/NetworkMap';
-import { Card, Check, EmptyState, MetricCard, PageHeader, SolverChip } from '../common/ui';
-import { IconDollar, IconFactory, IconTruck, IconCheck } from '../common/icons';
+import { EmptyState, PageHeader } from '../common/ui';
+import { IconDollar, IconTruck, IconCheck } from '../common/icons';
+import { HeroArt, IconArrow, IconBuilding, IconDepot, IconFlame, IconNetwork, IconPin, IconPlaneSm, IconTrend, Kpi, OutcomeRow, Tile } from '../overview/Parts';
 import { demandOf } from '../../lib/demand';
 import { useApp } from '../../lib/store';
-import { AIRPORTS, DEFAULT_SCENARIO, type DemandKt, type Leg, type Scenario, type Solution } from '../../lib/contract';
+import { useSession } from '../../lib/auth';
+import { AIRPORTS, type Leg, type Solution } from '../../lib/contract';
 import { annualCost } from '../../lib/annual';
 import { legSums } from '../../lib/trace';
-import { getEntry } from '../../lib/bundle';
-import { storedSlugOf } from '../../lib/useLive';
-import { isProvenOptimal, kt, km, LEG_LABEL, MISSING, pct, seconds, statusLabel, usd } from '../../lib/format';
+import { isProvenOptimal, kt, km, LEG_LABEL, MISSING, pct, seconds, usd } from '../../lib/format';
 
 const TOL = 1e-6;
+const card = 'rounded-xl border border-line bg-white shadow-sm';
 
-function scenarioOf(s: Solution): Scenario {
-    if (s.scenario) return s.scenario;
-    const entry = getEntry(storedSlugOf(s) ?? '') as unknown as { scenario?: Scenario } | undefined;
-    return entry?.scenario ?? DEFAULT_SCENARIO;
+function greeting(): string {
+    const h = new Date().getHours();
+    return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
-function Stat({ label, value }: { label: string; value: ReactNode }) {
+function NetRow({ icon, tone, count, label, detail }: { icon: ReactNode; tone: 'orange' | 'red' | 'blue' | 'amber'; count: ReactNode; label: string; detail?: string }) {
     return (
-        <div className="flex items-baseline justify-between gap-3 border-b border-line py-2 last:border-0">
-            <dt className="text-sm text-muted">{label}</dt>
-            <dd className="num text-sm font-semibold text-deep">{value}</dd>
+        <li className="flex items-center gap-3">
+            <Tile tone={tone} size="sm">{icon}</Tile>
+            <span className="num w-6 text-lg font-bold text-deep">{count}</span>
+            <span className="min-w-0 text-[13.5px] text-deep">
+                {label}
+                {detail && <span className="ml-1 text-[12px] text-muted">{detail}</span>}
+            </span>
+        </li>
+    );
+}
+
+function Insight({ tone, icon, title, children }: { tone: 'red' | 'green' | 'amber'; icon: ReactNode; title: ReactNode; children: ReactNode }) {
+    return (
+        <div className="flex min-w-0 items-start gap-3">
+            <Tile tone={tone} size="md">{icon}</Tile>
+            <div className="min-w-0">
+                <div className="text-[14px] font-bold leading-snug text-deep">{title}</div>
+                <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-muted">{children}</p>
+            </div>
         </div>
     );
 }
 
-function LinkBtn({ onClick, children }: { onClick: () => void; children: ReactNode }) {
-    return (
-        <button type="button" onClick={onClick} className="mt-2 text-sm font-medium text-primary hover:underline">
-            {children}
-        </button>
-    );
-}
-
 export default function OverviewPage() {
-    const { solution, baseline, isLive, go } = useApp();
+    const { solution, baseline, go } = useApp();
+    const { user } = useSession();
+    const [hello, setHello] = useState('Hello');
+    useEffect(() => setHello(greeting()), []);
+    const first = user?.name?.split(/\s+/)[0] ?? null;
 
     if (!solution) {
         return (
@@ -50,157 +62,142 @@ export default function OverviewPage() {
         );
     }
 
-    const ann = annualCost(solution);
-    const sc = scenarioOf(solution);
-    const demand: DemandKt | null = demandOf(solution);
-    const optimal = isProvenOptimal(solution);
+    const s: Solution = solution;
+    const ann = annualCost(s);
+    const demand = demandOf(s);
+    const optimal = isProvenOptimal(s);
+    const infeasible = s.status === 'infeasible';
 
-    const fac = solution.facilities;
+    const fac = s.facilities;
     const count = (type: string, size: string) => fac.filter((f) => f.type === type && f.size === size).length;
-    const refCapex = fac.filter((f) => f.type === 'refinery').reduce((a, f) => a + f.capex_usd, 0);
-    const depCapex = fac.filter((f) => f.type === 'depot').reduce((a, f) => a + f.capex_usd, 0);
+    const refs = fac.filter((f) => f.type === 'refinery');
+    const deps = fac.filter((f) => f.type === 'depot');
+    const refCapex = refs.reduce((a, f) => a + f.capex_usd, 0);
+    const depCapex = deps.reduce((a, f) => a + f.capex_usd, 0);
 
     const inbound: Record<string, number> = {};
     for (const a of AIRPORTS) inbound[a] = 0;
-    for (const f of solution.flows) if (f.leg === 'refinery_airport' && f.to in inbound) inbound[f.to] += f.kt;
+    for (const f of s.flows) if (f.leg === 'refinery_airport' && f.to in inbound) inbound[f.to] += f.kt;
     const served = AIRPORTS.filter((a) => inbound[a] > 0);
-    const sites = new Set(solution.flows.filter((f) => f.leg === 'supply_depot').map((f) => f.from)).size;
-    const strandedKt = solution.stranded.reduce((a, s) => a + s.kt, 0);
+    const deliveredKt = AIRPORTS.reduce((a, c) => a + inbound[c], 0);
+    const sites = new Set(s.flows.filter((f) => f.leg === 'supply_depot').map((f) => f.from)).size;
+    const strandedKt = s.stranded.reduce((a, x) => a + x.kt, 0);
 
-    const totalBasis = ann.total != null ? 'annual basis' : 'horizon basis, CapEx plus logistics';
-    const total = ann.total ?? solution.total_horizon_usd;
+    const total = ann.total ?? s.total_horizon_usd;
+    const totalLabel = ann.total != null ? 'Total modelled cost (1 yr)' : 'Total modelled cost (horizon)';
 
-    // Baseline comparison only on the same cost basis.
-    let baseDelta: ReactNode = null;
+    // Baseline only on the same cost basis; a negative saving is shown as higher, never as a saving.
+    let basePct: number | null = null;
     if (baseline) {
         const bAnn = annualCost(baseline);
-        const sameBasis = ann.total != null && bAnn.total != null;
-        const bTotal = sameBasis ? bAnn.total : ann.total == null ? baseline.total_horizon_usd : null;
-        if (bTotal != null) {
-            const diff = bTotal - total;
-            baseDelta = diff >= 0 ? `${usd(diff)} below greedy baseline (${usd(bTotal)})` : `${usd(-diff)} above greedy baseline (${usd(bTotal)})`;
-        }
+        const bTotal = ann.total != null ? bAnn.total : baseline.total_horizon_usd;
+        if (bTotal != null && bTotal > 0) basePct = (bTotal - total) / bTotal;
     }
 
-    // Insights, all from this run.
-    const legs = legSums(solution);
+    const legs = legSums(s);
     const legTotal = (Object.values(legs) as number[]).reduce((a, b) => a + b, 0);
     const topLeg = (Object.entries(legs) as [Leg, number][]).sort((a, b) => b[1] - a[1])[0];
-    const topFac = [...fac].sort((a, b) => b.utilisation - a.utilisation)[0];
-    const topFlow = [...solution.flows].sort((a, b) => b.cost_usd - a.cost_usd)[0];
+    const topRef = [...refs].sort((a, b) => b.capacity_kt - a.capacity_kt || b.utilisation - a.utilisation)[0];
+    const supply = s.flows.filter((f) => f.leg === 'supply_depot');
+    const supplyKt = supply.reduce((a, f) => a + f.kt, 0);
+    const avgSupplyKm = supplyKt > 0 ? supply.reduce((a, f) => a + f.kt * f.km, 0) / supplyKt : null;
 
-    const failures = solution.validation.failures ?? [];
-    const auditOk = solution.validation.passed === true;
+    const failures = s.validation.failures ?? [];
+    const auditOk = s.validation.passed === true;
+    const demandMet = demand ? AIRPORTS.every((a) => Math.abs(inbound[a] - demand[a]) <= TOL * Math.max(1, demand[a])) : null;
+    const unmet = demand ? AIRPORTS.filter((a) => Math.abs(inbound[a] - demand[a]) > TOL * Math.max(1, demand[a])) : [];
 
     return (
-        <div className="p-6 lg:p-8">
-            <PageHeader
-                title="Recommended SAF supply chain for Kalimantan"
-                subtitle={
-                    <>
-                        {solution.run_id} · {isLive ? 'live solve' : solution.source} · {statusLabel(solution)}
-                    </>
-                }
-            />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard
-                    icon={<IconDollar />}
-                    label={`Total modelled cost (${totalBasis})`}
-                    value={usd(total)}
-                    sub={baseDelta ?? (ann.total != null && ann.variableOpex == null ? 'Variable OpEx not in this run' : undefined)}
-                />
-                <MetricCard
-                    icon={<IconFactory />}
-                    tone="amber"
-                    label="CapEx, one-off"
-                    value={usd(solution.capex_usd)}
-                    sub={`Refineries ${usd(refCapex)} · depots ${usd(depCapex)}`}
-                />
-                <MetricCard icon={<IconTruck />} tone="green" label="Annual logistics" value={usd(solution.logistics_annual_usd)} sub={`${solution.flows.length} costed flows`} />
-                <MetricCard
-                    icon={<IconCheck />}
-                    tone={optimal ? 'green' : 'amber'}
-                    label="Solver status"
-                    value={<SolverChip solution={solution} />}
-                    sub={`Solve time ${seconds(solution.solve_seconds)}`}
-                />
-            </div>
-
-            <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-12">
-                <Card title="Recommended network" className="lg:col-span-3">
-                    <dl>
-                        <Stat label="Large refineries" value={count('refinery', 'large')} />
-                        <Stat label="Small refineries" value={count('refinery', 'small')} />
-                        <Stat label="Large depots" value={count('depot', 'large')} />
-                        <Stat label="Small depots" value={count('depot', 'small')} />
-                        <Stat label="Airports served" value={`${served.length} (${served.join(', ') || 'none'})`} />
-                        <Stat label="Collection sites used" value={sites} />
-                        <Stat label="Stranded sites" value={solution.stranded.length} />
-                    </dl>
-                </Card>
-                <Card title="Network map" className="overflow-hidden lg:col-span-6" bodyClass="p-0" aside={<button type="button" className="btn-secondary" onClick={() => go('network')}>Explore full network →</button>}>
-                    <div className="relative h-[340px]">
-                        <NetworkMap />
-                    </div>
-                </Card>
-                <Card title="Key outcomes" className="lg:col-span-3">
-                    <ul className="space-y-3">
-                        {AIRPORTS.map((a) => {
-                            const want = demand ? demand[a] : null;
-                            return (
-                                <Check key={a} ok={want == null ? null : Math.abs(inbound[a] - want) <= TOL * Math.max(1, want)}>
-                                    {a}: {kt(inbound[a])} delivered{want == null ? ' (demand not echoed by this run)' : ` of ${kt(want)} demand`}
-                                </Check>
-                            );
-                        })}
-                        <Check ok={auditOk}>{auditOk ? 'Independent audit passed' : `Audit not passed${failures.length ? `: ${failures.length} failure(s), first: ${failures[0]}` : ''}`}</Check>
-                        <Check ok={strandedKt <= TOL}>Stranded biomass {kt(strandedKt)}</Check>
-                        {baseline && baseDelta && <Check ok={null}>{baseDelta}</Check>}
-                        {!optimal && <Check ok={null}>Best found, gap {solution.gap == null ? MISSING : pct(solution.gap, 2)}; the gap is not a saving</Check>}
-                    </ul>
-                </Card>
-            </div>
-
-            <Card title="Insights & risks" className="mt-5">
-                <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-                    <div>
-                        <div className="text-sm text-deep">
-                            {topLeg && legTotal > 0 ? (
-                                <>
-                                    <b>{LEG_LABEL[topLeg[0]]}</b> is the largest logistics leg: {usd(topLeg[1])}, {pct(topLeg[1] / legTotal)} of flow cost.
-                                </>
-                            ) : (
-                                'No costed flows in this run.'
-                            )}
-                        </div>
-                        <LinkBtn onClick={() => go('results', 'costs')}>See cost breakdown →</LinkBtn>
-                    </div>
-                    <div>
-                        <div className="text-sm text-deep">
-                            {topFac ? (
-                                <>
-                                    <b>{topFac.label}</b> ({topFac.size} {topFac.type}) is the most utilised facility at {pct(topFac.utilisation)}.
-                                </>
-                            ) : (
-                                'No facilities in this run.'
-                            )}
-                        </div>
-                        <LinkBtn onClick={() => go('results', 'facilities')}>See facilities →</LinkBtn>
-                    </div>
-                    <div>
-                        <div className="text-sm text-deep">
-                            {topFlow ? (
-                                <>
-                                    Costliest flow: <b>{topFlow.from_label}</b> to <b>{topFlow.to_label}</b>, {kt(topFlow.kt)} over {km(topFlow.km)} costing {usd(topFlow.cost_usd)}.
-                                </>
-                            ) : (
-                                'No flows in this run.'
-                            )}
-                        </div>
-                        <LinkBtn onClick={() => go('results', 'flows')}>See flows →</LinkBtn>
-                    </div>
+        <div className="space-y-4 p-4 lg:p-6">
+            <section className={`relative min-h-[140px] overflow-hidden ${card}`}>
+                <HeroArt />
+                <div className="relative z-10 px-8 py-8">
+                    <h1 className="text-[28px] font-bold tracking-tight text-deep">{first ? `${hello}, ${first}.` : `${hello}.`}</h1>
+                    <p className="mt-1 text-[15px] text-muted">Here is the recommended SAF supply chain for Kalimantan.</p>
                 </div>
-            </Card>
+            </section>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <Kpi tone="blue" icon={<IconDollar width={24} height={24} />} label={totalLabel} value={usd(total)}>
+                    {basePct != null ? (
+                        basePct >= 0 ? (
+                            <span className="font-semibold text-success">▼ {pct(basePct)} vs baseline</span>
+                        ) : (
+                            <span className="font-semibold text-warning">▲ {pct(-basePct)} above baseline</span>
+                        )
+                    ) : ann.total != null && ann.variableOpex == null ? (
+                        'Variable OpEx not in this run'
+                    ) : null}
+                </Kpi>
+                <Kpi tone="blue" icon={<IconBuilding width={24} height={24} />} label="CapEx (one-off)" value={usd(s.capex_usd)}>
+                    Refineries {usd(refCapex)} · Depots {usd(depCapex)}
+                </Kpi>
+                <Kpi tone="blue" icon={<IconTruck width={24} height={24} />} label="Annual logistics cost" value={usd(s.logistics_annual_usd)}>
+                    {s.flows.length} costed flows
+                </Kpi>
+                <Kpi tone={infeasible ? 'red' : optimal ? 'green' : 'amber'} icon={<IconCheck width={24} height={24} />} label="Solver status" value={<span className={`text-[17px] ${infeasible ? 'text-danger' : optimal ? 'text-success' : 'text-warning'}`}>{infeasible ? 'Infeasible' : optimal ? 'Proven optimal' : 'Best found solution'}</span>}>
+                    Gap {s.gap == null ? MISSING : pct(s.gap, 2)} · Runtime {seconds(s.solve_seconds)}
+                </Kpi>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+                <section className={`p-5 lg:col-span-3 ${card}`}>
+                    <h2 className="mb-4 text-[15px] font-bold text-deep">Recommended network</h2>
+                    <ul className="space-y-3.5">
+                        <NetRow icon={<IconFlame />} tone="orange" count={refs.length} label="Refineries" detail={`(${count('refinery', 'large')} large, ${count('refinery', 'small')} small)`} />
+                        <NetRow icon={<IconDepot />} tone="red" count={deps.length} label="Depots" detail={`(${count('depot', 'large')} large, ${count('depot', 'small')} small)`} />
+                        <NetRow icon={<IconPlaneSm />} tone="blue" count={served.length} label="Airports" detail={served.length === AIRPORTS.length ? '(all served)' : `(${served.length} of ${AIRPORTS.length}: ${served.join(', ') || 'none'})`} />
+                        <NetRow icon={<IconPin />} tone="amber" count={sites} label="Collection sites" detail="(used)" />
+                    </ul>
+                </section>
+
+                <section className={`relative h-[300px] overflow-hidden lg:col-span-5 ${card}`}>
+                    <NetworkMap />
+                    <button type="button" onClick={() => go('network')} className="absolute bottom-3 right-3 z-[1000] inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-[13px] font-semibold text-primary shadow-md hover:bg-blue-50">
+                        View network <IconArrow width={14} height={14} />
+                    </button>
+                </section>
+
+                <section className={`p-5 lg:col-span-4 ${card}`}>
+                    <h2 className="mb-4 text-[15px] font-bold text-deep">Key outcomes</h2>
+                    <ul className="space-y-3">
+                        {demand ? (
+                            <OutcomeRow ok={demandMet}>{demandMet ? `All airport demands satisfied (${AIRPORTS.map((a) => `${a} ${kt(demand[a], 0)}`).join(', ')})` : `Demand not met at ${unmet.join(', ')}`}</OutcomeRow>
+                        ) : (
+                            <OutcomeRow ok={served.length === AIRPORTS.length}>
+                                Delivered SAF to {served.length === AIRPORTS.length ? 'all 4 airports' : `${served.length} of 4 airports`}: {kt(deliveredKt)} (demand not echoed by this run)
+                            </OutcomeRow>
+                        )}
+                        <OutcomeRow ok={auditOk}>{auditOk ? 'Independent audit passed, no constraint violations' : `Audit not passed${failures.length ? `: ${failures.length} failure(s)` : ''}`}</OutcomeRow>
+                        <OutcomeRow ok={infeasible ? false : true}>{infeasible ? 'Model reported infeasible' : 'Network is feasible'}</OutcomeRow>
+                        <OutcomeRow ok={strandedKt <= TOL}>{strandedKt <= TOL ? 'No stranded biomass' : `Stranded biomass ${kt(strandedKt)}`}</OutcomeRow>
+                        {baseline && basePct != null && (
+                            <OutcomeRow ok={basePct >= 0 ? true : null}>{basePct >= 0 ? `Total cost ${pct(basePct)} lower than greedy baseline` : `Total cost ${pct(-basePct)} above greedy baseline`}</OutcomeRow>
+                        )}
+                        {!optimal && !infeasible && <OutcomeRow ok={null}>Best found, not proven optimal; the gap is not a saving</OutcomeRow>}
+                    </ul>
+                </section>
+            </div>
+
+            <section className={`p-5 ${card}`}>
+                <h2 className="mb-4 text-[15px] font-bold text-deep">Top insights</h2>
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+                    <Insight tone="red" icon={<IconFlame />} title={topRef ? `Largest refinery: ${topRef.label}` : 'No refineries in this run'}>
+                        {topRef ? `${topRef.size} refinery, ${kt(topRef.capacity_kt, 0)} capacity, ${pct(topRef.utilisation)} utilised.` : MISSING}
+                    </Insight>
+                    <Insight tone="green" icon={<IconNetwork />} title={deps.length ? `${deps.length} depot${deps.length === 1 ? '' : 's'} consolidate biomass` : 'No depots in this run'}>
+                        {avgSupplyKm != null ? `Supply legs average ${km(avgSupplyKm, 0)} (kt-weighted) from ${sites} collection sites.` : MISSING}
+                    </Insight>
+                    <Insight tone="amber" icon={<IconTrend />} title={topLeg && legTotal > 0 ? `${LEG_LABEL[topLeg[0]]} is the largest cost leg` : 'No costed flows'}>
+                        {topLeg && legTotal > 0 ? `${usd(topLeg[1])}, ${pct(topLeg[1] / legTotal)} of annual logistics cost.` : MISSING}
+                    </Insight>
+                </div>
+                <div className="mt-3 flex justify-end">
+                    <button type="button" onClick={() => go('results', 'costs')} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary hover:underline">
+                        View detailed analysis <IconArrow width={14} height={14} />
+                    </button>
+                </div>
+            </section>
         </div>
     );
 }

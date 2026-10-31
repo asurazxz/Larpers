@@ -12,13 +12,14 @@ import Disrupt from '../Disrupt';
 import Robustness from '../Robustness';
 import Provenance from '../Provenance';
 import FailureBand from '../FailureBand';
+import { ValidationOverview } from '../audit/SolverValidation';
 
 const TABS = [
-    { key: 'solver', label: 'Solver and audit' },
-    { key: 'sensitivity', label: 'Sensitivity' },
+    { key: 'solver', label: 'Solver Validation' },
+    { key: 'sensitivity', label: 'Sensitivity Analysis' },
     { key: 'disruptions', label: 'Disruptions' },
-    { key: 'routing', label: 'Routing' },
-    { key: 'data', label: 'Data and assumptions' },
+    { key: 'routing', label: 'Routing Validation' },
+    { key: 'data', label: 'Data & Assumptions' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -84,6 +85,7 @@ function SolverTab() {
     const recomputed = trace.total + trace.hiddenTotal;
     return (
         <>
+            <ValidationOverview s={s} slug={storedSlugOf(s) ?? null} />
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <MetricCard label="Status" value={<SolverChip solution={s} />} sub={s.status_reason ?? statusLabel(s)} />
                 <MetricCard label="Primal (best found)" value={usd(s.primal)} sub={s.primal !== null ? `$${fmtNum(s.primal)}` : undefined} />

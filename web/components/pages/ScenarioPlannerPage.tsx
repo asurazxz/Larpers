@@ -19,21 +19,15 @@ import {
     viewForEntry,
     type ScenarioForm,
 } from '../../lib/useLive';
-import { PageHeader } from '../common/ui';
+import { Card } from '../common/ui';
+import DemandSupplyStep, { Tag } from '../planner/DemandSupplyStep';
+import { listSaved, saveScenario, type SavedScenario } from '../planner/saved';
 
 const STEPS = ['Demand & Supply', 'Conversion & Logistics', 'Facilities', 'Planning Settings', 'Review & Run'] as const;
-const OFFICIAL_DEMAND = 300;
+const SUBTITLES = ['Airport demand, biomass supply', 'Yields, costs, road factors', 'Include / exclude sites', 'Horizon, options, solver', 'Check inputs and run'] as const;
 const OFFICIAL = { yield: 0.2, road: 1.3, horizon: 1 };
 
 const sameNum = (s: string, n: number) => s.trim() !== '' && Math.abs(Number(s) - n) < 1e-9;
-
-function Tag({ official }: { official: boolean }) {
-    return (
-        <span className={`chip ${official ? 'bg-green-50 text-success' : 'bg-amber-50 text-warning'}`}>
-            {official ? 'Official' : 'Assumption'}
-        </span>
-    );
-}
 
 function Field({ label, hint, tag, error, children }: { label: string; hint?: string; tag?: boolean; error?: string; children: React.ReactNode }) {
     return (
@@ -58,6 +52,10 @@ export default function ScenarioPlannerPage() {
     const [step, setStep] = useState(0);
     const [search, setSearch] = useState('');
     const [signInError, setSignInError] = useState<string | null>(null);
+    const [visited, setVisited] = useState<number[]>([0]);
+    const [saved, setSaved] = useState<SavedScenario[]>([]);
+    useEffect(() => setSaved(listSaved()), []);
+    useEffect(() => setVisited((v) => (v.includes(step) ? v : [...v, step])), [step]);
 
     const runner = useLiveRunner((run) => {
         onLiveRun(run);
@@ -87,6 +85,20 @@ export default function ScenarioPlannerPage() {
         lastSeq.current = pickedNode.seq;
         setPicked(isCandidate(pickedNode.id) ? pickedNode.id : null);
     }, [pickedNode]);
+
+    const onSaveNew = () => {
+        const name = window.prompt('Name this scenario (saved in this browser only):');
+        if (!name || !name.trim()) return;
+        setSaved(saveScenario(name.trim(), form));
+    };
+    const onLoadSaved = (name: string) => {
+        const f = saved.find((x) => x.name === name);
+        if (f) {
+            setForm(f.form);
+            runner.clear();
+        }
+    };
+    const stepErrors = [!!errors.demand, !!(errors.yield || errors.road || errors.horizon), !!errors.excluded, false, false];
 
     const upd = (patch: Partial<ScenarioForm>) => setForm((f) => ({ ...f, ...patch }));
     const toggleExcluded = (id: string) =>
@@ -133,10 +145,6 @@ export default function ScenarioPlannerPage() {
         return CANDIDATE_IDS.filter((id) => !q || id.toLowerCase().includes(q) || (siteById(id)?.label ?? '').toLowerCase().includes(q) || (siteById(id)?.province ?? '').toLowerCase().includes(q));
     }, [search]);
 
-    const demandVals = AIRPORTS.map((a) => (form.demand[a].trim() === '' ? null : Number(form.demand[a])));
-    const maxDemand = Math.max(OFFICIAL_DEMAND, ...demandVals.map((v) => (v !== null && Number.isFinite(v) ? v : 0)));
-    const demandTotal = demandVals.reduce<number>((s, v) => s + (v !== null && Number.isFinite(v) ? v : 0), 0);
-
     const editBtn = (n: number) => (
         <button type="button" className="text-sm text-primary hover:underline" onClick={() => setStep(n)}>Edit</button>
     );
@@ -173,51 +181,9 @@ export default function ScenarioPlannerPage() {
     // ---------- step content ----------
     const content = [
         // 1
-        <div key="s1" className="space-y-5">
-            <div>
-                <h3 className="text-base font-semibold text-deep">Airport demand, kt SAF per year</h3>
-                <p className="mt-1 text-sm text-muted">Official (12:45 update): 300 kt per airport, 1,200 kt total. Leave all four blank to use the full-production preset.</p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-                {AIRPORTS.map((a) => (
-                    <Field key={a} label={a} tag={form.demand[a].trim() === '' ? undefined : sameNum(form.demand[a], OFFICIAL_DEMAND)} hint="Official (12:45 update): 300">
-                        <input
-                            className="input num w-full"
-                            inputMode="decimal"
-                            placeholder="blank = preset"
-                            value={form.demand[a]}
-                            onChange={(e) => upd({ demand: { ...form.demand, [a]: e.target.value } })}
-                        />
-                    </Field>
-                ))}
-            </div>
-            {errors.demand && <div className="text-sm text-danger" role="alert">{errors.demand}</div>}
-            <div className="rounded-xl border border-line p-4">
-                <div className="mb-2 flex justify-between text-sm"><span className="font-medium text-deep">Demand summary</span><span className="num text-muted">{demandTotal} kt total</span></div>
-                <div className="space-y-2">
-                    {AIRPORTS.map((a, i) => {
-                        const v = demandVals[i];
-                        const w = v !== null && Number.isFinite(v) ? Math.min(100, (v / maxDemand) * 100) : 0;
-                        return (
-                            <div key={a} className="flex items-center gap-3 text-sm">
-                                <span className="w-10 font-medium text-deep">{a}</span>
-                                <div className="h-2.5 flex-1 rounded bg-app"><div className="h-2.5 rounded bg-primary" style={{ width: `${w}%` }} /></div>
-                                <span className="num w-20 text-right text-muted">{v === null ? 'preset' : `${v} kt`}</span>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-            <Field label="Biomass collection policy" hint="All: every supply site must be fully collected. Optional: the solver may leave biomass uncollected.">
-                <select className="input w-full sm:w-64" value={form.collection} onChange={(e) => upd({ collection: e.target.value as ScenarioForm['collection'] })}>
-                    <option value="all">All biomass collected</option>
-                    <option value="optional">Collection optional</option>
-                </select>
-            </Field>
-        </div>,
+        <DemandSupplyStep key="s1" form={form} upd={upd} error={errors.demand} />,
         // 2
         <div key="s2" className="space-y-5">
-            <h3 className="text-base font-semibold text-deep">Conversion and logistics</h3>
             <Field label="SAF yield (fraction of biomass)" tag={sameNum(form.yieldValue, OFFICIAL.yield)} hint="Official: 0.20 (organisers' range 15-25%)." error={errors.yield}>
                 <input className="input num w-full sm:w-64" inputMode="decimal" value={form.yieldValue} onChange={(e) => upd({ yieldValue: e.target.value })} />
             </Field>
@@ -264,7 +230,6 @@ export default function ScenarioPlannerPage() {
         </div>,
         // 4
         <div key="s4" className="space-y-5">
-            <h3 className="text-base font-semibold text-deep">Planning settings</h3>
             <Field label="Capacity basis" hint="Official: capacity is biomass intake for depots and refineries. SAF output is our earlier interpretation.">
                 <select className="input w-full sm:w-64" value={form.capacityBasis} onChange={(e) => upd({ capacityBasis: e.target.value as ScenarioForm['capacityBasis'] })}>
                     <option value="biomass_input">Biomass input</option>
@@ -281,7 +246,6 @@ export default function ScenarioPlannerPage() {
         </div>,
         // 5
         <div key="s5" className="space-y-4">
-            <h3 className="text-base font-semibold text-deep">Review and run</h3>
             <table className="tbl w-full text-sm">
                 <thead><tr><th className="text-left">Input</th><th className="text-left">Value</th><th /></tr></thead>
                 <tbody>
@@ -347,36 +311,71 @@ export default function ScenarioPlannerPage() {
         </div>,
     ];
 
+    const cardTitle = ['', 'Conversion & logistics', 'Facility candidates', 'Planning settings', 'Review and run'][step];
+    const nextTitle = STEPS[step + 1];
+
     return (
-        <div className="p-6 lg:p-8">
-            <PageHeader
-                title="Scenario Planner"
-                subtitle="Set the inputs step by step, then run the solver."
-                actions={<span className={`chip ${chip.c}`} data-testid="planner-status">{chip.t}</span>}
-            />
-            <div className="flex flex-col gap-6 lg:flex-row">
-                <nav aria-label="Planner steps" className="w-full shrink-0 lg:w-[260px]">
+        <div className="p-5 lg:px-8 lg:py-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h1 className="text-[24px] font-semibold tracking-tight text-deep">Scenario Planner</h1>
+                    <p className="text-sm text-muted">Configure and run scenarios</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <select
+                        className="input w-52"
+                        aria-label="Saved scenarios (saved in this browser)"
+                        value=""
+                        onChange={(e) => onLoadSaved(e.target.value)}
+                        title="Scenarios saved in this browser"
+                    >
+                        <option value="">Saved scenarios (this browser){saved.length ? ` · ${saved.length}` : ''}</option>
+                        {saved.map((x) => <option key={x.name} value={x.name}>{x.name}</option>)}
+                    </select>
+                    <span className={`chip ${chip.c}`} data-testid="planner-status">
+                        {(chip.t === 'Unsaved changes' || chip.t === 'Solving') && <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />}
+                        {chip.t}
+                    </span>
+                </div>
+            </div>
+            <div className="flex flex-col gap-5 lg:flex-row">
+                <nav aria-label="Planner steps" className="w-full shrink-0 lg:w-[250px]">
                     <ol className="space-y-1 rounded-xl border border-line bg-white p-2 shadow-sm">
-                        {STEPS.map((label, i) => (
-                            <li key={label}>
-                                <button
-                                    type="button"
-                                    onClick={() => setStep(i)}
-                                    aria-current={step === i ? 'step' : undefined}
-                                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm ${step === i ? 'bg-blue-50 font-semibold text-primary' : 'text-navy hover:bg-app'}`}
-                                >
-                                    <span className={`num flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${step === i ? 'bg-primary text-white' : 'bg-app text-muted'}`}>{i + 1}</span>
-                                    {label}
-                                </button>
-                            </li>
-                        ))}
+                        {STEPS.map((label, i) => {
+                            const active = step === i;
+                            const done = !active && visited.includes(i) && !stepErrors[i];
+                            return (
+                                <li key={label}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStep(i)}
+                                        aria-current={active ? 'step' : undefined}
+                                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left ${active ? 'bg-blue-50' : 'hover:bg-app'}`}
+                                    >
+                                        <span className={`num flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${active ? 'bg-primary text-white' : done ? 'bg-green-50 text-success' : 'bg-app text-muted'}`}>
+                                            {done ? '✓' : i + 1}
+                                        </span>
+                                        <span className="min-w-0">
+                                            <span className={`block text-sm font-semibold ${active ? 'text-primary' : 'text-deep'}`}>{label}</span>
+                                            <span className="block truncate text-xs text-muted">{SUBTITLES[i]}</span>
+                                        </span>
+                                    </button>
+                                </li>
+                            );
+                        })}
                     </ol>
                 </nav>
-                <section className="min-w-0 flex-1 rounded-xl border border-line bg-white p-5 shadow-sm">
-                    <fieldset disabled={running} className="min-w-0">{content[step]}</fieldset>
-                    <div className="mt-6 flex justify-between border-t border-line pt-4">
-                        <button type="button" className="btn-secondary" disabled={step === 0} onClick={() => setStep(step - 1)}>Back</button>
-                        {step < STEPS.length - 1 && <button type="button" className="btn-primary" onClick={() => setStep(step + 1)}>Next</button>}
+                <section className="min-w-0 flex-1">
+                    <h2 className="mb-3 text-lg font-semibold text-deep">{step + 1}. {STEPS[step]}</h2>
+                    <fieldset disabled={running} className="min-w-0">
+                        {step === 0 ? content[0] : <Card title={cardTitle} bodyClass="p-5">{content[step]}</Card>}
+                    </fieldset>
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                        <div className="flex gap-2">
+                            <button type="button" className="btn-secondary" onClick={onSaveNew}>Save as new scenario</button>
+                            {step > 0 && <button type="button" className="btn-secondary" onClick={() => setStep(step - 1)}>Back</button>}
+                        </div>
+                        {nextTitle && <button type="button" className="btn-primary" onClick={() => setStep(step + 1)}>Next: {nextTitle} →</button>}
                     </div>
                 </section>
             </div>
