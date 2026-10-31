@@ -8,7 +8,8 @@ import type { Facility, Scenario, Solution } from '../lib/contract';
 import { DEFAULT_SCENARIO } from '../lib/contract';
 import { getSolution } from '../lib/bundle';
 import { AuthRequiredError, health, liveEnabled, solve } from '../lib/api';
-import { signInWithGoogle } from '../lib/auth';
+import { signInWithGoogle, useSession } from '../lib/auth';
+import { getCurrentForm } from '../lib/useLive';
 import { pct, statusLabel, usd } from '../lib/format';
 import { baseSolution, compareToBase, runIndex } from '../lib/robustness';
 import { baseView, disruptView, liveDisruptSlug, type View } from '../lib/view';
@@ -45,6 +46,7 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [authNeeded, setAuthNeeded] = useState(false);
+    const session = useSession();
     const abortRef = useRef<AbortController | null>(null);
     const rowRefs = useRef(new Map<string, HTMLLIElement>());
     const [moreOpen, setMoreOpen] = useState(false);
@@ -100,6 +102,11 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
 
     const resolveLive = async (siteId: string) => {
         if (!base) return;
+        if (session.status === 'signed_out') {
+            setAuthNeeded(true);
+            setError('Sign in with Google to re-solve. The current run stays on screen.');
+            return;
+        }
         setBusy(siteId);
         setError(null);
         setAuthNeeded(false);
@@ -298,7 +305,11 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
                     {authNeeded && (
                         <button
                             type="button"
-                            onClick={() => void signInWithGoogle()}
+                            onClick={() =>
+                                void signInWithGoogle(getCurrentForm() ?? undefined).catch((e) =>
+                                    setError(e instanceof Error ? e.message : 'Sign-in failed.'),
+                                )
+                            }
                             className="pill-primary ml-2 py-0.5 text-sm"
                         >
                             Sign in with Google
