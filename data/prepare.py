@@ -7,6 +7,8 @@ Offline only: reads data/raw/ and data/reference/, never calls OSRM.
 import hashlib
 import json
 import shutil
+import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +22,9 @@ PROCESSED = ROOT / "data" / "processed"
 
 SITES_CSV = RAW / "kalimantan_80_locations_6800kt_full_range.csv"
 AIRPORTS_DAT = RAW / "airports.dat"
+# Organisers' 12:45 update: official demand and parameters, which outrank our assumptions.
+AIRPORTS_CSV = RAW / "challenge3_airports_4.csv"
+PARAMETERS_XLSX = RAW / "challenge3_parameters.xlsx"
 OSRM_JSON = REFERENCE / "osrm_table_84.json"
 PROTOTYPE_OSRM = ROOT / "prototype" / "osrm_table_84.json"
 
@@ -27,8 +32,15 @@ EARTH_RADIUS_KM = 6371.0088
 TOTAL_KT = 6800.0
 N_SITES = 80
 IATA = ["PNK", "PKN", "BPN", "TRK"]
-# Approved base split, % of demand (docs/prompts, "Approved base settings").
-DEMAND_SHARE = {"BPN": 0.558, "PNK": 0.317, "TRK": 0.075, "PKN": 0.050}
+OFFICIAL_DEMAND_KT = 300.0
+OFFICIAL_YIELD = 0.20
+OFFICIAL_ROAD_FACTOR = 1.3
+CAPEX_YEARS = 20
+FIXED_OPEX_RATE = 0.05
+# Earlier production-derived split, kept as demand_share because the solver uses it when a scenario
+# leaves demand_kt null. The official demand is the separate demand_kt column (300 kt each).
+EARLIER_DEMAND_SHARE = {"BPN": 0.558, "PNK": 0.317, "TRK": 0.075, "PKN": 0.050}
+XLSX_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 LAT_RANGE = (-5.0, 8.0)
 LON_RANGE = (108.0, 120.0)
 # Sites that plot in the sea off Ketapang (GLOBE 1 km mask, docs/proposals/geospatial-data.md).
@@ -89,7 +101,19 @@ def load_sites(path=SITES_CSV):
     return sites
 
 
-def load_airports(path=AIRPORTS_DAT):
+def load_official_demand(path=AIRPORTS_CSV):
+    """Official SAF demand per airport (kt/yr), from the organisers' 12:45 update."""
+    df = pd.read_csv(path, dtype={"iata": str, "icao": str}, keep_default_na=False)
+    if sorted(df["iata"]) != sorted(IATA):
+        raise DataError(f"official airports file lists {sorted(df['iata'])}, expected {sorted(IATA)}")
+    demand = dict(zip(df["iata"], df["saf_demand_kt_per_year"].astype(float)))
+    if any(v != OFFICIAL_DEMAND_KT for v in demand.values()):
+        raise DataError(f"official demand changed: {demand}")
+    coords = {r.iata: (float(r.latitude), float(r.longitude)) for r in df.itertuples()}
+    return demand, coords
+
+
+def load_airports(path=AIRPORTS_DAT, official_path=AIRPORTS_CSV):
     raw = read_airports_dat(path)
     rows = []
     for code in IATA:
@@ -104,11 +128,108 @@ def load_airports(path=AIRPORTS_DAT):
         "lat": [round(float(r["lat"]), 4) for r in rows],
         "lon": [round(float(r["lon"]), 4) for r in rows],
     })
-    airports["demand_share"] = airports["iata"].map(DEMAND_SHARE)
+    demand, coords = load_official_demand(official_path)
+    for r in airports.itertuples():
+        lat, lon = coords[r.iata]
+        if abs(lat - r.lat) > 1e-4 or abs(lon - r.lon) > 1e-4:
+            raise DataError(f"{r.iata} coordinates differ between airports.dat and the official file")
+    airports["demand_kt"] = airports["iata"].map(demand)
+    airports["demand_share"] = airports["iata"].map(EARLIER_DEMAND_SHARE)
     inside = airports["lat"].between(*LAT_RANGE) & airports["lon"].between(*LON_RANGE)
     if not inside.all():
         raise DataError(f"airports outside Kalimantan: {list(airports.loc[~inside, 'iata'])}")
     return airports
+
+
+def read_xlsx(path):
+    """Sheets as lists of rows of strings. Standard library only: openpyxl is not a dependency."""
+    with zipfile.ZipFile(path) as z:
+        shared = []
+        if "xl/sharedStrings.xml" in z.namelist():
+            for si in ET.fromstring(z.read("xl/sharedStrings.xml")).iter(f"{XLSX_NS}si"):
+                shared.append("".join(t.text or "" for t in si.iter(f"{XLSX_NS}t")))
+        sheets = [s.get("name") for s in ET.fromstring(z.read("xl/workbook.xml")).iter(f"{XLSX_NS}sheet")]
+        out = {}
+        for i, name in enumerate(sheets, 1):
+            rows = []
+            for row in ET.fromstring(z.read(f"xl/worksheets/sheet{i}.xml")).iter(f"{XLSX_NS}row"):
+                vals = []
+                for c in row.iter(f"{XLSX_NS}c"):
+                    v = c.find(f"{XLSX_NS}v")
+                    if c.get("t") == "s" and v is not None:
+                        vals.append(shared[int(v.text)])
+                    elif c.get("t") == "inlineStr":
+                        vals.append("".join(t.text or "" for t in c.iter(f"{XLSX_NS}t")))
+                    else:
+                        vals.append(v.text if v is not None else "")
+                rows.append(vals)
+            out[name] = rows
+    return out
+
+
+def _table(rows, header_first):
+    """Rows after the header row whose first cell is header_first, as dicts."""
+    start = next(i for i, r in enumerate(rows) if r and r[0] == header_first)
+    header = rows[start]
+    return [dict(zip(header, r)) for r in rows[start + 1:] if r and r[0]]
+
+
+def load_parameters(path=PARAMETERS_XLSX):
+    """Official cost table, transport rates and assumptions from the organisers' workbook."""
+    book = read_xlsx(path)
+    facilities = [
+        {
+            "facility": r["facility"].lower(),
+            "size": r["size"].lower(),
+            "capex_usd": float(r["capex_usd"]),
+            "capacity_kt_biomass_in": float(r["capacity_kt_biomass_in_per_year"]),
+            "fixed_opex_usd_per_year": float(r["fixed_opex_usd_per_year"]),
+            "variable_opex_usd_per_t_in": float(r["variable_opex_usd_per_tonne_in"]),
+            "annualised_capex_usd_per_year": float(r["annualised_capex_usd_per_year"]),
+        }
+        for r in _table(book["facilities"], "facility")
+    ]
+    legs = {"Farm to depot": "supply_depot", "Depot to refinery": "depot_refinery",
+            "Refinery to airport": "refinery_airport"}
+    transport = [
+        {
+            "leg": legs[r["leg"]],
+            "cargo": r["cargo"],
+            "usd_per_t_km": float(r["cost_usd_per_tonne_km"]),
+            "small_truck_t": float(r["small_truck_t"]),
+            "large_truck_t": float(r["large_truck_t"]),
+        }
+        for r in _table(book["transport"], "leg")
+    ]
+    assumptions = {r["parameter"]: r["value"] for r in _table(book["assumptions"], "parameter")}
+
+    expected_capex = {("depot", "small"): 2.25e6, ("depot", "large"): 4.5e6,
+                      ("refinery", "small"): 480e6, ("refinery", "large"): 765e6}
+    got = {(f["facility"], f["size"]): f["capex_usd"] for f in facilities}
+    if got != expected_capex:
+        raise DataError(f"official CapEx differs from the Airbus PDF: {got}")
+    for f in facilities:
+        if abs(f["annualised_capex_usd_per_year"] - f["capex_usd"] / CAPEX_YEARS) > 0.01:
+            raise DataError(f"annualised CapEx is not CapEx/{CAPEX_YEARS} for {f['facility']} {f['size']}")
+        if abs(f["fixed_opex_usd_per_year"] - FIXED_OPEX_RATE * f["capex_usd"]) > 0.01:
+            raise DataError(f"fixed OpEx is not {FIXED_OPEX_RATE:.0%} of CapEx for {f['facility']} {f['size']}")
+    rates = {t["leg"]: t["usd_per_t_km"] for t in transport}
+    if rates != {"supply_depot": 0.10, "depot_refinery": 0.12, "refinery_airport": 0.08}:
+        raise DataError(f"official transport rates differ from the Airbus PDF: {rates}")
+    return {
+        "source": "data/raw/challenge3_parameters.xlsx (organisers' update, 31 Oct 2026 12:45)",
+        "yield": OFFICIAL_YIELD,
+        "road_factor": OFFICIAL_ROAD_FACTOR,
+        "depot_retention": 1.0,
+        "capex_years": CAPEX_YEARS,
+        "fixed_opex_rate": FIXED_OPEX_RATE,
+        "capacity_basis": "biomass_input",
+        "collection_policy": "optional",
+        "demand_kt": {code: OFFICIAL_DEMAND_KT for code in IATA},
+        "facilities": facilities,
+        "transport": transport,
+        "assumptions": assumptions,
+    }
 
 
 def haversine_matrix(lat, lon):
@@ -163,6 +284,7 @@ def prepare():
     copy_reference()
     sites = load_sites()
     airports = load_airports()
+    parameters = load_parameters()
 
     osrm = json.loads(OSRM_JSON.read_text(encoding="utf-8"))
     node_ids = np.array(list(sites["site_id"]) + list(airports["iata"]), dtype=str)
@@ -179,10 +301,11 @@ def prepare():
     np.savez(PROCESSED / "distances.npz", node_ids=node_ids, hav_km=hav_km, road_km=road_km)
     sites.to_parquet(PROCESSED / "sites.parquet", index=False)
     airports.to_parquet(PROCESSED / "airports.parquet", index=False)
+    (PROCESSED / "parameters.json").write_text(json.dumps(parameters, indent=2) + "\n", encoding="utf-8")
 
     raw_hashes = {
         str(p.relative_to(ROOT).as_posix()): sha256_file(p)
-        for p in (SITES_CSV, AIRPORTS_DAT, OSRM_JSON)
+        for p in (SITES_CSV, AIRPORTS_DAT, AIRPORTS_CSV, PARAMETERS_XLSX, OSRM_JSON)
     }
     array_hashes = {
         "node_ids": sha256_array(node_ids),
@@ -199,7 +322,9 @@ def prepare():
 
     print(f"sites: {len(sites)} ({int(sites['is_candidate'].sum())} candidates), "
           f"{sites['kt'].sum():.2f} kt")
-    print(f"airports: {', '.join(airports['iata'])}")
+    print(f"airports: {', '.join(f'{a} {d:g} kt' for a, d in zip(airports['iata'], airports['demand_kt']))}")
+    print(f"official: yield {parameters['yield']}, road factor {parameters['road_factor']}, "
+          f"capacity {parameters['capacity_basis']}, collection {parameters['collection_policy']}")
     print(f"data_hash: {hashes['data_hash']}")
     return hashes
 

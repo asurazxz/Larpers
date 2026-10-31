@@ -13,18 +13,16 @@ None of these are in the build. One line each, with the reason.
 
 ## Model and data
 
-- Barge or ferry rate for Tarakan and Bulungan. The OSRM route to TRK includes a water crossing that we price at the truck rate.
+- Re-run the refinery shortlist under the official objective. The shortlist was chosen before the 12:45 update, so a better refinery site outside it is not ruled out.
+- Real barge rates and a port model for Tarakan and Bulungan. The organisers set the barge at the truck rate, which a real barge may not match.
 - Port nodes and a sea export leg. Most SAF would leave by sea, and we have none.
 - Mill-level tonnage, crop and moisture data. The sites are organiser-supplied and treated as synthetic.
-- Depot retention runs below r = 1 (drying or handling losses). The base uses r = 1, and no r < 1 run is stored.
-- Real OSRM routes on a self-hosted truck profile, with plantation tracks added. OSM under-maps them.
-- Second source for the Tarakan ferry. Until then Bulungan is the failure case.
+- Real OSRM routes on a self-hosted truck profile, with plantation tracks added. OSM under-maps them. Today the OSRM table is a reference check only.
 - Multi-period model with harvest seasons and inventory. Annual totals hide peaks.
-- OpEx once Airbus supplies figures. The PDF names it and gives none.
-- Fuel-uplift data for the four airports from Pertamina. Passenger share is only a proxy.
 - Proof over all refinery sites. Today's "optimal" holds among the shortlisted candidates only.
-- Re-solve the baseline at each horizon. The H = 5 comparison used a fixed baseline.
-- Run the unrun refinery mixes (two large, large plus two small, four small).
+- Re-solve the baseline under each scenario's own settings, not a fixed baseline.
+- Run the unrun refinery mixes. The official intake need of 6,000 kt makes the mix space larger.
+- Financing cost beyond the organisers' 20-year, no-interest annualisation.
 
 ## Product
 
