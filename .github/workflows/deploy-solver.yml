@@ -25,20 +25,28 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 15
         steps:
+            # Without the token, skip the deploy with a warning instead of failing the run.
             - name: Check for the token
+              id: token
               env:
                   HF_TOKEN: ${{ secrets.HF_TOKEN }}
               run: |
                   if [ -z "$HF_TOKEN" ]; then
-                      echo "::error::Add the repository secret HF_TOKEN (Settings > Secrets and variables > Actions), then re-run this workflow."
-                      exit 1
+                      echo "::warning::Deploy skipped: add the repository secret HF_TOKEN (Settings > Secrets and variables > Actions), then re-run this workflow."
+                      echo "present=false" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "present=true" >> "$GITHUB_OUTPUT"
                   fi
-            - uses: actions/checkout@v4
-            - uses: actions/setup-python@v5
+            - if: steps.token.outputs.present == 'true'
+              uses: actions/checkout@v4
+            - if: steps.token.outputs.present == 'true'
+              uses: actions/setup-python@v5
               with:
                   python-version: "3.12"
-            - run: pip install -U huggingface_hub
-            - run: python deploy/hf-space/deploy.py
+            - if: steps.token.outputs.present == 'true'
+              run: pip install -U huggingface_hub
+            - if: steps.token.outputs.present == 'true'
+              run: python deploy/hf-space/deploy.py
               env:
                   HF_TOKEN: ${{ secrets.HF_TOKEN }}
                   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
