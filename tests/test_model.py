@@ -7,7 +7,8 @@ import pandas as pd
 import pytest
 
 from solver.contract import Scenario
-from solver.model import (ANNUAL_FIXED_SHARE, DEPOT_VAR_USD_T, HAUL_HAV_KM, RATE, REFINERY_VAR_USD_T, build_problem,
+from solver.model import (
+    precheck,ANNUAL_FIXED_SHARE, DEPOT_VAR_USD_T, HAUL_HAV_KM, RATE, REFINERY_VAR_USD_T, build_problem,
                           enumerate_mixes, mix_floor, portfolio_row, resolve, solve_mix)
 
 AIRPORTS = ("PNK", "PKN", "BPN", "TRK")
@@ -463,3 +464,32 @@ def test_six_large_refineries_on_real_data_cost_about_895m_a_year():
     result = solve_mix(problem, 6, 0, 45)
     assert result["primal"] is not None, result["state"]
     assert result["primal"] == pytest.approx(895e6, abs=10e6)
+
+
+def test_precheck_passes_a_scenario_that_can_work():
+    assert precheck(official(demand_kt=demand(BPN=100.0)), line([300.0, 300.0]), candidates=[A, B]) is None
+
+
+def test_precheck_names_excess_demand():
+    assert "exceeds" in precheck(official(demand_kt=demand(BPN=16.0)), tiny([50.0]), candidates=[A])
+
+
+def test_precheck_names_short_refinery_capacity():
+    reason = precheck(official(demand_kt=demand(BPN=240.0)), line([1500.0]), candidates=[A])
+    assert "1,200.00 kt" in reason
+    assert "1,087.00 kt" in reason
+    assert "efiner" in reason
+
+
+def test_precheck_names_short_depot_capacity():
+    reason = precheck(official(demand_kt=demand(BPN=80.0)), tiny([400.0]), candidates=[A, "BPN"])
+    assert "400.00 kt" in reason
+    assert "300.00 kt" in reason
+    assert "epot" in reason
+
+
+def test_resolve_reports_the_same_reason_without_starting_a_solve(monkeypatch):
+    monkeypatch.setattr("solver.model.run_portfolio", lambda *a, **k: pytest.fail("must not solve"))
+    sol = resolve(official(demand_kt=demand(BPN=240.0)), inputs=line([1500.0]), candidates=[A])
+    assert sol.status == "infeasible"
+    assert "1,087.00 kt" in sol.status_reason
