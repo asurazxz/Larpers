@@ -24,7 +24,7 @@ export default function AuthButton({ getPendingInputs, className = '' }: AuthBut
     if (status === 'disabled') {
         return (
             <div className={wrap}>
-                <span className="text-base text-ink2">Stored runs only, no login</span>
+                <span className="text-base text-ink2">{liveEnabled ? 'Live solve, no login' : 'Stored runs only, no login'}</span>
             </div>
         );
     }

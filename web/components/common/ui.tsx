@@ -35,7 +35,7 @@ export function MetricCard({ label, value, sub, icon, tone = 'blue' }: { label: 
 
 export function Tabs<T extends string>({ tabs, active, onChange }: { tabs: { key: T; label: string }[]; active: T; onChange: (k: T) => void }) {
     return (
-        <div role="tablist" className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line">
+        <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-line">
             {tabs.map((t) => (
                 <button
                     key={t.key}

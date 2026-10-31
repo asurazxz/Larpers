@@ -28,7 +28,7 @@ const BADGE_STYLE: Record<BadgeKind, { pill: string; dot: string }> = {
     offline: { pill: 'bg-[#7f1d1d]/40 text-[#fecaca] ring-1 ring-[#f87171]/60', dot: 'bg-[#f87171]' },
 };
 
-export function badgeFor(health: SolverHealth, isLive: boolean): { text: string; kind: BadgeKind; title: string } {
+function badgeFor(health: SolverHealth, isLive: boolean): { text: string; kind: BadgeKind; title: string } {
     const n = storedRunCount();
     const stored = `STORED RUN: ${n} stored run${n === 1 ? '' : 's'}`;
     if (health.state === 'down') {
