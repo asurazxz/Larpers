@@ -26,6 +26,9 @@ def get_jwks_client(supabase_url: str) -> jwt.PyJWKClient:
 
 
 def require_user(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> dict:
+    # Login is off by default: the API runs on the presenter's laptop. REQUIRE_LOGIN=1 turns it back on.
+    if os.getenv("REQUIRE_LOGIN", "").strip() != "1":
+        return {"sub": "local"}
     denied = HTTPException(status_code=401, detail="A valid signed-in session is required", headers={"WWW-Authenticate": "Bearer"})
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise denied

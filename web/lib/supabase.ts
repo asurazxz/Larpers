@@ -11,7 +11,10 @@ export const authConfigured = SUPABASE_URL.length > 0 && SUPABASE_PUBLISHABLE_KE
 // OAuth cannot redirect back to file://, so the Level 4 fallback runs with no login.
 const onFileProtocol = typeof window !== 'undefined' && window.location.protocol === 'file:';
 
-export const authEnabled = authConfigured && !onFileProtocol;
+// Google login is off unless NEXT_PUBLIC_REQUIRE_LOGIN=1; the solver API is open on localhost by default.
+const LOGIN_REQUIRED = (process.env.NEXT_PUBLIC_REQUIRE_LOGIN ?? '').trim() === '1';
+
+export const authEnabled = authConfigured && !onFileProtocol && LOGIN_REQUIRED;
 
 let clientPromise: Promise<SupabaseClient> | null = null;
 
