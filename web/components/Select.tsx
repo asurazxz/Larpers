@@ -27,7 +27,7 @@ export default function Select({ name, value, onValueChange, options, placeholde
             <RS.Trigger
                 aria-label={ariaLabel}
                 data-select={name}
-                className={`field group flex items-center justify-between gap-2 text-left data-[placeholder]:text-ink2 data-[state=open]:border-accent data-[state=open]:ring-2 data-[state=open]:ring-brand-teal/25 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+                className={`field group flex items-center justify-between gap-2 text-left data-[placeholder]:text-ink2 data-[state=open]:border-accent data-[state=open]:ring-1 data-[state=open]:ring-accent disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
             >
                 <span className="min-w-0 truncate">
                     <RS.Value placeholder={placeholder} />
@@ -37,7 +37,7 @@ export default function Select({ name, value, onValueChange, options, placeholde
                 </RS.Icon>
             </RS.Trigger>
             <RS.Portal>
-                <RS.Content className="lp-select-content" position="popper" sideOffset={6} collisionPadding={8}>
+                <RS.Content className="lp-select-content" position="popper" sideOffset={4} collisionPadding={8}>
                     <RS.ScrollUpButton className="flex h-6 items-center justify-center text-ink2">
                         <ChevronUp size={16} aria-hidden="true" />
                     </RS.ScrollUpButton>
