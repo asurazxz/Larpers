@@ -152,6 +152,11 @@ export interface Solution {
     logistics_annual_usd: number;
     opex?: 'not_provided';
     total_horizon_usd: number;
+    /** Organisers' annual cost basis (12:45 update): proposed fields, absent from older runs. */
+    annualised_capex_usd?: number | null;
+    fixed_opex_usd?: number | null;
+    variable_opex_usd?: number | null;
+    total_annual_usd?: number | null;
     validation: AuditReport;
     portfolios?: Portfolio[];
     /** Not in the contract: the UI attaches the Scenario it posted to a live result. Absent on stored runs. */
