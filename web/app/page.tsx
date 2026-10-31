@@ -139,7 +139,7 @@ function Planner() {
                     </div>
                 </div>
 
-                <aside id="right-column" className="min-w-0 pb-3 md:h-full md:flex-[2_1_0%] md:overflow-y-auto">
+                <aside id="right-column" className="relative min-w-0 pb-3 md:h-full md:flex-[2_1_0%] md:overflow-y-auto">
                     {/* Pinned summary: total, status, audit and baseline stay visible while the column scrolls. */}
                     <div id="panel-summary" className="z-10 bg-canvas pb-3 md:sticky md:top-0">
                         <div className="card bg-gradient-to-b from-white to-[#f6faf9] px-3.5 py-3">

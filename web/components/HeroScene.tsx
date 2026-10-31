@@ -150,7 +150,7 @@ export default function HeroScene({ className = '' }: { className?: string }) {
                 new THREE.PointsMaterial({ color, size: 0.2, map: sprite, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
             );
             spin.add(new THREE.Points(pg, pm));
-            const box = own(new THREE.BoxGeometry(0.17, 0.075, 0.07));
+            const box = own(new THREE.BoxGeometry(0.13, 0.06, 0.055));
             const bm = own(new THREE.MeshBasicMaterial({ color }));
             const trucks = new THREE.InstancedMesh(box, bm, pArcs.length);
             trucks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);

@@ -134,9 +134,9 @@ export default function Landing() {
                                 e.preventDefault();
                                 document.getElementById('how')?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth' });
                             }}
-                            className="text-lg text-[#4da3ff] hover:underline"
+                            className="text-lg text-[#5eead4] hover:underline"
                         >
-                            How it works ›
+                            How it works â€º
                         </a>
                     </div>
                 </div>
@@ -145,9 +145,9 @@ export default function Landing() {
                     <span className="flex flex-wrap gap-4">
                         {(
                             [
-                                ['supply_depot', 'Site → depot'],
-                                ['depot_refinery', 'Depot → refinery'],
-                                ['refinery_airport', 'Refinery → airport'],
+                                ['supply_depot', 'Site â†’ depot'],
+                                ['depot_refinery', 'Depot â†’ refinery'],
+                                ['refinery_airport', 'Refinery â†’ airport'],
                             ] as const
                         ).map(([leg, label]) => (
                             <span key={leg} className="inline-flex items-center gap-2">

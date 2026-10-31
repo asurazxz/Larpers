@@ -224,23 +224,18 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
                     </div>
                 )}
                 <div className="tile flex items-center justify-between gap-2 py-2" data-kpi="audit">
-                    <span className="flex items-center gap-2 text-ink2">
-                        <span className="tile-icon bg-[#e6eef7] text-brand-navy" aria-hidden="true">
-                            <ShieldCheck size={16} strokeWidth={2.25} />
-                        </span>
-                        Audit
+                    <span className="tile-icon bg-[#e6eef7] text-brand-navy" aria-hidden="true">
+                        <ShieldCheck size={16} strokeWidth={2.25} />
                     </span>
                     <AuditBadge s={s} />
                 </div>
                 <div className="tile flex items-center justify-between gap-2 py-2" data-kpi="network" title="Refineries and depots opened in this run">
-                    <span className="flex items-center gap-2 text-ink2">
-                        <span className="tile-icon bg-brand-sand text-[#b45309]" aria-hidden="true">
-                            <Factory size={16} strokeWidth={2.25} />
-                        </span>
-                        Network
+                    <span className="tile-icon bg-brand-sand text-[#b45309]" aria-hidden="true">
+                        <Factory size={16} strokeWidth={2.25} />
                     </span>
+                    <span className="sr-only">Network</span>
                     <span id="network-size" className="num whitespace-nowrap font-semibold text-brand-ink">
-                        {s.facilities ? `${refineries} ref · ${depots} dep` : MISSING}
+                        {s.facilities ? `${refineries} ref · ${depots} depots` : MISSING}
                     </span>
                 </div>
             </div>
