@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from solver.audit import audit
 from solver.contract import (
-    AuditReport, CAPACITY_KT, CAPEX_USD, Facility, Flow, HAUL_HAV_KM,
+    AuditReport, CAPACITY_KT, CAPEX_USD, Facility, Flow, 
     RATES, Scenario, Solution, Stranded, Surplus, TRUCK_T,
 )
 from solver.inputs import load_inputs
@@ -28,6 +28,11 @@ def baseline(scenario: Scenario, *, inputs=None) -> Solution:
     index = {str(node): i for i, node in enumerate(inputs.node_ids)}
     supply = {node: float(row["kt"]) for node, row in sites.items()}
     onshore = [node for node, row in sites.items() if row["is_candidate"] and row["is_onshore"] and node not in scenario.excluded_ids]
+    wanted_depots, wanted_refineries = scenario.depot_candidates, scenario.refinery_candidates
+    depot_sites = onshore if wanted_depots is None else [node for node in onshore if node in wanted_depots]
+    refinery_sites = onshore if wanted_refineries is None else [
+        node for node in wanted_refineries if node in onshore or (node in airports and node != "TRK"
+                                                                  and node not in scenario.excluded_ids)]
     result = Solution(
         run_id=str(uuid4()), source="baseline", data_hash=inputs.data_hash,
         scenario_hash=scenario.scenario_hash(), status="heuristic", primal=0,
@@ -90,19 +95,19 @@ def baseline(scenario: Scenario, *, inputs=None) -> Solution:
     # Preserve the prototype's descending-production seeds and whole-site assignment.
     unassigned = {node for node in sites if supply[node] > 0}
     depots = {}
-    for seed in sorted(onshore, key=lambda node: (-supply[node], node)):
+    for seed in sorted(depot_sites, key=lambda node: (-supply[node], node)):
         if seed not in unassigned or supply[seed] > 300:
             continue
         members, amount = [seed], supply[seed]
         unassigned.remove(seed)
         for node in nearest(seed, unassigned):
-            if distance(seed, node) <= HAUL_HAV_KM and amount + supply[node] <= 300:
+            if distance(seed, node) <= scenario.haul_limit_km and amount + supply[node] <= 300:
                 members.append(node)
                 amount += supply[node]
                 unassigned.remove(node)
         depots[seed] = (members, amount)
     for node in sorted(unassigned):
-        room = [depot for depot, (_, amount) in depots.items() if amount + supply[node] <= 300 and distance(node, depot) <= HAUL_HAV_KM]
+        room = [depot for depot, (_, amount) in depots.items() if amount + supply[node] <= 300 and distance(node, depot) <= scenario.haul_limit_km]
         if room:
             depot = nearest(node, room)[0]
             members, amount = depots[depot]
@@ -110,7 +115,7 @@ def baseline(scenario: Scenario, *, inputs=None) -> Solution:
             depots[depot] = (members, amount + supply[node])
         else:
             # The prototype omitted this haul check on offshore leftovers.
-            available = [depot for depot in onshore if depot not in depots and distance(node, depot) <= HAUL_HAV_KM and supply[node] <= 300]
+            available = [depot for depot in depot_sites if depot not in depots and distance(node, depot) <= scenario.haul_limit_km and supply[node] <= 300]
             if available:
                 depots[nearest(node, available)[0]] = ([node], supply[node])
             elif scenario.collection_policy == "all":
@@ -131,17 +136,19 @@ def baseline(scenario: Scenario, *, inputs=None) -> Solution:
 
     total_supply = sum(supply.values())
     centroid = tuple(sum(supply[node]*sites[node][coord] for node in sites)/total_supply for coord in ("lat", "lon"))
-    primary = min(onshore, key=lambda node: (_haversine((sites[node]["lat"], sites[node]["lon"]), centroid), node))
+    if not refinery_sites:
+        return infeasible("No eligible refinery candidate for the greedy baseline")
+    primary = min(refinery_sites, key=lambda node: (_haversine((nodes[node]["lat"], nodes[node]["lon"]), centroid), node))
     required = production if scenario.capacity_basis == "saf_output" else biomass
     portfolios = []
-    for n_large in range(1, min(len(onshore), max(1, math.ceil(required/1087))) + 1):
+    for n_large in range(1, min(len(refinery_sites), max(1, math.ceil(required/1087))) + 1):
         n_small = max(0, math.ceil((required - n_large*1087 - 1e-9)/500))
-        if n_large + n_small <= len(onshore):
+        if n_large + n_small <= len(refinery_sites):
             portfolios.append((n_large*765_000_000+n_small*480_000_000, n_large, n_small))
     if not portfolios:
         return infeasible("Not enough eligible sites for greedy refinery capacity")
     _, n_large, n_small = min(portfolios)
-    additions = nearest("BPN", [node for node in onshore if node != primary])
+    additions = nearest("BPN", [node for node in refinery_sites if node != primary])
     refineries = [(primary, "large")]
     refineries += list(zip(additions, ["small"]*n_small + ["large"]*(n_large-1)))
     input_room = {node: CAPACITY_KT["refinery"][size] / (scenario.yield_fraction if scenario.capacity_basis == "saf_output" else 1) for node, size in refineries}

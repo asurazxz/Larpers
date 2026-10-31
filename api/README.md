@@ -59,3 +59,18 @@ Tests generate RSA and EC keys only in memory and substitute the remote JWKS
 client. They do not need Supabase credentials, browser login, or network access.
 The pinned Starlette/HTTPX test stack currently emits an upstream deprecation
 warning; tests continue using the repository's declared dependencies.
+
+## Our own settings
+
+The organisers fix yield, capacities, costs, rates, road factor and demand. These settings are ours, so `POST /api/solve`, `POST /api/baseline` and the audit accept them as optional `Scenario` fields:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `haul_limit_km` | 214.29 | Longest straight-line supply haul |
+| `refinery_candidates` | Frozen 20-site shortlist | Sites that may host a refinery. Onshore sites, PNK, PKN and BPN; never TRK |
+| `depot_candidates` | All 69 onshore sites | Sites that may host a depot |
+| `time_limit_s` | 90 | Solve budget, capped at 600 s by the solver. The web client gives up after 150 s |
+
+`SOLVER_CORES` in the environment limits the solver on a shared or smaller machine.
+
+An ineligible site is refused with `422` and the reason. A scenario left at these defaults keeps its `scenario_hash`, so stored runs stay valid. "Optimal among N candidates" is a claim about the list used.

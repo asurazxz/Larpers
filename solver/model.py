@@ -43,11 +43,10 @@ from dataclasses import dataclass
 import pulp
 
 from solver.candidates import SHORTLIST
-from solver.contract import AIRPORT_DEMAND_KT, Scenario, Solution
+from solver.contract import AIRPORT_DEMAND_KT, HAUL_HAV_KM, Scenario, Solution
 from solver.inputs import load_inputs
 
 RATE = (0.10, 0.12, 0.08)
-HAUL_HAV_KM = 300 / 1.4
 TRUCK_T = (9, 30, 32)
 DEPOT_KT, DEPOT_USD = {"S": 150, "L": 300}, {"S": 2.25e6, "L": 4.5e6}
 REFINERY_KT, REFINERY_USD = {"S": 500, "L": 1087}, {"S": 480e6, "L": 765e6}
@@ -56,11 +55,17 @@ ANNUAL_FIXED_SHARE = 1 / CAPEX_YEARS + FIXED_OPEX_SHARE
 DEPOT_VAR_USD_T, REFINERY_VAR_USD_T = {"S": 5, "L": 4}, {"S": 60, "L": 55}
 NO_TRUCK_ACCESS = {"TRK"}
 SIZE_NAME = {"S": "small", "L": "large"}
-MAX_SOLVE_S = 90
+MAX_SOLVE_S = 600
 THREADS = 2
-CORES = os.cpu_count() or 2
-WORKERS = max(1, min(5, CORES // THREADS))
-LEAD_THREADS = max(THREADS, min(7, CORES - THREADS * (WORKERS - 1)))
+
+
+def worker_plan(cores: int) -> tuple[int, int]:
+    """Parallel mixes and the threads for the lead mix. SOLVER_CORES caps this on a shared or smaller machine."""
+    workers = max(1, min(5, cores // THREADS))
+    return workers, max(THREADS, min(7, cores - THREADS * (workers - 1)))
+
+
+WORKERS, LEAD_THREADS = worker_plan(int(os.getenv("SOLVER_CORES") or os.cpu_count() or 2))
 EPS = 1e-9
 RESOLVED = {"proven", "infeasible", "skipped_capacity", "skipped_capex", "dominated"}
 MIX_STATUS = {"proven": "optimal", "infeasible": "infeasible", "best_found": "best_found"}
@@ -82,6 +87,8 @@ class Problem:
     collect_all: bool
     biomass_basis: bool
     rates: tuple[float, float, float]
+    haul_limit_km: float = HAUL_HAV_KM
+    ineligible: tuple[str, ...] = ()
 
 
 def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem:
@@ -92,8 +99,10 @@ def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem
     airports = inputs.airports.iata.tolist()
     excluded = set(s["excluded_ids"])
     onshore = inputs.sites.site_id[inputs.sites.is_candidate].tolist()
-    depots = tuple(j for j in onshore if j not in excluded)
+    wanted_depots = onshore if s["depot_candidates"] is None else s["depot_candidates"]
+    depots = tuple(j for j in onshore if j in wanted_depots and j not in excluded)
     allowed = (set(onshore) | set(airports)) - NO_TRUCK_ACCESS
+    ineligible = sorted((set(s["refinery_candidates"] or ()) - allowed) | (set(s["depot_candidates"] or ()) - set(onshore)))
     refineries = tuple(k for k in dict.fromkeys(candidates) if k in allowed and k not in excluded)
     y, r = s["yield"], s["depot_retention"]
     if s["demand_kt"] is None:
@@ -106,7 +115,7 @@ def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem
         depots=depots,
         refineries=refineries,
         demand=demand,
-        supply_km={(i, j): km(i, j) for i in supply for j in depots if hav[at[i], at[j]] <= HAUL_HAV_KM},
+        supply_km={(i, j): km(i, j) for i in supply for j in depots if hav[at[i], at[j]] <= s["haul_limit_km"]},
         depot_km={(j, k): km(j, k) for j in depots for k in refineries},
         airport_km={(k, a): km(k, a) for k in refineries for a in airports},
         yield_=y,
@@ -115,11 +124,16 @@ def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem
         collect_all=s["collection_policy"] == "all",
         biomass_basis=s["capacity_basis"] == "biomass_input",
         rates=tuple(rates),
+        haul_limit_km=s["haul_limit_km"],
+        ineligible=tuple(ineligible),
     )
 
 
 def infeasible_reason(p: Problem) -> str | None:
     """Reasons that hold for every refinery mix, stated before any solve."""
+    if p.ineligible:
+        return (f"Not eligible as facility sites: {', '.join(p.ineligible)}. "
+                "Facilities need onshore sites, and trucks cannot reach TRK")
     total = sum(p.demand.values())
     most = p.yield_ * p.retention * sum(p.supply.values())
     if total > most + EPS:
@@ -127,7 +141,7 @@ def infeasible_reason(p: Problem) -> str | None:
                 f"at yield {p.yield_:g} and retention {p.retention:g}")
     served = {i for i, _ in p.supply_km}
     if p.collect_all and (cut_off := sorted(set(p.supply) - served)):
-        return f"No depot in range ({HAUL_HAV_KM:.1f} km straight-line) of {', '.join(cut_off)}"
+        return f"No depot in range ({p.haul_limit_km:.1f} km straight-line) of {', '.join(cut_off)}"
     reachable = p.yield_ * p.retention * sum(p.supply[i] for i in served)
     if total > reachable + EPS:
         return f"Demand of {total:,.2f} kt exceeds the {reachable:,.2f} kt of SAF from sites with a depot in range"
@@ -140,9 +154,15 @@ def infeasible_reason(p: Problem) -> str | None:
     return None
 
 
+def _refinery_pool(scenario: Scenario, candidates):
+    if candidates is not None:
+        return candidates
+    return SHORTLIST if scenario.refinery_candidates is None else scenario.refinery_candidates
+
+
 def precheck(scenario: Scenario, inputs, candidates=None) -> str | None:
     """Why no network can serve this scenario, found without solving, or None if one may exist."""
-    return infeasible_reason(build_problem(scenario, inputs, SHORTLIST if candidates is None else candidates))
+    return infeasible_reason(build_problem(scenario, inputs, _refinery_pool(scenario, candidates)))
 
 
 def required_capacity(p: Problem) -> float:
@@ -465,7 +485,7 @@ def resolve(scenario: Scenario, inputs=None, candidates=None, rates=RATE) -> Sol
     """Solve a scenario across all refinery mixes and label the result by what was actually proven."""
     started = time.monotonic()
     inputs = load_inputs() if inputs is None else inputs
-    p = build_problem(scenario, inputs, SHORTLIST if candidates is None else candidates, rates)
+    p = build_problem(scenario, inputs, _refinery_pool(scenario, candidates), rates)
     n = len(p.refineries)
     if reason := infeasible_reason(p):
         return _empty_solution(scenario, inputs, n, started, reason)
@@ -509,11 +529,17 @@ def main() -> None:
     parser.add_argument("--horizon", type=float, default=1)
     parser.add_argument("--yield", dest="yield_", type=float, default=0.20)
     parser.add_argument("--road-factor", type=float, default=1.3)
-    parser.add_argument("--time-limit", type=float, default=MAX_SOLVE_S)
+    parser.add_argument("--time-limit", type=float, default=Scenario.model_fields["time_limit_s"].default)
+    parser.add_argument("--haul-limit-km", type=float, default=HAUL_HAV_KM)
+    parser.add_argument("--refinery-candidates", help="comma-separated ids; default is the frozen shortlist")
+    parser.add_argument("--depot-candidates", help="comma-separated ids; default is all 69 onshore sites")
     args = parser.parse_args()
     scenario = Scenario.model_validate({"yield": args.yield_, "road_factor": args.road_factor,
                                         "horizon_years": args.horizon, "time_limit_s": args.time_limit,
-                                        "collection_policy": "optional", "capacity_basis": "biomass_input"})
+                                        "collection_policy": "optional", "capacity_basis": "biomass_input",
+                                        "haul_limit_km": args.haul_limit_km,
+                                        "refinery_candidates": args.refinery_candidates and args.refinery_candidates.split(","),
+                                        "depot_candidates": args.depot_candidates and args.depot_candidates.split(",")})
     solution = resolve(scenario)
     for mix in solution.model_dump(by_alias=True)["portfolios"]:
         primal = "-" if mix["primal"] is None else f"${mix['primal'] / 1e6:,.1f}M"

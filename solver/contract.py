@@ -37,6 +37,10 @@ class Scenario(ContractModel):
     capacity_basis: Literal["saf_output", "biomass_input"] = "biomass_input"
     excluded_ids: list[NodeId] = Field(default_factory=list)
     time_limit_s: Finite = Field(default=90, gt=0)
+    # Our own modelling choices, not organiser values. None keeps the 69 onshore depots and the frozen shortlist.
+    haul_limit_km: Finite = Field(default=HAUL_HAV_KM, gt=0)
+    refinery_candidates: list[NodeId] | None = None
+    depot_candidates: list[NodeId] | None = None
 
     @field_validator("demand_kt")
     @classmethod
@@ -50,8 +54,20 @@ class Scenario(ContractModel):
     def unique_exclusions(cls, value):
         return sorted(set(value))
 
+    @field_validator("refinery_candidates", "depot_candidates")
+    @classmethod
+    def unique_candidates(cls, value):
+        return None if value is None else sorted(set(value))
+
     def scenario_hash(self) -> str:
-        payload = json.dumps(self.model_dump(mode="json", by_alias=True), sort_keys=True, separators=(",", ":"), allow_nan=False)
+        fields = self.model_dump(mode="json", by_alias=True)
+        # Settings left at their defaults stay out, so stored runs keep their hash.
+        if self.haul_limit_km == HAUL_HAV_KM:
+            del fields["haul_limit_km"]
+        for name in ("refinery_candidates", "depot_candidates"):
+            if fields[name] is None:
+                del fields[name]
+        payload = json.dumps(fields, sort_keys=True, separators=(",", ":"), allow_nan=False)
         return hashlib.sha256(payload.encode()).hexdigest()
 
     def airport_demand(self, supply_kt: float) -> dict[str, float]:
