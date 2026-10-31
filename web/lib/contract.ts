@@ -45,7 +45,7 @@ export const DEFAULT_SCENARIO: Scenario = {
     time_limit_s: 90,
 };
 
-export type SolveStatus = 'optimal' | 'best_found' | 'infeasible' | 'heuristic';
+export type SolveStatus = 'optimal' | 'best_found' | 'infeasible' | 'heuristic' | 'no_solution';
 export type PortfolioStatus = SolveStatus | 'skipped';
 export type SolutionSource = 'live' | 'stored' | 'fixture' | 'baseline';
 

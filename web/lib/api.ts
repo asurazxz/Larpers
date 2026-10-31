@@ -1,7 +1,8 @@
 // Client for Damien's FastAPI solver (api/main.py).
 // Public: GET /api/health, GET /api/data, POST /api/validate.
-// Signed-in: POST /api/solve, POST /api/baseline, with Authorization: Bearer <Supabase access token>.
+// Signed-in: POST /api/solve, POST /api/baseline, POST /api/plain-english, with Authorization: Bearer <Supabase access token>.
 import type { AuditReport, Scenario, Solution } from './contract';
+import type { ExplainInput } from './explain';
 import { getAccessToken, refreshAccessToken } from './supabase';
 
 export const SOLVER_API_URL = (process.env.NEXT_PUBLIC_SOLVER_API_URL ?? '').trim().replace(/\/+$/, '');
@@ -11,12 +12,19 @@ export const liveEnabled = SOLVER_API_URL.length > 0;
 export const HEALTH_TIMEOUT_MS = 3_000;
 export const SOLVE_TIMEOUT_MS = 150_000;
 export const DEFAULT_TIMEOUT_MS = 30_000;
+export const PLAIN_ENGLISH_TIMEOUT_MS = 20_000; // above the API's 16 s worst case, so its empty answer arrives first
 
 // Fixed unless a caller overrides them explicitly.
 export const SCENARIO_DEFAULTS = { depot_retention: 1, time_limit_s: 90 } as const;
 
 export type ScenarioInput = Partial<Scenario>;
 export type { AuditReport };
+
+export interface PlainEnglishResult {
+    run_id: string;
+    text: string | null;
+    model: string | null;
+}
 
 export interface HealthResult {
     ok: boolean;
@@ -79,6 +87,7 @@ export interface ApiClient {
     validate(scenario: ScenarioInput, solution: Solution, opts?: RequestOptions): Promise<AuditReport>;
     solve(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution>;
     baseline(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution>;
+    plainEnglish(input: ExplainInput, opts?: RequestOptions): Promise<PlainEnglishResult>;
 }
 
 // Applies depot_retention 1 and time_limit_s 90 when the caller left them out.
@@ -281,6 +290,10 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         baseline(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> {
             return authedPost<Solution>('/api/baseline', buildScenario(scenario), opts);
         },
+
+        plainEnglish(input: ExplainInput, opts?: RequestOptions): Promise<PlainEnglishResult> {
+            return authedPost<PlainEnglishResult>('/api/plain-english', input, { timeoutMs: PLAIN_ENGLISH_TIMEOUT_MS, ...opts });
+        },
     };
 }
 
@@ -294,3 +307,4 @@ export const validate = (scenario: ScenarioInput, solution: Solution, opts?: Req
 export const solve = (scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> => api.solve(scenario, opts);
 export const baseline = (scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> =>
     api.baseline(scenario, opts);
+export const plainEnglish = (input: ExplainInput, opts?: RequestOptions): Promise<PlainEnglishResult> => api.plainEnglish(input, opts);

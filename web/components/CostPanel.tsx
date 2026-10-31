@@ -7,6 +7,8 @@ import { bundle, solutionOf } from '../lib/bundle';
 import { LEG_LABEL, MISSING, orMissing, pct, seconds, statusLabel, usd } from '../lib/format';
 import { legSums } from '../lib/trace';
 import { annualCost, CAPEX_YEARS, FIXED_OPEX_SHARE, type AnnualCost } from '../lib/annual';
+import { explainInput, fixedText, hasNoNetwork, plainReason } from '../lib/explain';
+import ExplainButton from './ExplainButton';
 
 const LEGS: Leg[] = ['supply_depot', 'depot_refinery', 'refinery_airport'];
 const LEG_BAR: Record<Leg, string> = {
@@ -101,6 +103,7 @@ function AuditBadge({ s }: { s: Solution }) {
     const v = s.validation;
     if (!v) return <span id="audit-result" className="text-base text-ink2">Audit: {MISSING}</span>;
     const failures = v.failures ?? [];
+    if (v.passed && hasNoNetwork(s)) return <span id="audit-result" data-passed="true" className="text-base text-ink2">No network to audit</span>;
     return (
         <span
             id="audit-result"
@@ -166,6 +169,9 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
     const s = solution;
     const { H, capex, horizonTotal, annual, total, baseTotal, saving } = derive(s, baseline);
     const failures = s.validation?.failures ?? [];
+    const noNetwork = hasNoNetwork(s);
+    const reason = plainReason(s.status_reason);
+    const explanation = explainInput(s, baseline);
     return (
         <div id="cost-summary" className="text-base leading-snug" data-run-id={s.run_id} data-annual-source={annual.fromSolver ? 'solver' : 'recomputed'}>
             <div className="flex items-center justify-between gap-3">
@@ -175,32 +181,40 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
             <div className="mt-0.5 flex items-baseline justify-between gap-3">
                 <span className="flex items-baseline gap-1.5">
                     <span id="cost-total" className="figure-xl">
-                        {usd(total)}
+                        {noNetwork ? 'No network' : usd(total)}
                     </span>
-                    {total !== null && <span className="text-base text-ink2">/ yr</span>}
+                    {total !== null && !noNetwork && <span className="text-base text-ink2">/ yr</span>}
                 </span>
                 <span id="cost-status" className="text-right font-semibold">
                     {statusLabel(s)}
                 </span>
             </div>
-            <div id="annual-rows" className="mt-1 grid grid-cols-2 gap-x-5 gap-y-0.5">
-                {ANNUAL_ROWS(annual).map(([id, k, v]) => (
-                    <div key={id} id={id} className="flex items-baseline justify-between gap-2">
-                        <span className="text-ink2">{k}</span>
-                        <span className="num font-medium">{usd(v)}</span>
+            {noNetwork ? (
+                <div id="no-network-reason" className="mt-1 text-ink2">
+                    {reason.charAt(0).toUpperCase() + reason.slice(1)}.
+                </div>
+            ) : (
+                <>
+                    <div id="annual-rows" className="mt-1 grid grid-cols-2 gap-x-5 gap-y-0.5">
+                        {ANNUAL_ROWS(annual).map(([id, k, v]) => (
+                            <div key={id} id={id} className="flex items-baseline justify-between gap-2">
+                                <span className="text-ink2">{k}</span>
+                                <span className="num font-medium">{usd(v)}</span>
+                            </div>
+                        ))}
                     </div>
-                ))}
-            </div>
-            <div className="mt-1 leading-tight text-ink2" id="objective-note">
-                Organisers&apos; basis
-                {!annual.fromSolver && (
-                    <span className="font-medium text-ink3" title="Recomputed in the browser from this run's facilities and costs (lib/annual.ts), like the arc trace.">
-                        , recomputed from this run
-                    </span>
-                )}
-                . One-off CapEx <span className="num">{usd(capex)}</span>; MILP objective <span className="num">{usd(horizonTotal)}</span> (H ={' '}
-                {orMissing(H, (h: number) => `${h} yr`)}).
-            </div>
+                    <div className="mt-1 leading-tight text-ink2" id="objective-note">
+                        Organisers&apos; basis
+                        {!annual.fromSolver && (
+                            <span className="font-medium text-ink3" title="Recomputed in the browser from this run's facilities and costs (lib/annual.ts), like the arc trace.">
+                                , recomputed from this run
+                            </span>
+                        )}
+                        . One-off CapEx <span className="num">{usd(capex)}</span>; MILP objective <span className="num">{usd(horizonTotal)}</span> (H ={' '}
+                        {orMissing(H, (h: number) => `${h} yr`)}).
+                    </div>
+                </>
+            )}
             {failures.length > 0 && (
                 <ul className="mt-1 list-disc pl-5 text-orange-900">
                     {failures.map((f) => (
@@ -208,7 +222,7 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
                     ))}
                 </ul>
             )}
-            {baseline && baseTotal !== null && total !== null ? (
+            {noNetwork ? null : baseline && baseTotal !== null && total !== null ? (
                 <div id="baseline-compare" className="hair-t mt-1.5 flex items-baseline justify-between gap-3 pt-1.5">
                     <span className="text-ink2">
                         {saving !== null && saving >= 0 ? 'Saving vs greedy baseline' : 'Greedy baseline cheaper by'}
@@ -223,6 +237,7 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
                     {baseline ? 'Greedy baseline annual total: not in this run' : 'Greedy baseline not in this run'}
                 </div>
             )}
+            {explanation && <ExplainButton key={s.run_id} id="explain" input={explanation} fixedText={fixedText(explanation)} />}
         </div>
     );
 }
@@ -253,7 +268,7 @@ export default function CostPanel({ solution, baseline }: { solution: Solution |
 
     return (
         <div id="cost-panel" data-run-id={s.run_id}>
-            <Fold
+            {!hasNoNetwork(s) && <Fold
                 id="cost-breakdown"
                 title={
                     <>
@@ -323,7 +338,7 @@ export default function CostPanel({ solution, baseline }: { solution: Solution |
                         </div>
                     </>
                 )}
-            </Fold>
+            </Fold>}
 
             <Fold
                 id="solver-state"
