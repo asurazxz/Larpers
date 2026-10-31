@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 AIRPORT_SHARES = {"BPN": 0.558, "PNK": 0.317, "TRK": 0.075, "PKN": 0.050}
+AIRPORT_DEMAND_KT = 300.0
 SITE_IDS = frozenset(f"KAL_SUP_{i:02d}" for i in range(1, 81))
 NODE_IDS = SITE_IDS | AIRPORT_SHARES.keys()
 HAUL_HAV_KM = 300 / 1.4
@@ -16,6 +17,8 @@ RATES = {"supply_depot": 0.10, "depot_refinery": 0.12, "refinery_airport": 0.08}
 TRUCK_T = {"supply_depot": 9, "depot_refinery": 30, "refinery_airport": 32}
 CAPACITY_KT = {"depot": {"small": 150, "large": 300}, "refinery": {"small": 500, "large": 1087}}
 CAPEX_USD = {"depot": {"small": 2_250_000, "large": 4_500_000}, "refinery": {"small": 480_000_000, "large": 765_000_000}}
+CAPEX_YEARS, FIXED_OPEX_SHARE = 20, 0.05
+VARIABLE_OPEX_USD_T = {"depot": {"small": 5, "large": 4}, "refinery": {"small": 60, "large": 55}}
 Finite = Annotated[float, Field(allow_inf_nan=False)]
 NodeId = Annotated[str, Field(pattern=r"^(KAL_SUP_(0[1-9]|[1-7][0-9]|80)|BPN|PNK|TRK|PKN)$")]
 
@@ -26,12 +29,12 @@ class ContractModel(BaseModel):
 
 class Scenario(ContractModel):
     demand_kt: dict[Literal["BPN", "PNK", "TRK", "PKN"], Annotated[Finite, Field(ge=0)]] | None = None
-    yield_fraction: Finite = Field(default=0.15, alias="yield", gt=0, le=1)
+    yield_fraction: Finite = Field(default=0.20, alias="yield", gt=0, le=1)
     depot_retention: Finite = Field(default=1.0, gt=0, le=1)
-    road_factor: Finite = Field(default=1.9, ge=1)
+    road_factor: Finite = Field(default=1.3, ge=1)
     horizon_years: Finite = Field(default=1, ge=1)
-    collection_policy: Literal["all", "optional"] = "all"
-    capacity_basis: Literal["saf_output", "biomass_input"] = "saf_output"
+    collection_policy: Literal["all", "optional"] = "optional"
+    capacity_basis: Literal["saf_output", "biomass_input"] = "biomass_input"
     excluded_ids: list[NodeId] = Field(default_factory=list)
     time_limit_s: Finite = Field(default=90, gt=0)
 
@@ -54,8 +57,7 @@ class Scenario(ContractModel):
     def airport_demand(self, supply_kt: float) -> dict[str, float]:
         if self.demand_kt is not None:
             return dict(self.demand_kt)
-        total = supply_kt * self.depot_retention * self.yield_fraction
-        return {airport: share * total for airport, share in AIRPORT_SHARES.items()}
+        return {airport: AIRPORT_DEMAND_KT for airport in AIRPORT_SHARES}
 
 
 def scenario_hash(scenario: Scenario) -> str:
@@ -136,7 +138,7 @@ class Solution(ContractModel):
     source: Literal["live", "stored", "fixture", "baseline"]
     data_hash: str
     scenario_hash: str
-    status: Literal["optimal", "best_found", "infeasible", "heuristic"]
+    status: Literal["optimal", "best_found", "infeasible", "heuristic", "no_solution"]
     status_reason: str | None = None
     primal: Finite | None
     bound: Finite | None
@@ -149,7 +151,11 @@ class Solution(ContractModel):
     surplus: list[Surplus]
     capex_usd: Finite
     logistics_annual_usd: Finite
-    opex: Literal["not_provided"] = "not_provided"
+    opex: Literal["not_provided", "included"] = "not_provided"
+    annualised_capex_usd: Finite | None = None
+    fixed_opex_usd: Finite | None = None
+    variable_opex_usd: Finite | None = None
+    total_annual_usd: Finite | None = None
     total_horizon_usd: Finite
     validation: AuditReport = Field(default_factory=AuditReport)
     portfolios: list[Portfolio] = Field(default_factory=list)
