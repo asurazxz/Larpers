@@ -39,10 +39,11 @@ module.exports = {
                 ink: '#0b1f33',
                 ink2: '#56677b',
                 ink3: '#34475b',
-                canvas: '#eef2f6',
+                canvas: '#f6f7f9',
                 track: '#e4eaf1',
                 accent: '#0f766e',
-                hairline: 'rgba(11, 31, 51, 0.09)',
+                hairline: '#e3e7ec',
+                line: '#e3e7ec',
                 brand: {
                     ink: '#0b1f33',
                     navy: '#0f2a3d',
@@ -82,11 +83,11 @@ module.exports = {
                 ],
             },
             borderRadius: {
-                card: '16px',
+                card: '10px',
             },
             boxShadow: {
-                card: '0 1px 2px rgba(11, 31, 51, 0.05), 0 6px 20px -6px rgba(11, 31, 51, 0.12)',
-                tile: '0 1px 2px rgba(11, 31, 51, 0.05), 0 4px 12px -4px rgba(11, 31, 51, 0.10)',
+                card: 'none',
+                tile: 'none',
                 thumb: '0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 1px rgba(0, 0, 0, 0.04)',
                 float: '0 10px 40px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06)',
             },

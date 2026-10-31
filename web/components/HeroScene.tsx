@@ -123,7 +123,7 @@ export default function HeroScene({ className = '' }: { className?: string }) {
                 const lm = own(
                     sea
                         ? new THREE.LineDashedMaterial({ color, dashSize: 0.09, gapSize: 0.07, transparent: true, opacity: 0.85, depthWrite: false })
-                        : new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
+                        : new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false }),
                 );
                 const line = new THREE.LineSegments(lg, lm);
                 if (sea) line.computeLineDistances();
@@ -147,7 +147,7 @@ export default function HeroScene({ className = '' }: { className?: string }) {
             attr.setUsage(THREE.DynamicDrawUsage);
             pg.setAttribute('position', attr);
             const pm = own(
-                new THREE.PointsMaterial({ color, size: 0.2, map: sprite, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
+                new THREE.PointsMaterial({ color, size: 0.14, map: sprite, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }),
             );
             spin.add(new THREE.Points(pg, pm));
             const box = own(new THREE.BoxGeometry(0.13, 0.06, 0.055));

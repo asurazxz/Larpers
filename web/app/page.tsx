@@ -24,6 +24,7 @@ import FailureBand from '../components/FailureBand';
 import Trace from '../components/Trace';
 import Landing from '../components/Landing';
 import Explanation from '../components/Explanation';
+import { FlowsOverlay } from '../components/FlowSankey';
 import { reducedMotion } from '../components/motion';
 import { AppProvider, PAGES as WORKSPACE_PAGES } from '../lib/store';
 import AppShell from '../components/layout/AppShell';
@@ -167,6 +168,7 @@ function Planner() {
                     <div id="trace-slot" className="pointer-events-none absolute bottom-3 left-3 z-[1000] flex max-h-[calc(100%-1.5rem)]">
                         <Trace solution={solution} selected={selected} onClose={() => setSelected(null)} />
                     </div>
+                    <FlowsOverlay solution={solution} />
                 </div>
 
                 <aside id="right-column" className="relative min-w-0 pb-3 md:h-full md:flex-[2_1_0%] md:overflow-y-auto">
