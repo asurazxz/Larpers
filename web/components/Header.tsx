@@ -22,10 +22,10 @@ export interface HeaderProps {
 type BadgeKind = 'stored' | 'live' | 'checking' | 'offline';
 
 const BADGE_STYLE: Record<BadgeKind, { pill: string; dot: string }> = {
-    stored: { pill: 'bg-[#f1f3f5] text-ink ring-1 ring-[#d5dbe2]', dot: 'bg-[#6b7785]' },
-    live: { pill: 'bg-[#e8f4f2] text-[#0b5a53] ring-1 ring-[#0f766e]/45', dot: 'bg-[#0f766e] animate-pulse' },
-    checking: { pill: 'bg-[#f1f3f5] text-ink ring-1 ring-[#d5dbe2]', dot: 'bg-[#6b7785]' },
-    offline: { pill: 'bg-[#fdf0f0] text-[#9b1c1c] ring-1 ring-[#e3a1a1]', dot: 'bg-[#c53030]' },
+    stored: { pill: 'bg-white/10 text-white ring-1 ring-white/25', dot: 'bg-[#9fb3c8]' },
+    live: { pill: 'bg-brand-teal/20 text-[#ccfbf1] ring-1 ring-brand-teal/60', dot: 'bg-brand-teal animate-pulse' },
+    checking: { pill: 'bg-white/10 text-white ring-1 ring-white/25', dot: 'bg-[#9fb3c8]' },
+    offline: { pill: 'bg-[#7f1d1d]/40 text-[#fecaca] ring-1 ring-[#f87171]/60', dot: 'bg-[#f87171]' },
 };
 
 function badgeFor(health: SolverHealth, isLive: boolean): { text: string; kind: BadgeKind; title: string } {
@@ -70,19 +70,19 @@ export default function Header({ solution, view, health, isLive }: HeaderProps) 
     return (
         <header
             id="header"
-            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-white px-4 py-1.5 text-ink md:flex-nowrap"
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-[linear-gradient(100deg,#071521_0%,#0f2a3d_55%,#0b3b3f_100%)] px-4 py-1.5 text-white md:flex-nowrap"
         >
             <div className="flex min-w-0 items-center gap-3">
-                <a href="#home" className="shrink-0 rounded-md" title="Larpers home">
-                    <Logo size={30} />
+                <a href="#home" className="shrink-0 rounded-[10px]" title="Larpers home">
+                    <Logo size={34} tone="light" />
                 </a>
-                <span aria-hidden="true" className="hidden h-8 w-px shrink-0 bg-line md:block" />
+                <span aria-hidden="true" className="hidden h-8 w-px shrink-0 bg-white/20 md:block" />
                 <div className="min-w-0">
                 <h1 className="flex items-baseline gap-3 text-[1.1rem] font-semibold leading-tight tracking-[-0.02em]">
                     <a
                         href="#home"
                         id="home-link"
-                        className="inline-flex shrink-0 items-center gap-1 rounded-md text-base font-medium text-accent hover:underline"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full text-base font-medium text-[#5eead4] transition-opacity hover:opacity-80"
                         title="Back to the front page"
                     >
                         <ArrowLeft size={16} strokeWidth={2.5} aria-hidden="true" /> Home
@@ -92,20 +92,20 @@ export default function Header({ solution, view, health, isLive }: HeaderProps) 
                 {/* Status, solve time and run ID live in the provenance strip and the summary. */}
                 <div
                     id="run-label"
-                    className="truncate text-base leading-snug text-ink2"
+                    className="truncate text-base leading-snug text-white/70"
                     title={solution ? `${runLabel} | ${statusLabel(solution)} | solve ${seconds(solution.solve_seconds)} | run ID ${solution.run_id}` : runLabel}
                 >
-                    Run: <span className="text-ink">{runLabel}</span>
+                    Run: <span className="text-white">{runLabel}</span>
                 </div>
                 </div>
             </div>
             <div className="flex flex-wrap items-center gap-3 md:shrink-0 md:flex-nowrap">
                 <div className="flex flex-wrap items-center gap-2.5">
-                    {solverNote && <span className="text-base text-ink2">{solverNote}</span>}
+                    {solverNote && <span className="text-base text-white/70">{solverNote}</span>}
                     <div
                         id="header-badge"
                         data-badge={isLive && health.state === 'up' ? 'live' : health.state === 'down' ? 'offline' : 'stored'}
-                        className={`inline-flex items-center gap-2 rounded-md px-3 py-1 text-base font-semibold tracking-[0.01em] transition-[background-color,color,box-shadow] duration-500 ease-out ${style.pill}`}
+                        className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-base font-semibold tracking-[0.01em] transition-[background-color,color,box-shadow] duration-500 ease-out ${style.pill}`}
                         title={badge.title}
                         aria-live="polite"
                     >

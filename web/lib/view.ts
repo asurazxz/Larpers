@@ -96,3 +96,8 @@ export const BAND_COLOR: Record<Band, string> = {
     most: '#60a5fa', // light blue
     some: '#ea580c', // orange
 };
+
+/** Map basemap. 'none' is the offline land layer only and needs no network; it is the default and the stage setting. */
+// app/Map.tsx draws CARTO tiles (showTiles) over the offline land layer; nothing else yet.
+export type Basemap = 'none' | 'carto';
+export const BASEMAP_LABEL: Record<Basemap, string> = { none: 'Offline', carto: 'CARTO' };

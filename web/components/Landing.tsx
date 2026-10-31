@@ -12,7 +12,6 @@ import { MISSING, pct, statusLabel, usd } from '../lib/format';
 import { storedBaselineFor } from './CostPanel';
 import { LEG_GLOW } from './heroNetwork';
 import { reducedMotion, Tween } from './motion';
-import FlowSankey from './FlowSankey';
 
 const HeroScene = dynamic(() => import('./HeroScene'), { ssr: false, loading: () => null });
 
@@ -56,8 +55,11 @@ function useReveal<T extends HTMLElement>(onShow?: () => void) {
 function Block({ eyebrow, title, children, id, onShow }: { eyebrow: string; title: string; children: React.ReactNode; id: string; onShow?: () => void }) {
     const ref = useReveal<HTMLElement>(onShow);
     return (
-        <section ref={ref} id={id} aria-label={eyebrow} className="mx-auto max-w-5xl px-6 py-16 md:py-24">
-            <h2 data-reveal className="max-w-3xl text-[2rem] font-semibold leading-[1.1] tracking-[-0.025em] md:text-[2.6rem]">
+        <section ref={ref} id={id} className="mx-auto max-w-5xl px-6 py-20 md:py-28">
+            <p data-reveal className="text-lg font-semibold text-accent">
+                {eyebrow}
+            </p>
+            <h2 data-reveal className="mt-2 text-[2.2rem] font-semibold leading-[1.08] tracking-[-0.03em] md:text-[2.9rem]">
                 {title}
             </h2>
             <div className="mt-8">{children}</div>
@@ -102,30 +104,29 @@ export default function Landing() {
     return (
         <div id="landing" className="min-h-screen bg-canvas text-ink">
             <section className="relative isolate flex min-h-[100svh] flex-col overflow-hidden bg-black text-white">
-                <div className="absolute inset-0 -z-10 bg-[#05070b]" />
+                <div className="absolute inset-0 -z-10 bg-[radial-gradient(120%_80%_at_50%_100%,#0d1a2e_0%,#05070b_55%,#000_100%)]" />
                 <HeroScene className="!absolute inset-0 -z-10" />
                 <nav className="flex items-center justify-between px-6 py-4 text-base text-white/70 md:px-10">
-                    <Logo size={30} tone="light" />
-                    <span className="flex flex-wrap items-center gap-x-3">
-                        <span className="hidden text-white/85 sm:inline">Kalimantan SAF Network Planner</span>
-                        <span aria-hidden="true" className="hidden h-4 w-px bg-white/25 sm:inline-block" />
-                        <span>Airbus Challenge #3</span>
-                    </span>
+                    <Logo size={32} tone="light" />
+                    <span>Airbus Challenge #3</span>
                 </nav>
-                <div ref={hero} className="mx-auto mt-[8vh] max-w-5xl px-6 text-center">
-                    <h1 data-hero className="text-[2.3rem] font-semibold leading-[1.06] tracking-[-0.03em] md:text-[3.5rem]">
+                <div ref={hero} className="mx-auto mt-[6vh] max-w-4xl px-6 text-center">
+                    <p data-hero className="text-lg font-semibold text-[#5eead4]">
+                        Kalimantan SAF Network Planner
+                    </p>
+                    <h1 data-hero className="mt-3 text-[2.6rem] font-semibold leading-[1.04] tracking-[-0.035em] md:text-[4.2rem]">
                         Four airports. Eighty sites.
                         <br />
                         One network, solved.
                     </h1>
-                    <p data-hero className="mx-auto mt-5 max-w-2xl text-xl leading-snug text-white/75">
+                    <p data-hero className="mx-auto mt-4 max-w-2xl text-xl leading-snug text-white/70">
                         Where to put depots and refineries for sustainable aviation fuel, chosen by a solver and checked by an independent audit.
                     </p>
                     <div data-hero className="mt-7 flex flex-wrap items-center justify-center gap-4">
                         <a
                             href="#planner"
                             id="open-planner"
-                            className="rounded-lg bg-white px-6 py-2.5 text-lg font-medium text-[#05070b] transition-colors hover:bg-white/85"
+                            className="rounded-full bg-accent px-7 py-3 text-lg font-medium text-white shadow-[0_8px_30px_rgba(0,113,227,0.45)] transition hover:bg-[#0077ed] hover:shadow-[0_8px_40px_rgba(0,113,227,0.6)]"
                         >
                             Open the planner
                         </a>
@@ -135,13 +136,13 @@ export default function Landing() {
                                 e.preventDefault();
                                 document.getElementById('how')?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth' });
                             }}
-                            className="rounded-lg px-3 py-2.5 text-lg text-white/85 hover:text-white hover:underline"
+                            className="text-lg text-[#5eead4] hover:underline"
                         >
                             How it works {'›'}
                         </a>
                     </div>
                 </div>
-                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 px-6 pb-5 text-base text-white/70 md:px-10">
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 px-6 pb-5 text-base text-white/60 md:px-10">
                     <span>Stored run: base network, real site coordinates</span>
                     <span className="flex flex-wrap gap-4">
                         {(
@@ -152,7 +153,7 @@ export default function Landing() {
                             ] as const
                         ).map(([leg, label]) => (
                             <span key={leg} className="inline-flex items-center gap-2">
-                                <span aria-hidden="true" className="inline-block h-[3px] w-5" style={{ background: LEG_GLOW[leg] }} />
+                                <span className="inline-block h-2 w-5 rounded-full" style={{ background: LEG_GLOW[leg] }} />
                                 {label}
                             </span>
                         ))}
@@ -175,28 +176,20 @@ export default function Landing() {
 
             <div className="bg-white">
                 <Block id="how" eyebrow="How it works" title="Decide, audit, compare. Label everything.">
-                    <div className="grid gap-x-12 gap-y-6 md:grid-cols-2">
-                        {STEPS.map(([h, p]) => (
-                            <div key={h} data-reveal className="border-t border-line pt-4">
-                                <h3 className="text-xl font-semibold tracking-tight">{h}</h3>
-                                <p className="mt-1.5 text-lg leading-snug text-ink2">{p}</p>
-                            </div>
+                    <ol className="grid gap-4 md:grid-cols-4">
+                        {STEPS.map(([h, p], i) => (
+                            <li key={h} data-reveal className="rounded-card bg-canvas p-6">
+                                <div className="text-lg font-semibold text-accent">{i + 1}</div>
+                                <div className="mt-2 text-xl font-semibold tracking-tight">{h}</div>
+                                <p className="mt-2 text-lg leading-snug text-ink2">{p}</p>
+                            </li>
                         ))}
-                    </div>
-                    <figure data-reveal className="mt-12 border-t border-line pt-6">
-                        <figcaption className="text-lg text-ink2">
-                            <span className="font-semibold text-ink">Material flow in the base run, kt per year.</span> Biomass from supply sites through depots to
-                            the refinery, SAF on to the four airports. Hover a band for its tonnage.
-                        </figcaption>
-                        <div className="mt-4 h-[440px]">
-                            <FlowSankey solution={base} />
-                        </div>
-                    </figure>
+                    </ol>
                 </Block>
             </div>
 
             <Block id="numbers" eyebrow="Key numbers" title="The base network, from the stored run." onShow={() => setCounting(true)}>
-                <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Stat
                         label="Total annual cost"
                         note={baseBasis ? `Network solved before the 12:45 update (${baseBasis.short}); costs recomputed on the organisers' annual basis` : "Organisers' basis, stored run"}
@@ -236,7 +229,7 @@ export default function Landing() {
 
             <footer className="mx-auto flex max-w-5xl flex-col items-center gap-5 px-6 py-20 text-center">
                 <h2 className="text-[2.2rem] font-semibold tracking-[-0.03em]">See the network for yourself.</h2>
-                <a href="#planner" className="rounded-lg bg-accent px-6 py-2.5 text-lg font-medium text-white transition-colors hover:bg-[#115e59]">
+                <a href="#planner" className="rounded-full bg-accent px-7 py-3 text-lg font-medium text-white transition hover:bg-[#0077ed]">
                     Open the planner
                 </a>
                 <p className="text-base text-ink2">Larpers, Airbus Challenge #3. Everything on this page is read from the stored bundle.</p>
@@ -247,10 +240,10 @@ export default function Landing() {
 
 function Stat({ label, note, children }: { label: string; note: string; children: React.ReactNode }) {
     return (
-        <div data-reveal className="border-t border-ink/80 pt-4">
+        <div data-reveal className="card p-6">
             <div className="text-lg text-ink2">{label}</div>
-            <div className="num mt-1 text-[2.6rem] font-semibold leading-tight tracking-[-0.03em]">{children}</div>
-            <div className="mt-1 text-base leading-snug text-ink2">{note}</div>
+            <div className="num mt-2 text-[2.2rem] font-semibold leading-tight tracking-[-0.03em]">{children}</div>
+            <div className="mt-1 text-base text-ink2">{note}</div>
         </div>
     );
 }

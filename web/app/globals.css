@@ -364,133 +364,31 @@ details[open] > :not(summary) {
     cursor: not-allowed;
 }
 
-/* ---- Quiet analytics theme: overrides the rules above, additive only ---- */
-html,
-body {
-    background: #f6f7f9;
-}
-:focus-visible {
-    outline: 2px solid #0f766e;
-    outline-offset: 2px;
-    border-radius: 6px;
-}
-[data-view] {
-    background-image: none !important;
-}
-div:has(> #header) {
-    background: #ffffff !important;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
-}
-#panel-summary > .card {
-    background-image: none;
-    padding: 0.5rem 1rem;
-}
-.card {
-    border-radius: 10px;
-    border-color: #e3e7ec;
-    box-shadow: none;
-}
-.card-icon,
-.tile-icon {
-    display: none;
-}
-.tile {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    padding: 0.625rem 0.25rem;
-}
-#cost-summary .tile + .tile {
-    border-top: 1px solid #e3e7ec;
-}
-#cost-summary [data-kpi='network'] {
-    border-left: 1px solid #e3e7ec;
-    padding-left: 0.75rem;
-}
-#cost-summary [data-kpi] > span.absolute[aria-hidden='true'] {
-    display: none;
-}
-#cost-summary > .grid {
-    row-gap: 0;
-}
-.badge {
-    border-radius: 6px;
-    padding: 0.125rem 0.5rem;
-}
-.seg {
-    border-radius: 8px;
-    border-color: #e3e7ec;
-    background: #f1f3f5;
-    box-shadow: none;
-}
-.seg-btn {
-    border-radius: 6px;
-}
-.seg-btn[aria-checked='true'] {
-    box-shadow: 0 0 0 1px #e3e7ec;
-}
-.pill {
-    border-radius: 8px;
-}
-.pill-primary {
-    background: #0f766e;
-    box-shadow: none;
-}
-.pill-primary:hover:not(:disabled) {
-    background: #115e59;
-}
-.pill-secondary {
-    border-color: #e3e7ec;
-    box-shadow: none;
-}
-.field {
-    border-radius: 8px;
-    border-color: #cfd6de;
-    box-shadow: none;
-}
-.hair-t {
-    border-top-color: #e3e7ec;
-}
-.hair-b {
-    border-bottom-color: #e3e7ec;
-}
-.leaflet-container {
-    background: #f8fafb;
-}
-.leaflet-bar {
-    border-radius: 8px !important;
-    border: 1px solid #d5dbe2 !important;
-    box-shadow: none !important;
-}
-.leaflet-bar a,
-.leaflet-bar a:hover {
-    background: #ffffff !important;
-    backdrop-filter: none;
-    border-bottom: 1px solid #e3e7ec !important;
-}
-.leaflet-bar a:hover {
-    background: #f3f5f7 !important;
-}
-.leaflet-popup-content-wrapper,
-.lp-select-content {
-    border-radius: 10px;
-    border: 1px solid #d5dbe2;
-    background: #ffffff;
-    box-shadow: 0 8px 24px -12px rgba(11, 31, 51, 0.25);
-}
-.lp-select-item {
-    border-radius: 6px;
-}
-.lp-select-item[data-highlighted] {
-    background: #f1f3f5;
-    color: #0b1f33;
-}
-/* The header is a light surface, so auth keeps its own ink colours. */
-#auth-slot > div {
-    color: inherit;
-}
-#auth-slot span.text-ink2 {
-    color: #56677b;
+/* Five-page workspace (#overview, #network, #scenarios, #results, #reliability). Sized in px so the
+   workspace keeps 14px body text whatever the root font-size the landing and #planner screens set. */
+@layer components {
+    .chip {
+        @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-medium;
+    }
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    }
+    .btn-primary {
+        @apply btn bg-primary text-white hover:brightness-110;
+    }
+    .btn-secondary {
+        @apply btn border border-line bg-white text-deep hover:bg-slate-50;
+    }
+    .input {
+        @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-[14px] text-deep focus:border-primary focus:outline-none;
+    }
+    .tbl th {
+        @apply border-b border-line bg-slate-50 px-3 py-2 text-left text-[13px] font-medium text-muted;
+    }
+    .tbl td {
+        @apply border-b border-line px-3 py-2 text-[14px] text-deep;
+    }
+    .legacy {
+        font-size: 14px;
+    }
 }

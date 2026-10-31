@@ -8,7 +8,8 @@ uvicorn api.main:app --host 127.0.0.1 --port 8000
 ```
 
 Set `SUPABASE_URL` in the process environment to the public project URL. The API
-does not read `.env` files and needs no service key or signing secret. HTTPS is
+reads one value from the root `.env`, `GEMINI_API_KEY`, and needs no service key or
+signing secret. HTTPS is
 required except for `localhost`, `127.0.0.1`, and `::1` development projects.
 Bearer tokens must use RS256 or ES256 and have an expiry, subject, audience
 `authenticated`, and the project's `/auth/v1` issuer. Public signing keys are
@@ -28,6 +29,7 @@ enabled.
 | `POST /api/solve/stream` | Signed in | Scenario JSON → NDJSON of the run as it happens, ending in the same audited Solution |
 | `POST /api/baseline` | Signed in | Scenario JSON → audited greedy Solution |
 | `POST /api/validate` | Public | `{ "scenario": ..., "solution": ... }` → flat AuditReport |
+| `POST /api/plain-english` | Signed in | `{ "kind": ..., "facts": ... }` → `{ "text", "model" }`, both null when Gemini gives no clean draft in time or past 30 calls a minute |
 
 All JSON results and errors include `run_id`; every HTTP response also has an
 `X-Run-ID` header, including CORS preflight responses. Infeasible solve results

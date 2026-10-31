@@ -38,7 +38,7 @@ function Item({
         <span
             id={id}
             title={title ?? (typeof v === 'string' ? `${k} ${v}` : undefined)}
-            className={`min-w-0 truncate whitespace-nowrap text-base ${minor ? 'text-ink2' : ''} ${!minor || fixed ? 'shrink-0' : ''} ${wide ? 'hidden 2xl:inline' : ''}`}
+            className={`min-w-0 truncate whitespace-nowrap ${minor ? 'text-sm' : 'text-base'} ${!minor || fixed ? 'shrink-0' : ''} ${wide ? 'hidden 2xl:inline' : ''}`}
         >
             <span className="text-ink2">{k} </span>
             <span className={`num font-medium ${minor ? 'text-ink3' : 'text-ink'}`}>{v}</span>

@@ -20,6 +20,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.auth import require_user
 from api.explain import router as explain_router
+from api.plain_english import ExplainRequest, ExplainResponse, plain_english
 from solver.audit import audit
 from solver.baseline import baseline
 from solver.contract import AuditReport, ContractModel, Scenario, Solution
@@ -252,6 +253,11 @@ def create_app() -> FastAPI:
         result = baseline(scenario, inputs=inputs)
         result.run_id = request.state.run_id
         return result
+
+    @protected.post("/plain-english")
+    def plain_english_route(body: ExplainRequest, request: Request) -> ExplainResponse:
+        text, model = plain_english(body.kind, body.facts)
+        return ExplainResponse(run_id=request.state.run_id, text=text, model=model)
 
     app.include_router(public)
     app.include_router(protected)
