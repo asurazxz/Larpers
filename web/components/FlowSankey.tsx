@@ -175,13 +175,42 @@ export default function FlowSankey({ solution, className = '' }: { solution: Sol
             )}
             {hover && (
                 <div
-                    className="num pointer-events-none absolute z-10 whitespace-nowrap rounded-md border border-line bg-white px-2.5 py-1 text-base text-ink"
-                    style={{ left: hover.x, top: hover.y + 16, transform: hover.x > w / 2 ? 'translateX(calc(-100% - 8px))' : 'translateX(8px)' }}
+                    className="num pointer-events-none absolute z-10 rounded-md border border-line bg-white px-2.5 py-1 text-base text-ink"
+                    style={{ left: Math.max(4, Math.min(hover.x + 10, w - 444)), top: hover.y + 16, maxWidth: 440 }}
                     role="status"
                 >
                     {hover.text}
                 </div>
             )}
         </div>
+    );
+}
+
+/** "Map | Flows" segmented control over the map slot; Flows covers the map with this run's Sankey. */
+export function FlowsOverlay({ solution }: { solution: Solution | null }) {
+    const [mode, setMode] = useState<'map' | 'flows'>('map');
+    return (
+        <>
+            <div className="absolute right-3 top-3 z-[1003]">
+                <div className="seg bg-white" role="radiogroup" aria-label="Map or flow view">
+                    {(['map', 'flows'] as const).map((m) => (
+                        <button key={m} type="button" role="radio" aria-checked={mode === m} className="seg-btn" data-mode-btn={m} onClick={() => setMode(m)}>
+                            {m === 'map' ? 'Map' : 'Flows'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            {mode === 'flows' && (
+                <div className="absolute inset-0 z-[1002] flex flex-col bg-white px-4 pb-3 pt-4">
+                    <div className="pr-40 text-base text-ink2">
+                        <span className="font-semibold text-ink">Material flow, kt per year.</span> Biomass to the refineries, SAF to the airports; widths from this
+                        run&apos;s flows.
+                    </div>
+                    <div className="min-h-0 flex-1 pt-2">
+                        <FlowSankey solution={solution} />
+                    </div>
+                </div>
+            )}
+        </>
     );
 }
