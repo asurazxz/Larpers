@@ -124,11 +124,11 @@ export default function Landing() {
                     </p>
                     <div data-hero className="mt-7 flex flex-wrap items-center justify-center gap-4">
                         <a
-                            href="#planner"
-                            id="open-planner"
+                            href="#overview"
+                            id="open-dashboard"
                             className="rounded-full bg-accent px-7 py-3 text-lg font-medium text-white shadow-[0_8px_30px_rgba(0,113,227,0.45)] transition hover:bg-[#0077ed] hover:shadow-[0_8px_40px_rgba(0,113,227,0.6)]"
                         >
-                            Open the planner
+                            Open the dashboard
                         </a>
                         <a
                             href="#how"
@@ -229,8 +229,8 @@ export default function Landing() {
 
             <footer className="mx-auto flex max-w-5xl flex-col items-center gap-5 px-6 py-20 text-center">
                 <h2 className="text-[2.2rem] font-semibold tracking-[-0.03em]">See the network for yourself.</h2>
-                <a href="#planner" className="rounded-full bg-accent px-7 py-3 text-lg font-medium text-white transition hover:bg-[#0077ed]">
-                    Open the planner
+                <a href="#overview" className="rounded-full bg-accent px-7 py-3 text-lg font-medium text-white transition hover:bg-[#0077ed]">
+                    Open the dashboard
                 </a>
                 <p className="text-base text-ink2">Larpers, Airbus Challenge #3. Everything on this page is read from the stored bundle.</p>
             </footer>
