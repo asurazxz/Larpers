@@ -139,7 +139,8 @@ def test_mixes_ascend_by_capex_and_start_at_zero():
     assert len(mixes) == 10
 
 
-def test_every_mix_is_reported_and_short_capacity_is_skipped():
+def test_every_mix_is_reported_and_short_capacity_is_skipped(monkeypatch):
+    monkeypatch.setattr("solver.model.WORKERS", 1)
     sol = resolve(Scenario(capacity_basis="biomass_input"), inputs=line([300.0, 300.0]), candidates=["A", "B"])
     states = {(m["n_large"], m["n_small"]): m["state"] for m in sol.model_dump()["portfolios"]}
     assert set(states) == {(0, 0), (0, 1), (1, 0), (0, 2), (1, 1), (2, 0)}
