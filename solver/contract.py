@@ -122,6 +122,7 @@ class Portfolio(ContractModel):
     n_large: int = Field(ge=0)
     n_small: int = Field(ge=0)
     status: Literal["optimal", "best_found", "infeasible", "heuristic", "skipped"]
+    capex_usd: Finite | None = None
     primal: Finite | None = None
     bound: Finite | None = None
     gap: Finite | None = None
@@ -136,6 +137,7 @@ class Solution(ContractModel):
     data_hash: str
     scenario_hash: str
     status: Literal["optimal", "best_found", "infeasible", "heuristic"]
+    status_reason: str | None = None
     primal: Finite | None
     bound: Finite | None
     gap: Finite | None
@@ -149,7 +151,7 @@ class Solution(ContractModel):
     logistics_annual_usd: Finite
     opex: Literal["not_provided"] = "not_provided"
     total_horizon_usd: Finite
-    validation: AuditReport
+    validation: AuditReport = Field(default_factory=AuditReport)
     portfolios: list[Portfolio] = Field(default_factory=list)
 
 
