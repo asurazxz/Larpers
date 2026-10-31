@@ -25,6 +25,7 @@ enabled.
 | `GET /api/data` | Public | Sites, airports, distance matrices, data hash, scenario defaults |
 | `GET /api/health` | Public | `ok`, `available`, solver/data availability, version and source |
 | `POST /api/solve` | Signed in | Scenario JSON → independently audited Solution |
+| `POST /api/solve/stream` | Signed in | Scenario JSON → NDJSON of the run as it happens, ending in the same audited Solution |
 | `POST /api/baseline` | Signed in | Scenario JSON → audited greedy Solution |
 | `POST /api/validate` | Public | `{ "scenario": ..., "solution": ... }` → flat AuditReport |
 
@@ -40,6 +41,18 @@ contract fixture. Health then reports `ok: false`, `available: false`, and
 `source: "fixture"`; returned solutions also remain labelled `fixture`. A fixture
 is not an audited network or a live solver result. Restart the API after the real
 solver becomes available.
+
+`POST /api/solve/stream` sends one JSON object per line, each with `type` and `t`
+(seconds since the start). `start` names the candidates and airports, `portfolio`
+lists every refinery mix, `mix` reports a mix starting or finishing, `incumbent`
+carries each improving network HiGHS finds with its facilities and flows, `bound`
+reports a mix's lower bound and search nodes, and `phase` marks the polish and audit
+steps. `tick` is a keepalive, sent after 2 s of silence. The last line is `result`,
+holding the audited Solution, or `error`. Progress lines carry `best`, `lower_bound`,
+`gap`, `settled`, `total` and `nodes` across the whole portfolio. Only `result` can
+say optimal. Closing the connection ends the solve and its workers. Two streams can
+run at once; a third gets a 429. Plain `POST /api/solve` is unchanged, and the
+frontend falls back to it on a 404 or 405.
 
 The default baseline is the approved single-assignment greedy network, with
 split depot/refinery and refinery/airport legs when capacity requires them. It

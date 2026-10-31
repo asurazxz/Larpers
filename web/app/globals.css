@@ -208,6 +208,98 @@ details[open] > summary::before {
     background: #e8e8ed;
 }
 
+/* ---- Motion ---- */
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes sink {
+    to {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.985);
+    }
+}
+@keyframes live-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(15, 118, 110, 0.5);
+    }
+    100% {
+        box-shadow: 0 0 0 7px rgba(15, 118, 110, 0);
+    }
+}
+@keyframes mix-pulse {
+    50% {
+        opacity: 0.45;
+    }
+}
+@keyframes result-glow {
+    0% {
+        box-shadow: inset 0 0 0 2px rgba(15, 118, 110, 0.6), inset 0 0 26px rgba(15, 118, 110, 0.1);
+    }
+    100% {
+        box-shadow: inset 0 0 0 2px rgba(15, 118, 110, 0), inset 0 0 26px rgba(15, 118, 110, 0);
+    }
+}
+
+.rise,
+#run-status-block > *,
+#disrupt-result,
+details[open] > :not(summary) {
+    animation: rise 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.solve-panel {
+    animation: rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.solve-panel-out {
+    animation: sink 240ms ease-in both;
+}
+.result-in {
+    animation: result-glow 1100ms ease-out both;
+}
+.pill {
+    transition-property: color, background-color, border-color, transform;
+}
+.pill:active:not(:disabled) {
+    transform: scale(0.965);
+}
+.live-dot {
+    width: 9px;
+    height: 9px;
+    flex: none;
+    border-radius: 50%;
+    background: #0f766e;
+    animation: live-pulse 1.3s ease-out infinite;
+}
+.mix-cell {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    transition: background-color 280ms ease;
+}
+.mix-running {
+    animation: mix-pulse 900ms ease-in-out infinite;
+}
+.mix-leader {
+    outline: 1.5px solid #0b1f33;
+    outline-offset: 0.5px;
+}
+.flow-fx {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+}
+.flow-fx-zooming {
+    opacity: 0;
+}
+
 /* DivIcon wrappers: no default white box. */
 .saf-airport,
 .saf-refinery,

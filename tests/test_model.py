@@ -1,5 +1,6 @@
 """Known-answer tests for the annualised MILP. Tiny instances are injected; one slow test uses the real sites."""
 import math
+import threading
 from types import SimpleNamespace
 
 import numpy as np
@@ -8,8 +9,8 @@ import pytest
 
 from solver.contract import Scenario
 from solver.model import (
-    precheck,ANNUAL_FIXED_SHARE, DEPOT_VAR_USD_T, HAUL_HAV_KM, RATE, REFINERY_VAR_USD_T, build_problem,
-                          enumerate_mixes, mix_floor, portfolio_row, resolve, solve_mix)
+    precheck, SolveCancelled, ANNUAL_FIXED_SHARE, DEPOT_VAR_USD_T, HAUL_HAV_KM, RATE, REFINERY_VAR_USD_T, build_problem,
+    enumerate_mixes, mix_floor, portfolio_row, resolve, solve_mix)
 
 AIRPORTS = ("PNK", "PKN", "BPN", "TRK")
 A, B, C, D = (f"KAL_SUP_{n:02d}" for n in range(1, 5))
@@ -493,3 +494,32 @@ def test_resolve_reports_the_same_reason_without_starting_a_solve(monkeypatch):
     sol = resolve(official(demand_kt=demand(BPN=240.0)), inputs=line([1500.0]), candidates=[A])
     assert sol.status == "infeasible"
     assert "1,087.00 kt" in sol.status_reason
+
+
+def test_streamed_run_matches_the_plain_run_and_never_claims_more_than_it_knows():
+    inputs, candidates = line([300.0, 300.0]), [A, B]
+    scenario = official(demand_kt=demand(BPN=120.0))
+    plain = resolve(scenario, inputs=inputs, candidates=candidates)
+    events = []
+    streamed = resolve(scenario, inputs=inputs, candidates=candidates, on_event=events.append)
+    assert streamed.status == plain.status
+    assert streamed.primal == pytest.approx(plain.primal, rel=1e-6)
+    kinds = [e["type"] for e in events]
+    assert kinds[:2] == ["start", "portfolio"] and "incumbent" in kinds and "phase" in kinds
+    node_ids = set(inputs.node_ids.tolist())
+    for event in (e for e in events if e["type"] == "incumbent"):
+        assert event["refineries"]
+        assert {arc[0] for arc in event["flows"]} <= {"supply_depot", "depot_refinery", "refinery_airport"}
+        assert all(arc[1] in node_ids and arc[2] in node_ids and arc[3] > 0 for arc in event["flows"])
+    bests = [e["best"] for e in events if e.get("best") is not None]
+    assert bests == sorted(bests, reverse=True)
+    assert bests[-1] == pytest.approx(plain.primal, rel=1e-6)
+    assert all(e["lower_bound"] <= e["best"] + 1e-6 for e in events if e.get("best") is not None)
+
+
+def test_setting_stop_abandons_the_run():
+    stop = threading.Event()
+    stop.set()
+    with pytest.raises(SolveCancelled):
+        resolve(official(demand_kt=demand(BPN=120.0)), inputs=line([300.0, 300.0]), candidates=[A, B],
+                on_event=lambda event: None, stop=stop)

@@ -164,7 +164,7 @@ const ANNUAL_ROWS = (a: AnnualCost): [string, string, number | null][] => [
 ];
 
 /** Always-visible summary: total annual cost (organisers' basis), solver status, audit and the baseline saving. */
-export function CostSummary({ solution, baseline }: { solution: Solution | null; baseline: Solution | null }) {
+export function CostSummary({ solution, baseline, hold = false }: { solution: Solution | null; baseline: Solution | null; hold?: boolean }) {
     if (!solution) return <div className="text-base text-ink2">No run selected: {MISSING}.</div>;
     const s = solution;
     const { H, capex, horizonTotal, annual, total, baseTotal, saving } = derive(s, baseline);
@@ -189,14 +189,14 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
                         </span>
                     </div>
                     <div className="mt-1 flex items-baseline gap-1.5">
-                        <Tween id="cost-total" className="figure-xl text-brand-ink" value={total} format={usd} />
+                        <Tween id="cost-total" className="figure-xl text-brand-ink" value={total} format={usd} start={!hold} />
                         {total !== null && <span className="text-base text-ink2">/ yr</span>}
                     </div>
                     <div id="annual-rows" className="mt-1 grid grid-cols-2 gap-x-5 gap-y-0.5">
                         {ANNUAL_ROWS(annual).map(([id, k, v]) => (
                             <div key={id} id={id} className="flex items-baseline justify-between gap-2">
                                 <span className="text-ink2">{k}</span>
-                                <Tween className="num font-medium" value={v} format={usd} />
+                                <Tween className="num font-medium" value={v} format={usd} start={!hold} />
                             </div>
                         ))}
                     </div>
@@ -213,7 +213,7 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
                             {saving !== null && saving >= 0 ? 'Saving vs greedy baseline' : 'Greedy baseline cheaper by'}
                         </span>
                         <span className="num font-semibold text-brand-ink">
-                            <Tween value={saving !== null ? Math.abs(saving) : null} format={usd} />/yr (
+                            <Tween value={saving !== null ? Math.abs(saving) : null} format={usd} start={!hold} />/yr (
                             {pct(saving !== null && baseTotal ? Math.abs(saving) / baseTotal : null, 1)})
                         </span>
                     </div>

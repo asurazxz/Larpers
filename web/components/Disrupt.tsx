@@ -7,12 +7,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Facility, Scenario, Solution } from '../lib/contract';
 import { DEFAULT_SCENARIO } from '../lib/contract';
 import { getSolution } from '../lib/bundle';
-import { AuthRequiredError, health, liveEnabled, solve } from '../lib/api';
+import { AuthRequiredError, health, liveEnabled, solveStream } from '../lib/api';
 import { signInWithGoogle, useSession } from '../lib/auth';
 import { getCurrentForm } from '../lib/useLive';
 import { pct, statusLabel, usd } from '../lib/format';
 import { annualCost } from '../lib/annual';
 import { baseSolution, compareToBase, runIndex } from '../lib/robustness';
+import type { SolveFeed } from '../lib/solveProgress';
+import { RESULT_LINGER_MS } from '../lib/useLive';
 import { baseView, disruptView, liveDisruptSlug, type View } from '../lib/view';
 
 export interface DisruptProps {
@@ -23,6 +25,8 @@ export interface DisruptProps {
     onSelect: (view: View, solution: Solution | null) => void;
     /** Site clicked on the map; its row is focused in the list. */
     focusSiteId?: string | null;
+    /** Receives the solver's progress during a live re-solve. */
+    feed: SolveFeed;
 }
 
 /** Rows shown before the "more" fold. */
@@ -40,7 +44,7 @@ function signedPct(v: number | null): string {
     return v > 0 ? `+${pct(v, 2)}` : pct(v, 2);
 }
 
-export default function Disrupt({ view, solution, onSelect, focusSiteId }: DisruptProps) {
+export default function Disrupt({ view, solution, onSelect, focusSiteId, feed }: DisruptProps) {
     const idx = runIndex();
     const base = baseSolution();
     const [liveOk, setLiveOk] = useState(false);
@@ -115,11 +119,14 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
         abortRef.current = ctrl;
         const baseScenario: Scenario = { ...DEFAULT_SCENARIO, ...(base.scenario ?? {}) };
         const excluded_ids = [...new Set([...(baseScenario.excluded_ids ?? []), siteId])];
+        feed.begin();
         try {
             const scenario = { ...baseScenario, excluded_ids };
-            const s = await solve(scenario, { signal: ctrl.signal });
+            const s = await solveStream(scenario, { signal: ctrl.signal, onEvent: feed.push });
+            feed.end(RESULT_LINGER_MS);
             onSelect(disruptView(liveDisruptSlug([siteId], s.run_id), [siteId], true), s.scenario ? s : { ...s, scenario });
         } catch (e) {
+            feed.end();
             if (e instanceof AuthRequiredError) {
                 setAuthNeeded(true);
                 setError(e.message);
