@@ -40,11 +40,19 @@ export default function NetworkMap({
     interactive = true,
     layers,
     zoomPosition,
+    popupPaddingTopLeft,
+    preview,
+    onPreviewClick,
 }: {
     interactive?: boolean;
     layers?: MapLayers;
     /** Corner for the zoom +/- buttons; omitted keeps Leaflet's default (top left). */
     zoomPosition?: ControlPosition;
+    /** Space popups keep clear of at the top left, for overlays drawn over the map. */
+    popupPaddingTopLeft?: [number, number];
+    /** Static thumbnail (Overview): no popups, pan or zoom; a click anywhere calls onPreviewClick. */
+    preview?: boolean;
+    onPreviewClick?: () => void;
 }) {
     const app = useApp();
     const { solution } = app;
@@ -66,6 +74,12 @@ export default function NetworkMap({
         [solution, app.selectFlow],
     );
 
+    const clearSelection = useCallback(() => {
+        app.selectFlow(null);
+        app.selectNode(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [app.selectFlow, app.selectNode]);
+
     return (
         <SafMap
             solution={shown}
@@ -73,9 +87,13 @@ export default function NetworkMap({
             highlight={app.highlight}
             bandFor={app.bandFor}
             feed={app.feed}
-            onSelectFlow={interactive ? selectFlow : undefined}
-            onSelectNode={interactive ? (id) => app.selectNode(id) : undefined}
+            onSelectFlow={interactive && !preview ? selectFlow : undefined}
+            onSelectNode={interactive && !preview ? (id) => app.selectNode(id) : undefined}
+            onClearSelection={clearSelection}
             zoomPosition={zoomPosition}
+            popupPaddingTopLeft={popupPaddingTopLeft}
+            preview={preview}
+            onPreviewClick={onPreviewClick}
         />
     );
 }
