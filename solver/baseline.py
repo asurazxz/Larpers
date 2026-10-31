@@ -73,6 +73,8 @@ def baseline(scenario: Scenario, *, inputs=None) -> Solution:
         a, b = nodes[source], nodes[dest]
         hav = distance(source, dest)
         km = hav * scenario.road_factor
+        if scenario.distance_basis == "osrm" and "TRK" not in (source, dest):
+            km = max(float(inputs.road_km[index[source], index[dest]]), hav)
         truck = truck_t[leg]
         result.flows.append(Flow(
             leg=leg, commodity="saf" if leg == "refinery_airport" else "biomass",
@@ -80,7 +82,7 @@ def baseline(scenario: Scenario, *, inputs=None) -> Solution:
             to_lat=b["lat"], to_lon=b["lon"], from_label=a.get("label", a.get("name", source)),
             to_label=b.get("label", b.get("name", dest)), kt=amount, hav_km=hav,
             road_factor=scenario.road_factor, km=km, rate_usd_per_t_km=rates[leg],
-            cost_usd=amount*1000*rates[leg]*km, truck_t=truck,
+            cost_usd=amount*1000*rates[leg]*km, truck_t=truck, distance_basis=scenario.distance_basis,
             trips=math.ceil(amount*1000/truck),
             road_km=float(inputs.road_km[index[source], index[dest]]),
         ))

@@ -213,6 +213,15 @@
           ],
           "default": null,
           "title": "Road Km"
+        },
+        "distance_basis": {
+          "default": "factor",
+          "enum": [
+            "factor",
+            "osrm"
+          ],
+          "title": "Distance Basis",
+          "type": "string"
         }
       },
       "required": [

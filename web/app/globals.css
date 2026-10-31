@@ -319,6 +319,12 @@ details[open] > :not(summary) {
     }
 }
 
+/* Tile attribution: required by Esri, kept small so it does not cover the map. */
+.leaflet-container .leaflet-control-attribution {
+    font-size: 11px;
+    line-height: 1.4;
+}
+
 /* Larpers custom select (Radix): above the map and header layers. */
 .lp-select-content {
     z-index: 3000;

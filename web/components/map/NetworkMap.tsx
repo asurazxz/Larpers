@@ -1,7 +1,7 @@
 'use client';
 
-// The one network map, shared by Overview and Network Explorer. It wraps app/Map.tsx unchanged so
-// basemap and OSRM route-geometry work in Map.tsx flows through to every page with no edits here.
+// The one network map, shared by Overview and Network Explorer. It wraps app/Map.tsx unchanged, so the Esri
+// basemap and the OSRM road geometry in Map.tsx reach every page with no edits here.
 // The optional `layers` prop hides parts of a COPY of the solution before it reaches the map.
 import dynamic from 'next/dynamic';
 import { useCallback, useMemo } from 'react';
@@ -62,7 +62,6 @@ export default function NetworkMap({ interactive = true, layers }: { interactive
             sites={layers && !layers.sites ? [] : sites}
             highlight={app.highlight}
             bandFor={app.bandFor}
-            showTiles={app.basemap !== 'none'}
             feed={app.feed}
             onSelectFlow={interactive ? selectFlow : undefined}
             onSelectNode={interactive ? (id) => app.selectNode(id) : undefined}

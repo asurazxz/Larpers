@@ -3,6 +3,7 @@
 // The moving part of the map: one canvas above the Leaflet layers. It draws a Scene and animates the
 // difference from the last one: new arcs grow from source to destination, leg by leg, lost arcs fade,
 // and opened facilities pop in. Dots run along every solid arc in the direction biomass and SAF move.
+// Arcs follow their OSRM road (SceneArc.path) where one is stored, so the dots run along the same road as the line.
 // At rest the Leaflet layers show the run and stay clickable; this layer only adds the dots.
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
@@ -74,6 +75,24 @@ function roundedSquare(ctx: CanvasRenderingContext2D, x: number, y: number, size
     const half = size / 2;
     ctx.beginPath();
     ctx.roundRect(x - half, y - half, size, size, radius);
+}
+
+type Pt = { x: number; y: number };
+
+/** Running pixel length at each vertex of a polyline. */
+function cumulative(pts: Pt[]): number[] {
+    const out = [0];
+    for (let k = 1; k < pts.length; k++) out.push(out[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+    return out;
+}
+
+/** The point `d` pixels along a polyline. */
+function pointAt(pts: Pt[], cum: number[], d: number): Pt {
+    let k = 1;
+    while (k < pts.length - 1 && cum[k] < d) k++;
+    const span = cum[k] - cum[k - 1] || 1;
+    const t = Math.min(1, Math.max(0, (d - cum[k - 1]) / span));
+    return { x: pts[k - 1].x + (pts[k].x - pts[k - 1].x) * t, y: pts[k - 1].y + (pts[k].y - pts[k - 1].y) * t };
 }
 
 export default function FlowLayer({ scene, resting, highlight, onSettled, settleId, colors }: FlowLayerProps) {
@@ -171,31 +190,40 @@ export default function FlowLayer({ scene, resting, highlight, onSettled, settle
                     const grown = still ? 1 : clamp01((now - s.born) / GROW_MS);
                     if (grown < 1 || s.target === 0 || Math.abs(s.alpha - s.target) > 0.02) busy = true;
                     if (grown <= 0) continue;
-                    const a = map.latLngToContainerPoint(s.arc.from);
-                    const b = map.latLngToContainerPoint(s.arc.to);
+                    // Along the OSRM road when one is stored (arc.path), else the straight from -> to.
+                    const pts = s.arc.path.map((ll) => map.latLngToContainerPoint(ll));
+                    const cum = cumulative(pts);
+                    const length = cum[cum.length - 1];
                     const reach = easeOut(grown);
-                    const dx = b.x - a.x;
-                    const dy = b.y - a.y;
                     if (!rest) {
                         ctx.globalAlpha = s.alpha;
                         ctx.strokeStyle = tone === 'greedy' ? GREEDY_GREY : palette[s.arc.leg];
                         ctx.lineWidth = s.width;
+                        ctx.lineJoin = 'round';
                         ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(a.x + dx * reach, a.y + dy * reach);
+                        ctx.moveTo(pts[0].x, pts[0].y);
+                        const end = length * reach;
+                        for (let k = 1; k < pts.length; k++) {
+                            if (cum[k] >= end) {
+                                const p = pointAt(pts, cum, end);
+                                ctx.lineTo(p.x, p.y);
+                                break;
+                            }
+                            ctx.lineTo(pts[k].x, pts[k].y);
+                        }
                         ctx.stroke();
                     }
                     if (still || tone !== 'solid' || grown < 1 || s.target === 0) continue;
                     if (hl && !hl.has(s.arc.id)) continue;
-                    const length = Math.hypot(dx, dy);
                     if (length < 10) continue;
                     const radius = Math.min(3, Math.max(1.3, s.width * 0.42));
                     ctx.fillStyle = '#ffffff';
                     const start = ((now / 1000) * DOT_SPEED_PX_S + s.phase) % DOT_SPACING_PX;
                     for (let d = start; d < length; d += DOT_SPACING_PX) {
+                        const p = pointAt(pts, cum, d);
                         ctx.globalAlpha = 0.9 * Math.min(1, d / 12, (length - d) / 12);
                         ctx.beginPath();
-                        ctx.arc(a.x + (dx * d) / length, a.y + (dy * d) / length, radius, 0, Math.PI * 2);
+                        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
                         ctx.fill();
                     }
                 }

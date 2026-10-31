@@ -3,6 +3,7 @@
 // to the next stays on screen instead of being redrawn.
 import type { Flow, Leg, Solution } from './contract';
 import type { LiveArc, LiveFacility, LiveNetwork, SolveProgress } from './solveProgress';
+import { fullPath } from './routes';
 import { flowKey } from './view';
 
 export type Tone = 'solid' | 'ghost' | 'greedy';
@@ -13,6 +14,8 @@ export interface SceneArc {
     leg: Leg;
     from: [number, number];
     to: [number, number];
+    /** Node to node along the stored OSRM road (lib/routes.ts); just [from, to] when there is none. */
+    path: [number, number][];
     width: number;
     tone: Tone;
 }
@@ -64,6 +67,7 @@ export function sceneFromSolution(solution: Solution | null): Scene {
             leg: f.leg,
             from: [f.from_lat, f.from_lon],
             to: [f.to_lat, f.to_lon],
+            path: fullPath(f.from, f.to, [f.from_lat, f.from_lon], [f.to_lat, f.to_lon]),
             width: legWidth(f.leg, f.kt, max[f.leg]),
             tone: 'solid',
         });
@@ -94,6 +98,7 @@ function addNetwork(scene: Scene, net: LiveNetwork, tone: Tone, at: (id: string)
             leg: a.leg,
             from: [p.lat, p.lon],
             to: [q.lat, q.lon],
+            path: fullPath(a.from, a.to, [p.lat, p.lon], [q.lat, q.lon]),
             width: tone === 'solid' ? legWidth(a.leg, a.kt, max[a.leg]) : 1.25,
             tone,
         });
