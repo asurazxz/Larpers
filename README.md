@@ -42,3 +42,9 @@ npx supabase gen types typescript --linked > src/types/database.ts   # TS types 
 npx supabase start      # local Supabase in Docker (Studio at http://127.0.0.1:54323)
 npx supabase db reset   # local: rebuild from migrations + supabase/seed.sql
 ```
+
+## Auth
+
+- Google sign-in (Google Cloud Console setup, Supabase config, Next.js/Vite code, admin role):
+  [docs/AUTH.md](docs/AUTH.md)
+- Writing RLS policies for new tables: [docs/RLS.md](docs/RLS.md)
