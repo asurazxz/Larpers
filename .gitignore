@@ -45,9 +45,7 @@ env/
 .ipynb_checkpoints/
 
 # ---------- Data & model artifacts ----------
-# Hackathon datasets are large (GitHub rejects files >100MB). Share them via the
-# Drive link; commit only small samples under data/sample/.
-data/raw/
+# data/raw/ is tracked: it is small and data/prepare.py needs it on a fresh clone.
 data/processed/
 *.zip
 *.parquet
@@ -72,3 +70,9 @@ desktop.ini
 
 # ---------- Claude Code (personal settings) ----------
 .claude/settings.local.json
+.playwright-mcp/
+
+# ---------- Personal notes (not shared with the team) ----------
+*.local.md
+docs/prompts/1-jing-yuan.md
+resource/CHALLENGE3_ORCHESTRATOR_PROMPT.md
