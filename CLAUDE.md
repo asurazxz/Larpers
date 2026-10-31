@@ -44,6 +44,7 @@ python -m solver.model                  # base case: objective, MIP gap, solve t
 python -m solver.baseline               # greedy baseline objective
 python -m solver.sensitivity            # assumption sweeps, selection frequency
 python -m solver.scenarios              # stored runs into web/data/bundle.json
+python -m solver.explain                # stored paragraphs into web/data/explanations.json, after scenarios
 uvicorn api.main:app --port 8000        # local solver API
 python -m pytest tests/                 # all tests
 python -m pytest tests/test_data.py::test_name   # single test
