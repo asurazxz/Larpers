@@ -266,6 +266,18 @@
           "title": "Status",
           "type": "string"
         },
+        "capex_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capex Usd"
+        },
         "primal": {
           "anyOf": [
             {
@@ -434,6 +446,18 @@
       "title": "Status",
       "type": "string"
     },
+    "status_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Status Reason"
+    },
     "primal": {
       "anyOf": [
         {
@@ -551,8 +575,7 @@
     "surplus",
     "capex_usd",
     "logistics_annual_usd",
-    "total_horizon_usd",
-    "validation"
+    "total_horizon_usd"
   ],
   "title": "Solution",
   "type": "object"
