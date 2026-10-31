@@ -131,7 +131,18 @@ def infeasible_reason(p: Problem) -> str | None:
     reachable = p.yield_ * p.retention * sum(p.supply[i] for i in served)
     if total > reachable + EPS:
         return f"Demand of {total:,.2f} kt exceeds the {reachable:,.2f} kt of SAF from sites with a depot in range"
+    need, most = required_capacity(p), len(p.refineries) * REFINERY_KT["L"]
+    if need > most + EPS:
+        return f"Refineries must take {need:,.2f} kt, but {len(p.refineries)} candidate sites hold {most:,.2f} kt at most"
+    need, most = depot_intake(p), len(p.depots) * DEPOT_KT["L"]
+    if need > most + EPS:
+        return f"Depots must take {need:,.2f} kt, but {len(p.depots)} candidate sites hold {most:,.2f} kt at most"
     return None
+
+
+def precheck(scenario: Scenario, inputs, candidates=None) -> str | None:
+    """Why no network can serve this scenario, found without solving, or None if one may exist."""
+    return infeasible_reason(build_problem(scenario, inputs, SHORTLIST if candidates is None else candidates))
 
 
 def required_capacity(p: Problem) -> float:
@@ -147,6 +158,11 @@ def refinery_intake(p: Problem) -> float:
     if p.collect_all:
         return p.retention * sum(p.supply.values())
     return sum(p.demand.values()) / p.yield_
+
+
+def depot_intake(p: Problem) -> float:
+    """Biomass kt every plan must pass through its depots."""
+    return sum(p.supply.values()) if p.collect_all else refinery_intake(p) / p.retention
 
 
 def mix_floor(p: Problem, n_large: int, n_small: int) -> float:
@@ -237,8 +253,7 @@ def solve_mix(p: Problem, n_large: int, n_small: int, time_limit: float, threads
         m += pulp.lpSum(in_a[a]) == kt
     m += pulp.lpSum(zr[k, "L"] for k in p.refineries) == n_large
     m += pulp.lpSum(zr[k, "S"] for k in p.refineries) == n_small
-    must_pass = sum(p.supply.values()) if p.collect_all else refinery_intake(p) / p.retention
-    m += pulp.lpSum(zd[j, "S"] + 2 * zd[j, "L"] for j in p.depots) >= math.ceil(must_pass / DEPOT_KT["S"] - EPS)
+    m += pulp.lpSum(zd[j, "S"] + 2 * zd[j, "L"] for j in p.depots) >= math.ceil(depot_intake(p) / DEPOT_KT["S"] - EPS)
 
     limit = max(time_limit - (time.monotonic() - started), 0.1)
     m.solve(pulp.HiGHS(msg=False, timeLimit=limit, gapRel=0.0, threads=threads))
