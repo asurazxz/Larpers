@@ -11,6 +11,7 @@ import { AuthRequiredError, health, liveEnabled, solve } from '../lib/api';
 import { signInWithGoogle, useSession } from '../lib/auth';
 import { getCurrentForm } from '../lib/useLive';
 import { pct, statusLabel, usd } from '../lib/format';
+import { annualCost } from '../lib/annual';
 import { baseSolution, compareToBase, runIndex } from '../lib/robustness';
 import { baseView, disruptView, liveDisruptSlug, type View } from '../lib/view';
 
@@ -146,6 +147,10 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
         });
         const infeasible = solution.status === 'infeasible';
         const cmp = base && !infeasible ? compareToBase(base, solution) : null;
+        const annualBase = base && cmp ? annualCost(base).total : null;
+        const annualNow = cmp ? annualCost(solution).total : null;
+        const annualDelta = annualBase !== null && annualNow !== null ? annualNow - annualBase : null;
+        const horizonLabel = cmp?.costField === 'total_horizon_usd' ? 'Total horizon cost' : 'Objective';
         result = (
             <div id="disrupt-result" className="mt-2.5 rounded-2xl bg-blue-50 px-4 py-3" data-status={solution.status}>
                 <div className="text-sm font-medium text-blue-800">
@@ -160,18 +165,40 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
                     </div>
                 ) : cmp ? (
                     <div className="mt-1.5 space-y-0.5" data-testid="disrupt-delta">
-                        <div className="flex justify-between gap-2">
-                            <span className="text-ink2">{cmp.costField === 'total_horizon_usd' ? 'Total horizon cost' : 'Objective'}</span>
-                            <span className="num">
-                                {usd(cmp.base)} → {usd(cmp.disrupted)}
-                            </span>
-                        </div>
-                        <div className="flex justify-between gap-2">
-                            <span className="text-ink2">Change against base</span>
-                            <span className={`num font-semibold ${cmp.delta !== null && cmp.delta > 0 ? 'text-orange-800' : 'text-blue-800'}`} data-testid="disrupt-delta-value">
-                                {signedUsd(cmp.delta)} ({signedPct(cmp.deltaFraction)})
-                            </span>
-                        </div>
+                        {annualDelta !== null ? (
+                            <>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-ink2">Total annual cost</span>
+                                    <span className="num">
+                                        {usd(annualBase)} → {usd(annualNow)}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-ink2">Change against base</span>
+                                    <span className={`num font-semibold ${annualDelta > 0 ? 'text-orange-800' : 'text-blue-800'}`} data-testid="disrupt-delta-value">
+                                        {signedUsd(annualDelta)}/yr ({signedPct(annualBase ? annualDelta / annualBase : null)})
+                                    </span>
+                                </div>
+                                <div className="text-sm text-ink3" data-testid="disrupt-delta-horizon">
+                                    {horizonLabel}: {usd(cmp.base)} → {usd(cmp.disrupted)} ({signedUsd(cmp.delta)})
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-ink2">{horizonLabel}</span>
+                                    <span className="num">
+                                        {usd(cmp.base)} → {usd(cmp.disrupted)}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-ink2">Change against base</span>
+                                    <span className={`num font-semibold ${cmp.delta !== null && cmp.delta > 0 ? 'text-orange-800' : 'text-blue-800'}`} data-testid="disrupt-delta-value">
+                                        {signedUsd(cmp.delta)} ({signedPct(cmp.deltaFraction)})
+                                    </span>
+                                </div>
+                            </>
+                        )}
                         <div className="flex justify-between gap-2">
                             <span className="text-ink2">Supply sites moved</span>
                             <span className="num" data-testid="disrupt-moved">
