@@ -10,6 +10,7 @@ pipeline with a stub resolve, so stub output never looks stored.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import random
@@ -154,10 +155,11 @@ class Runner:
     """Runs specs through solve, audit and an atomic bundle write."""
 
     def __init__(self, *, out, inputs, resolve_fn, baseline_fn, audit_fn, scenario_fn, stub=False, clock=_now,
-                 log=print):
+                 log=print, solver_version=None, fresh=False):
         self.out = Path(out)
         self.inputs = inputs
         self.data_hash = inputs.data_hash
+        self.solver_version = solver_version
         self.resolve_fn = resolve_fn
         self.baseline_fn = baseline_fn
         self.audit_fn = audit_fn
@@ -166,13 +168,18 @@ class Runner:
         self.clock = clock
         self.log = log
         self.base_overrides = official_base(getattr(inputs, "parameters", None))
-        self.bundle = load_bundle(self.out)
+        self.bundle = {} if fresh else load_bundle(self.out)
         self.bundle.setdefault("runs", {})
         self.table = []  # (tier, family, slug, outcome)
 
-    def _fresh(self, slug):
+    def _fresh(self, slug, payload):
+        """A stored run is reused only if its data, its full scenario and the solver version all match."""
         entry = self.bundle["runs"].get(slug)
-        return entry is not None and entry.get("data_hash") == self.data_hash
+        if entry is None or entry.get("data_hash") != self.data_hash:
+            return False
+        if entry.get("solver_version") != self.solver_version:
+            return False
+        return entry.get("scenario") == as_dict(self.scenario_fn(payload))
 
     def _solve(self, kind, payload):
         scenario = self.scenario_fn(payload)
@@ -182,11 +189,12 @@ class Runner:
         return scenario, as_dict(solution), report
 
     def run(self, spec):
-        if self._fresh(spec.slug):
+        payload = {**self.base_overrides, **spec.overrides}
+        if self._fresh(spec.slug, payload):
             self.table.append((spec.tier, spec.family, spec.slug, "resumed"))
             return self.bundle["runs"][spec.slug]
         started = time.monotonic()
-        scenario, solution, report = self._solve(spec.kind, {**self.base_overrides, **spec.overrides})
+        scenario, solution, report = self._solve(spec.kind, payload)
         if not report.get("passed"):
             self.table.append((spec.tier, spec.family, spec.slug, "audit_failed"))
             self.log(f"  {spec.slug}: audit failed, not written: {report.get('failures')}")
@@ -200,6 +208,7 @@ class Runner:
             "status": solution.get("status"),
             "solved_at": self.clock(),
             "data_hash": self.data_hash,
+            "solver_version": self.solver_version,
             "scenario_hash": solution.get("scenario_hash"),
             "precomputed": True,
             "stub": self.stub,
@@ -216,7 +225,8 @@ class Runner:
 
     def stress(self, seed=STRESS_SEED):
         done = self.bundle.get("stress")
-        if done and done.get("data_hash") == self.data_hash and done.get("seed") == seed:
+        if (done and done.get("data_hash") == self.data_hash and done.get("seed") == seed
+                and done.get("solver_version") == self.solver_version and done.get("base") == self.base_overrides):
             self.table.append(("T1", "stress", "stress_*", "resumed"))
             return done
         sites = self.inputs.sites
@@ -243,6 +253,8 @@ class Runner:
         summary = {
             "seed": seed,
             "data_hash": self.data_hash,
+            "solver_version": self.solver_version,
+            "base": self.base_overrides,
             "n_random": len(random_rows),
             "solved": len(solved),
             "worst_solve_seconds": max(seconds) if seconds else None,
@@ -324,12 +336,27 @@ def _default_scenario(payload):
     return Scenario.model_validate(payload)
 
 
+SOLVER_SOURCES = ("model.py", "baseline.py", "audit.py", "candidates.py", "contract.py")
+
+
+def solver_version():
+    """Hash of the solver sources, so a changed objective or audit never reuses stored runs."""
+    h = hashlib.sha256()
+    for name in SOLVER_SOURCES:
+        p = Path(__file__).with_name(name)
+        if p.exists():
+            h.update(name.encode())
+            h.update(p.read_bytes())
+    return h.hexdigest()[:12]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Solve, audit and store runs into the bundle.")
     parser.add_argument("--tiers", default=",".join(TIERS), help="comma-separated, e.g. T1,T2")
     parser.add_argument("--out", default=str(BUNDLE))
     parser.add_argument("--stub", action="store_true", help="stub resolve; needs --out outside web/")
     parser.add_argument("--no-stress", action="store_true")
+    parser.add_argument("--fresh", action="store_true", help="ignore runs already in --out")
     args = parser.parse_args()
     tiers = [t.strip() for t in args.tiers.split(",") if t.strip()]
     for t in tiers:
@@ -351,7 +378,7 @@ def main():
 
         resolve_fn, baseline_fn, audit_fn, scenario_fn = resolve, baseline, audit, _default_scenario
     runner = Runner(out=out, inputs=inputs, resolve_fn=resolve_fn, baseline_fn=baseline_fn, audit_fn=audit_fn,
-                    scenario_fn=scenario_fn, stub=args.stub)
+                    scenario_fn=scenario_fn, stub=args.stub, solver_version=solver_version(), fresh=args.fresh)
     run_all(runner, tiers, stress=not args.no_stress)
     print_table(runner.table)
     print(f"\nwrote {out}")

@@ -27,6 +27,51 @@ class ContractModel(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True, allow_inf_nan=False, validate_default=True)
 
 
+class Parameters(ContractModel):
+    """Organiser values from challenge3_parameters.xlsx are the defaults. Override any of them to test our own."""
+    rate_supply_depot: Finite = Field(default=RATES["supply_depot"], ge=0)
+    rate_depot_refinery: Finite = Field(default=RATES["depot_refinery"], ge=0)
+    rate_refinery_airport: Finite = Field(default=RATES["refinery_airport"], ge=0)
+    truck_supply_depot_t: Finite = Field(default=TRUCK_T["supply_depot"], gt=0)
+    truck_depot_refinery_t: Finite = Field(default=TRUCK_T["depot_refinery"], gt=0)
+    truck_refinery_airport_t: Finite = Field(default=TRUCK_T["refinery_airport"], gt=0)
+    depot_small_kt: Finite = Field(default=CAPACITY_KT["depot"]["small"], gt=0)
+    depot_large_kt: Finite = Field(default=CAPACITY_KT["depot"]["large"], gt=0)
+    refinery_small_kt: Finite = Field(default=CAPACITY_KT["refinery"]["small"], gt=0)
+    refinery_large_kt: Finite = Field(default=CAPACITY_KT["refinery"]["large"], gt=0)
+    depot_small_capex_usd: Finite = Field(default=CAPEX_USD["depot"]["small"], ge=0)
+    depot_large_capex_usd: Finite = Field(default=CAPEX_USD["depot"]["large"], ge=0)
+    refinery_small_capex_usd: Finite = Field(default=CAPEX_USD["refinery"]["small"], ge=0)
+    refinery_large_capex_usd: Finite = Field(default=CAPEX_USD["refinery"]["large"], ge=0)
+    depot_small_var_usd_t: Finite = Field(default=VARIABLE_OPEX_USD_T["depot"]["small"], ge=0)
+    depot_large_var_usd_t: Finite = Field(default=VARIABLE_OPEX_USD_T["depot"]["large"], ge=0)
+    refinery_small_var_usd_t: Finite = Field(default=VARIABLE_OPEX_USD_T["refinery"]["small"], ge=0)
+    refinery_large_var_usd_t: Finite = Field(default=VARIABLE_OPEX_USD_T["refinery"]["large"], ge=0)
+    capex_years: Finite = Field(default=CAPEX_YEARS, gt=0)
+    fixed_opex_share: Finite = Field(default=FIXED_OPEX_SHARE, ge=0)
+
+    def rates(self) -> dict[str, float]:
+        return {"supply_depot": self.rate_supply_depot, "depot_refinery": self.rate_depot_refinery,
+                "refinery_airport": self.rate_refinery_airport}
+
+    def truck_t(self) -> dict[str, float]:
+        return {"supply_depot": self.truck_supply_depot_t, "depot_refinery": self.truck_depot_refinery_t,
+                "refinery_airport": self.truck_refinery_airport_t}
+
+    def _by_size(self, suffix: str) -> dict[str, dict[str, float]]:
+        return {kind: {size: getattr(self, f"{kind}_{size}_{suffix}") for size in ("small", "large")}
+                for kind in ("depot", "refinery")}
+
+    def capacity_kt(self) -> dict[str, dict[str, float]]:
+        return self._by_size("kt")
+
+    def capex_usd(self) -> dict[str, dict[str, float]]:
+        return self._by_size("capex_usd")
+
+    def variable_opex_usd_t(self) -> dict[str, dict[str, float]]:
+        return self._by_size("var_usd_t")
+
+
 class Scenario(ContractModel):
     demand_kt: dict[Literal["BPN", "PNK", "TRK", "PKN"], Annotated[Finite, Field(ge=0)]] | None = None
     yield_fraction: Finite = Field(default=0.20, alias="yield", gt=0, le=1)
@@ -37,6 +82,11 @@ class Scenario(ContractModel):
     capacity_basis: Literal["saf_output", "biomass_input"] = "biomass_input"
     excluded_ids: list[NodeId] = Field(default_factory=list)
     time_limit_s: Finite = Field(default=90, gt=0)
+    # Our own modelling choices, not organiser values. None keeps the 69 onshore depots and the frozen shortlist.
+    haul_limit_km: Finite = Field(default=HAUL_HAV_KM, gt=0)
+    refinery_candidates: list[NodeId] | None = None
+    depot_candidates: list[NodeId] | None = None
+    parameters: Parameters = Field(default_factory=Parameters)
 
     @field_validator("demand_kt")
     @classmethod
@@ -50,8 +100,22 @@ class Scenario(ContractModel):
     def unique_exclusions(cls, value):
         return sorted(set(value))
 
+    @field_validator("refinery_candidates", "depot_candidates")
+    @classmethod
+    def unique_candidates(cls, value):
+        return None if value is None else sorted(set(value))
+
     def scenario_hash(self) -> str:
-        payload = json.dumps(self.model_dump(mode="json", by_alias=True), sort_keys=True, separators=(",", ":"), allow_nan=False)
+        fields = self.model_dump(mode="json", by_alias=True)
+        # Settings left at their defaults stay out, so stored runs keep their hash.
+        if self.haul_limit_km == HAUL_HAV_KM:
+            del fields["haul_limit_km"]
+        for name in ("refinery_candidates", "depot_candidates"):
+            if fields[name] is None:
+                del fields[name]
+        if self.parameters == Parameters():
+            del fields["parameters"]
+        payload = json.dumps(fields, sort_keys=True, separators=(",", ":"), allow_nan=False)
         return hashlib.sha256(payload.encode()).hexdigest()
 
     def airport_demand(self, supply_kt: float) -> dict[str, float]:
@@ -101,7 +165,7 @@ class Flow(ContractModel):
     km: Finite
     rate_usd_per_t_km: Finite
     cost_usd: Finite
-    truck_t: Literal[9, 30, 32]
+    truck_t: Finite = Field(gt=0)
     trips: int
     road_km: Finite | None = None
 

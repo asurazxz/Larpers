@@ -6,6 +6,7 @@ import type { Facility, Flow, Solution } from '../lib/contract';
 import { bundle, sites, solutionOf } from '../lib/bundle';
 import { km, kt, MISSING, pct, statusLabel } from '../lib/format';
 import { annualCost, CAPEX_YEARS, FIXED_OPEX_SHARE } from '../lib/annual';
+import { preUpdateBasis } from '../lib/basis';
 
 /** Bulungan, North Kalimantan. Tarakan ferry row only once Denzel confirms a second source. */
 const NORTH_KAL_IDS = ['KAL_SUP_18', 'KAL_SUP_70'];
@@ -187,6 +188,7 @@ export default function FailureBand({ solution, onSelectFlow }: FailureBandProps
     const saf = s ? safRequired(s) : null;
     const bioNeeded = saf && finite(y) && y > 0 ? saf.kt / y : null;
     const cap = s ? largeRefineryIntake(s) : null;
+    const preUpdate = preUpdateBasis(s);
     const nNeeded = bioNeeded !== null && cap && cap.intake > 0 ? Math.ceil(bioNeeded / cap.intake - 1e-9) : null;
 
     // (3) annualisation, checked against this run
@@ -277,6 +279,7 @@ export default function FailureBand({ solution, onSelectFlow }: FailureBandProps
                                 {totalBiomass > 0 && <> (of {kt(totalBiomass, 0)})</>}, {kt(cap.intake, 0)} per large refinery.
                             </span>{' '}
                             This run: <span className="font-semibold text-ink">{mix(s.facilities)}</span>.
+                            {preUpdate && <span className="text-ink2" data-testid="pre-update-capacity" title={`Stored run's scenario: ${preUpdate.full}.`}> Solved before the 12:45 update.</span>}
                         </>
                     ) : (
                         <>

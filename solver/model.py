@@ -31,23 +31,25 @@ mix that can still win, so "optimal" means every feasible mix was proven or vali
 from __future__ import annotations
 
 import argparse
+import json
 import math
+import multiprocessing
 import os
+import threading
 import time
 import uuid
 from collections import defaultdict, deque
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pulp
 
 from solver.candidates import SHORTLIST
-from solver.contract import AIRPORT_DEMAND_KT, Scenario, Solution
+from solver.contract import AIRPORT_DEMAND_KT, HAUL_HAV_KM, Parameters, Scenario, Solution
 from solver.inputs import load_inputs
 
 RATE = (0.10, 0.12, 0.08)
-HAUL_HAV_KM = 300 / 1.4
 TRUCK_T = (9, 30, 32)
 DEPOT_KT, DEPOT_USD = {"S": 150, "L": 300}, {"S": 2.25e6, "L": 4.5e6}
 REFINERY_KT, REFINERY_USD = {"S": 500, "L": 1087}, {"S": 480e6, "L": 765e6}
@@ -56,14 +58,82 @@ ANNUAL_FIXED_SHARE = 1 / CAPEX_YEARS + FIXED_OPEX_SHARE
 DEPOT_VAR_USD_T, REFINERY_VAR_USD_T = {"S": 5, "L": 4}, {"S": 60, "L": 55}
 NO_TRUCK_ACCESS = {"TRK"}
 SIZE_NAME = {"S": "small", "L": "large"}
-MAX_SOLVE_S = 90
+MAX_SOLVE_S = 600
 THREADS = 2
-CORES = os.cpu_count() or 2
-WORKERS = max(1, min(5, CORES // THREADS))
-LEAD_THREADS = max(THREADS, min(7, CORES - THREADS * (WORKERS - 1)))
+
+
+def worker_plan(cores: int) -> tuple[int, int]:
+    """Parallel mixes and the threads for the lead mix. SOLVER_CORES caps this on a shared or smaller machine."""
+    workers = max(1, min(5, cores // THREADS))
+    return workers, max(THREADS, min(7, cores - THREADS * (workers - 1)))
+
+
+WORKERS, LEAD_THREADS = worker_plan(int(os.getenv("SOLVER_CORES") or os.cpu_count() or 2))
 EPS = 1e-9
 RESOLVED = {"proven", "infeasible", "skipped_capacity", "skipped_capex", "dominated"}
 MIX_STATUS = {"proven": "optimal", "infeasible": "infeasible", "best_found": "best_found"}
+STOP_POLL_S = 0.25
+BOUND_EVERY_S = 0.5
+LEG_NAME = ("supply_depot", "depot_refinery", "refinery_airport")
+
+
+class SolveCancelled(Exception):
+    """The caller stopped listening, so the run was abandoned."""
+
+
+class ReportingHiGHS(pulp.HiGHS):
+    """HiGHS that passes each improving solution and each bound update to `report` while it solves."""
+
+    def __init__(self, report, **options):
+        super().__init__(**options)
+        self.report = report
+
+    def callSolver(self, lp):
+        h = lp.solverModel
+        last = 0.0
+
+        def tick(event):
+            nonlocal last
+            now = time.monotonic()
+            if now - last >= BOUND_EVERY_S:
+                last = now
+                self.report("bound", event.data_out)
+
+        h.cbMipImprovingSolution.subscribe(lambda event: self.report("incumbent", event.data_out))
+        # cbMipLogging stays silent with msg=False. Listening here changed no result in a timed comparison.
+        h.cbMipInterrupt.subscribe(tick)
+        h.solve()
+
+
+@dataclass(frozen=True)
+class Costs:
+    """Capacities and money for one scenario, keyed by size S and L. Organiser values unless overridden."""
+    depot_kt: dict[str, float]
+    depot_usd: dict[str, float]
+    depot_var: dict[str, float]
+    refinery_kt: dict[str, float]
+    refinery_usd: dict[str, float]
+    refinery_var: dict[str, float]
+    truck_t: tuple[float, float, float]
+    capex_years: float
+    fixed_share: float
+
+    @property
+    def annual_share(self) -> float:
+        return 1 / self.capex_years + self.fixed_share
+
+
+def costs_from(parameters: Parameters) -> Costs:
+    keyed = lambda values: {"S": values["small"], "L": values["large"]}
+    capacity, capex, variable = parameters.capacity_kt(), parameters.capex_usd(), parameters.variable_opex_usd_t()
+    trucks = parameters.truck_t()
+    return Costs(
+        depot_kt=keyed(capacity["depot"]), depot_usd=keyed(capex["depot"]), depot_var=keyed(variable["depot"]),
+        refinery_kt=keyed(capacity["refinery"]), refinery_usd=keyed(capex["refinery"]),
+        refinery_var=keyed(variable["refinery"]),
+        truck_t=(trucks["supply_depot"], trucks["depot_refinery"], trucks["refinery_airport"]),
+        capex_years=parameters.capex_years, fixed_share=parameters.fixed_opex_share,
+    )
 
 
 @dataclass(frozen=True)
@@ -82,9 +152,12 @@ class Problem:
     collect_all: bool
     biomass_basis: bool
     rates: tuple[float, float, float]
+    haul_limit_km: float = HAUL_HAV_KM
+    ineligible: tuple[str, ...] = ()
+    costs: Costs = field(default_factory=lambda: costs_from(Parameters()))
 
 
-def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem:
+def build_problem(scenario: Scenario, inputs, candidates, rates=None) -> Problem:
     s = scenario.model_dump(by_alias=True)
     at = {n: i for i, n in enumerate(inputs.node_ids.tolist())}
     hav, road_factor = inputs.hav_km, s["road_factor"]
@@ -92,8 +165,10 @@ def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem
     airports = inputs.airports.iata.tolist()
     excluded = set(s["excluded_ids"])
     onshore = inputs.sites.site_id[inputs.sites.is_candidate].tolist()
-    depots = tuple(j for j in onshore if j not in excluded)
+    wanted_depots = onshore if s["depot_candidates"] is None else s["depot_candidates"]
+    depots = tuple(j for j in onshore if j in wanted_depots and j not in excluded)
     allowed = (set(onshore) | set(airports)) - NO_TRUCK_ACCESS
+    ineligible = sorted((set(s["refinery_candidates"] or ()) - allowed) | (set(s["depot_candidates"] or ()) - set(onshore)))
     refineries = tuple(k for k in dict.fromkeys(candidates) if k in allowed and k not in excluded)
     y, r = s["yield"], s["depot_retention"]
     if s["demand_kt"] is None:
@@ -106,7 +181,7 @@ def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem
         depots=depots,
         refineries=refineries,
         demand=demand,
-        supply_km={(i, j): km(i, j) for i in supply for j in depots if hav[at[i], at[j]] <= HAUL_HAV_KM},
+        supply_km={(i, j): km(i, j) for i in supply for j in depots if hav[at[i], at[j]] <= s["haul_limit_km"]},
         depot_km={(j, k): km(j, k) for j in depots for k in refineries},
         airport_km={(k, a): km(k, a) for k in refineries for a in airports},
         yield_=y,
@@ -114,12 +189,18 @@ def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem
         horizon=s["horizon_years"],
         collect_all=s["collection_policy"] == "all",
         biomass_basis=s["capacity_basis"] == "biomass_input",
-        rates=tuple(rates),
+        rates=tuple(scenario.parameters.rates().values()) if rates is None else tuple(rates),
+        haul_limit_km=s["haul_limit_km"],
+        ineligible=tuple(ineligible),
+        costs=costs_from(scenario.parameters),
     )
 
 
 def infeasible_reason(p: Problem) -> str | None:
     """Reasons that hold for every refinery mix, stated before any solve."""
+    if p.ineligible:
+        return (f"Not eligible as facility sites: {', '.join(p.ineligible)}. "
+                "Facilities need onshore sites, and trucks cannot reach TRK")
     total = sum(p.demand.values())
     most = p.yield_ * p.retention * sum(p.supply.values())
     if total > most + EPS:
@@ -127,22 +208,28 @@ def infeasible_reason(p: Problem) -> str | None:
                 f"at yield {p.yield_:g} and retention {p.retention:g}")
     served = {i for i, _ in p.supply_km}
     if p.collect_all and (cut_off := sorted(set(p.supply) - served)):
-        return f"No depot in range ({HAUL_HAV_KM:.1f} km straight-line) of {', '.join(cut_off)}"
+        return f"No depot in range ({p.haul_limit_km:.1f} km straight-line) of {', '.join(cut_off)}"
     reachable = p.yield_ * p.retention * sum(p.supply[i] for i in served)
     if total > reachable + EPS:
         return f"Demand of {total:,.2f} kt exceeds the {reachable:,.2f} kt of SAF from sites with a depot in range"
-    need, most = required_capacity(p), len(p.refineries) * REFINERY_KT["L"]
+    need, most = required_capacity(p), len(p.refineries) * max(p.costs.refinery_kt.values())
     if need > most + EPS:
         return f"Refineries must take {need:,.2f} kt, but {len(p.refineries)} candidate sites hold {most:,.2f} kt at most"
-    need, most = depot_intake(p), len(p.depots) * DEPOT_KT["L"]
+    need, most = depot_intake(p), len(p.depots) * max(p.costs.depot_kt.values())
     if need > most + EPS:
         return f"Depots must take {need:,.2f} kt, but {len(p.depots)} candidate sites hold {most:,.2f} kt at most"
     return None
 
 
+def _refinery_pool(scenario: Scenario, candidates):
+    if candidates is not None:
+        return candidates
+    return SHORTLIST if scenario.refinery_candidates is None else scenario.refinery_candidates
+
+
 def precheck(scenario: Scenario, inputs, candidates=None) -> str | None:
     """Why no network can serve this scenario, found without solving, or None if one may exist."""
-    return infeasible_reason(build_problem(scenario, inputs, SHORTLIST if candidates is None else candidates))
+    return infeasible_reason(build_problem(scenario, inputs, _refinery_pool(scenario, candidates)))
 
 
 def required_capacity(p: Problem) -> float:
@@ -167,16 +254,22 @@ def depot_intake(p: Problem) -> float:
 
 def mix_floor(p: Problem, n_large: int, n_small: int) -> float:
     """Lower bound on any plan with this mix: its fixed charges, then the cheapest OpEx for the biomass it must take."""
-    intake = refinery_intake(p)
-    large_kt = n_large * REFINERY_KT["L"] / (1 if p.biomass_basis else p.yield_)
-    variable = REFINERY_VAR_USD_T["L"] * min(intake, large_kt) + REFINERY_VAR_USD_T["S"] * max(intake - large_kt, 0)
-    refineries = ANNUAL_FIXED_SHARE * (n_large * REFINERY_USD["L"] + n_small * REFINERY_USD["S"]) + 1000 * variable
-    per_kt = min(ANNUAL_FIXED_SHARE * DEPOT_USD[s] / DEPOT_KT[s] + 1000 * DEPOT_VAR_USD_T[s] for s in DEPOT_KT)
+    c = p.costs
+    intake = left = refinery_intake(p)
+    count = {"S": n_small, "L": n_large}
+    variable = 0.0
+    for size in sorted(count, key=lambda s: c.refinery_var[s]):
+        taken = min(left, count[size] * c.refinery_kt[size] / (1 if p.biomass_basis else p.yield_))
+        variable += c.refinery_var[size] * taken
+        left -= taken
+    variable += max(c.refinery_var.values()) * left
+    refineries = c.annual_share * (n_large * c.refinery_usd["L"] + n_small * c.refinery_usd["S"]) + 1000 * variable
+    per_kt = min(c.annual_share * c.depot_usd[s] / c.depot_kt[s] + 1000 * c.depot_var[s] for s in c.depot_kt)
     return p.horizon * (refineries + per_kt * intake / p.retention)
 
 
-def enumerate_mixes(n: int) -> list[dict]:
-    mixes = [{"n_large": nl, "n_small": ns, "capex_usd": nl * REFINERY_USD["L"] + ns * REFINERY_USD["S"]}
+def enumerate_mixes(n: int, refinery_usd=REFINERY_USD) -> list[dict]:
+    mixes = [{"n_large": nl, "n_small": ns, "capex_usd": nl * refinery_usd["L"] + ns * refinery_usd["S"]}
              for nl in range(n + 1) for ns in range(n + 1 - nl)]
     return sorted(mixes, key=lambda m: (m["capex_usd"], m["n_large"]))
 
@@ -185,11 +278,26 @@ def _finite(v) -> float | None:
     return float(v) if v is not None and math.isfinite(v) else None
 
 
-def solve_mix(p: Problem, n_large: int, n_small: int, time_limit: float, threads: int = THREADS, fixed=None) -> dict:
-    """Solve one refinery mix and return a plain dict. `fixed` pins the facilities and re-solves only the flows."""
+def _network(solution, p: Problem, zd, zr, x, f, g) -> dict:
+    """The facilities and flows in one raw HiGHS solution vector, in kt."""
+    open_sites = lambda variables: [[key[0], SIZE_NAME[key[1]]] for key, v in variables.items() if solution[v.index] > 0.5]
+    arcs = lambda leg, variables, kt: [[LEG_NAME[leg], *e, kt(e, solution[v.index])] for e, v in variables.items()
+                                       if solution[v.index] > EPS]
+    return {"depots": open_sites(zd), "refineries": open_sites(zr),
+            "flows": (arcs(0, x, lambda e, share: p.supply[e[0]] * share) + arcs(1, f, lambda e, kt: kt)
+                      + arcs(2, g, lambda e, kt: kt))}
+
+
+def solve_mix(p: Problem, n_large: int, n_small: int, time_limit: float, threads: int = THREADS, fixed=None,
+              events=None) -> dict:
+    """Solve one refinery mix and return a plain dict. `fixed` pins the facilities and re-solves only the flows.
+
+    `events` is a queue that receives each incumbent and bound update as HiGHS finds it. Losing one never costs the solve.
+    """
     started = time.monotonic()
     sizes = ("S", "L")
-    intake_kt = {s: REFINERY_KT[s] / (1 if p.biomass_basis else p.yield_) for s in sizes}
+    c = p.costs
+    intake_kt = {s: c.refinery_kt[s] / (1 if p.biomass_basis else p.yield_) for s in sizes}
     m = pulp.LpProblem("saf", pulp.LpMinimize)
     x = {e: pulp.LpVariable(f"x{n}", 0, 1) for n, e in enumerate(p.supply_km)}
     f = {e: pulp.LpVariable(f"f{n}", 0) for n, e in enumerate(p.depot_km)}
@@ -198,7 +306,7 @@ def solve_mix(p: Problem, n_large: int, n_small: int, time_limit: float, threads
     e_k = {k: pulp.LpVariable(f"e{n}", 0, spare) for n, k in enumerate(p.refineries)}
     zd = {(j, s): pulp.LpVariable(f"zd{n}{s}", cat="Binary") for n, j in enumerate(p.depots) for s in sizes}
     zr = {(k, s): pulp.LpVariable(f"zr{n}{s}", cat="Binary") for n, k in enumerate(p.refineries) for s in sizes}
-    qd = {(j, s): pulp.LpVariable(f"qd{n}{s}", 0, DEPOT_KT[s]) for n, j in enumerate(p.depots) for s in sizes}
+    qd = {(j, s): pulp.LpVariable(f"qd{n}{s}", 0, c.depot_kt[s]) for n, j in enumerate(p.depots) for s in sizes}
     qr = {(k, s): pulp.LpVariable(f"qr{n}{s}", 0, intake_kt[s]) for n, k in enumerate(p.refineries) for s in sizes}
     if fixed is not None:
         for variables, chosen in ((zd, fixed["depots"]), (zr, fixed["refineries"])):
@@ -206,10 +314,10 @@ def solve_mix(p: Problem, n_large: int, n_small: int, time_limit: float, threads
                 v.lowBound = v.upBound = 1 if key in chosen else 0
 
     r1, r2, r3 = p.rates
-    charges = ANNUAL_FIXED_SHARE * (pulp.lpSum(DEPOT_USD[s] * v for (_, s), v in zd.items()) + pulp.lpSum(
-        REFINERY_USD[s] * v for (_, s), v in zr.items()))
-    variable = (pulp.lpSum(1000 * DEPOT_VAR_USD_T[s] * v for (_, s), v in qd.items())
-                + pulp.lpSum(1000 * REFINERY_VAR_USD_T[s] * v for (_, s), v in qr.items()))
+    charges = c.annual_share * (pulp.lpSum(c.depot_usd[s] * v for (_, s), v in zd.items()) + pulp.lpSum(
+        c.refinery_usd[s] * v for (_, s), v in zr.items()))
+    variable = (pulp.lpSum(1000 * c.depot_var[s] * v for (_, s), v in qd.items())
+                + pulp.lpSum(1000 * c.refinery_var[s] * v for (_, s), v in qr.items()))
     freight = (pulp.lpSum(1000 * r1 * p.supply_km[e] * p.supply[e[0]] * v for e, v in x.items())
                + pulp.lpSum(1000 * r2 * p.depot_km[e] * v for e, v in f.items())
                + pulp.lpSum(1000 * r3 * p.airport_km[e] * v for e, v in g.items()))
@@ -234,12 +342,12 @@ def solve_mix(p: Problem, n_large: int, n_small: int, time_limit: float, threads
         m += p.retention * inflow == pulp.lpSum(out_j[j])
         m += inflow == pulp.lpSum(qd[j, s] for s in sizes)
         for s in sizes:
-            m += qd[j, s] <= DEPOT_KT[s] * zd[j, s]
+            m += qd[j, s] <= c.depot_kt[s] * zd[j, s]
         m += pulp.lpSum(zd[j, s] for s in sizes) <= 1
     for (i, j), v in x.items():
         m += v <= zd[j, "S"] + zd[j, "L"]
     for (j, k), v in f.items():
-        m += v <= DEPOT_KT["L"] * p.retention * (zr[k, "S"] + zr[k, "L"])
+        m += v <= max(c.depot_kt.values()) * p.retention * (zr[k, "S"] + zr[k, "L"])
     for (k, a), v in g.items():
         m += v <= p.demand[a] * (zr[k, "S"] + zr[k, "L"])
     for k in p.refineries:
@@ -253,10 +361,30 @@ def solve_mix(p: Problem, n_large: int, n_small: int, time_limit: float, threads
         m += pulp.lpSum(in_a[a]) == kt
     m += pulp.lpSum(zr[k, "L"] for k in p.refineries) == n_large
     m += pulp.lpSum(zr[k, "S"] for k in p.refineries) == n_small
-    m += pulp.lpSum(zd[j, "S"] + 2 * zd[j, "L"] for j in p.depots) >= math.ceil(depot_intake(p) / DEPOT_KT["S"] - EPS)
+    ratio = c.depot_kt["L"] / c.depot_kt["S"]
+    if ratio == int(ratio):
+        m += pulp.lpSum(zd[j, "S"] + ratio * zd[j, "L"] for j in p.depots) >= math.ceil(
+            depot_intake(p) / c.depot_kt["S"] - EPS)
+    else:
+        m += pulp.lpSum(c.depot_kt["S"] * zd[j, "S"] + c.depot_kt["L"] * zd[j, "L"] for j in p.depots) >= depot_intake(p)
 
     limit = max(time_limit - (time.monotonic() - started), 0.1)
-    m.solve(pulp.HiGHS(msg=False, timeLimit=limit, gapRel=0.0, threads=threads))
+    options = {"msg": False, "timeLimit": limit, "gapRel": 0.0, "threads": threads}
+    if events is None:
+        m.solve(pulp.HiGHS(**options))
+    else:
+        def report(kind, data):
+            try:
+                event = {"type": kind, "n_large": n_large, "n_small": n_small}
+                if kind == "incumbent":
+                    event.update(primal=_finite(data.objective_function_value),
+                                 **_network(data.mip_solution, p, zd, zr, x, f, g))
+                else:
+                    event.update(bound=_finite(data.mip_dual_bound), nodes=int(data.mip_node_count))
+                events.put(event)
+            except Exception:
+                pass
+        m.solve(ReportingHiGHS(report, **options))
     h = m.solverModel
     info = h.getInfo()
     model_status = h.modelStatusToString(h.getModelStatus())
@@ -298,18 +426,73 @@ def _stop_workers(pool: ProcessPoolExecutor) -> None:
         process.terminate()
 
 
-def _submit_mix(pool, p: Problem, mix: dict, left: float, threads: int):
-    return pool.submit(solve_mix, p, mix["n_large"], mix["n_small"], left, threads)
+def _submit_mix(pool, p: Problem, mix: dict, left: float, threads: int, events=None):
+    if events is None:
+        return pool.submit(solve_mix, p, mix["n_large"], mix["n_small"], left, threads)
+    return pool.submit(solve_mix, p, mix["n_large"], mix["n_small"], left, threads, None, events)
 
 
-def run_portfolio(p: Problem, budget_s: float, grace_s: float = 2.0) -> list[dict]:
+class Progress:
+    """Sends portfolio and worker happenings to `on_event`, each stamped with the run's best, lower bound and gap."""
+
+    def __init__(self, on_event, mixes):
+        self.on_event = on_event
+        self.mixes = mixes
+        self.lock = threading.Lock()
+        self.best = math.inf
+        self.dual = {}
+        self.nodes = {}
+
+    def summary(self) -> dict:
+        lower = [max(mix["bound"], self.dual.get((mix["n_large"], mix["n_small"]), mix["bound"]))
+                 for mix in self.mixes if mix["state"] not in RESOLVED and mix["bound"] is not None]
+        lower = min([self.best, *lower])
+        found = math.isfinite(self.best)
+        settled = sum(mix["state"] in RESOLVED or (mix["bound"] is not None and mix["bound"] >= self.best)
+                      for mix in self.mixes)
+        return {"best": self.best if found else None, "lower_bound": lower if math.isfinite(lower) else None,
+                "gap": max(self.best - lower, 0.0) / self.best if found and self.best else None,
+                "settled": settled, "total": len(self.mixes), "nodes": sum(self.nodes.values())}
+
+    def send(self, event: dict) -> None:
+        with self.lock:
+            self.on_event({**event, **self.summary()})
+
+    def mix(self, mix: dict) -> None:
+        self.send({"type": "mix", "n_large": mix["n_large"], "n_small": mix["n_small"], "state": mix["state"],
+                   "primal": mix.get("primal"), "bound": mix["bound"], "seconds": mix.get("seconds")})
+
+    def worker(self, event: dict) -> None:
+        with self.lock:
+            key = (event["n_large"], event["n_small"])
+            if event["type"] == "bound":
+                if event["bound"] is not None:
+                    self.dual[key] = max(event["bound"], self.dual.get(key, -math.inf))
+                self.nodes[key] = event["nodes"]
+            elif event["primal"] is not None:
+                event["improved"] = event["primal"] < self.best
+                self.best = min(self.best, event["primal"])
+            self.on_event({**event, **self.summary()})
+
+
+def _pump(queue, progress: Progress) -> None:
+    """Forward worker events until told to stop or the queue goes away."""
+    try:
+        while (event := queue.get()) is not None:
+            progress.worker(event)
+    except (EOFError, OSError):
+        pass
+
+
+def run_portfolio(p: Problem, budget_s: float, grace_s: float = 2.0, on_event=None, stop=None) -> list[dict]:
     """Solve every mix that can still win, lowest floor first, and report what happened to each one."""
     deadline = time.monotonic() + budget_s
     need = required_capacity(p)
-    mixes = enumerate_mixes(len(p.refineries))
+    c = p.costs
+    mixes = enumerate_mixes(len(p.refineries), c.refinery_usd)
     waiting = []
     for mix in mixes:
-        cap = mix["n_large"] * REFINERY_KT["L"] + mix["n_small"] * REFINERY_KT["S"]
+        cap = mix["n_large"] * c.refinery_kt["L"] + mix["n_small"] * c.refinery_kt["S"]
         floor = mix_floor(p, mix["n_large"], mix["n_small"])
         mix.update(state="not_run", primal=None, gap=None, seconds=None, bound=floor)
         if cap < need - EPS:
@@ -321,26 +504,48 @@ def run_portfolio(p: Problem, budget_s: float, grace_s: float = 2.0) -> list[dic
     best = math.inf
     running = {}
     threads = LEAD_THREADS
+    progress = manager = events = pump = None
+    if on_event is not None:
+        progress = Progress(on_event, mixes)
+        progress.send({"type": "portfolio", "workers": WORKERS, "budget_s": budget_s,
+                       "mixes": [{key: mix[key] for key in ("n_large", "n_small", "state", "bound")} for mix in mixes]})
+        manager = multiprocessing.Manager()
+        events = manager.Queue()
+        pump = threading.Thread(target=_pump, args=(events, progress), daemon=True)
+        pump.start()
     pool = ProcessPoolExecutor(max_workers=WORKERS, max_tasks_per_child=1)
     try:
         while queue or running:
+            if stop is not None and stop.is_set():
+                break
             while queue and len(running) < WORKERS and time.monotonic() < deadline:
                 mix = queue.popleft()
                 if mix["bound"] >= best:
                     mix["state"] = "skipped_capex"
+                    if progress:
+                        progress.mix(mix)
                     continue
                 try:
-                    running[_submit_mix(pool, p, mix, deadline - time.monotonic(), threads)] = mix
+                    if events is None:
+                        running[_submit_mix(pool, p, mix, deadline - time.monotonic(), threads)] = mix
+                    else:
+                        running[_submit_mix(pool, p, mix, deadline - time.monotonic(), threads, events)] = mix
                 except BrokenProcessPool:
                     mix["state"] = "failed"
                     queue.clear()
                     break
                 threads = THREADS
+                if progress:
+                    progress.send({"type": "mix", "n_large": mix["n_large"], "n_small": mix["n_small"],
+                                   "state": "running", "primal": None, "bound": mix["bound"], "seconds": None})
             if not running or all(mix["bound"] >= best for mix in running.values()):
                 break
-            done, _ = wait(running, timeout=max(deadline + grace_s - time.monotonic(), 0),
+            left = max(deadline + grace_s - time.monotonic(), 0)
+            done, _ = wait(running, timeout=left if stop is None else min(left, STOP_POLL_S),
                            return_when=FIRST_COMPLETED)
             if not done:
+                if stop is not None and left > STOP_POLL_S:
+                    continue
                 break
             broken = False
             for future in done:
@@ -360,6 +565,10 @@ def run_portfolio(p: Problem, budget_s: float, grace_s: float = 2.0) -> list[dic
                     mix["bound"] = floor if result["bound"] is None else max(floor, result["bound"])
                 if mix["primal"] is not None:
                     best = min(best, mix["primal"])
+                if progress:
+                    with progress.lock:
+                        progress.best = min(progress.best, best)
+                    progress.mix(mix)
             if broken:
                 for other in running.values():
                     other["state"] = "failed"
@@ -367,10 +576,19 @@ def run_portfolio(p: Problem, budget_s: float, grace_s: float = 2.0) -> list[dic
                 queue.clear()
     finally:
         _stop_workers(pool)
+        if manager is not None:
+            try:
+                events.put(None)
+                pump.join(1)
+            except (EOFError, OSError):
+                pass
+            manager.shutdown()
 
     for mix in mixes:
         if mix["state"] not in RESOLVED and mix["bound"] is not None and mix["bound"] >= best:
             mix["state"] = "skipped_capex" if mix["state"] == "not_run" else "dominated"
+            if progress:
+                progress.mix(mix)
     return mixes
 
 
@@ -402,6 +620,7 @@ def _empty_solution(scenario, inputs, n_candidates, started, reason, portfolios=
 def _report(scenario, inputs, p: Problem, flows: dict) -> dict:
     """Turn solved values into flat rows. Every cost is recomputed here from kt, rate and km."""
     s = scenario.model_dump(by_alias=True)
+    c = p.costs
     nodes = _nodes(inputs)
     at = {n: i for i, n in enumerate(inputs.node_ids.tolist())}
     rows = []
@@ -416,7 +635,7 @@ def _report(scenario, inputs, p: Problem, flows: dict) -> dict:
             "from_label": nodes[a]["label"], "to_label": nodes[b]["label"],
             "kt": kt, "hav_km": hav, "road_factor": road_factor, "km": km,
             "rate_usd_per_t_km": p.rates[n], "cost_usd": kt * 1000 * p.rates[n] * km,
-            "truck_t": TRUCK_T[n], "trips": math.ceil(kt * 1000 / TRUCK_T[n]),
+            "truck_t": c.truck_t[n], "trips": math.ceil(kt * 1000 / c.truck_t[n]),
             "road_km": road if math.isfinite(road) else None,
         })
 
@@ -441,9 +660,9 @@ def _report(scenario, inputs, p: Problem, flows: dict) -> dict:
                 "capacity_basis": basis, "throughput_kt": through, "utilisation": through / cap, "capex_usd": usd}
 
     refinery_basis, refinery_through = ("biomass_in", gate_in) if p.biomass_basis else ("saf_out", gate_out)
-    facilities = [facility("depot", j, s, DEPOT_KT[s], DEPOT_USD[s], "biomass_in", depot_in[j])
+    facilities = [facility("depot", j, s, c.depot_kt[s], c.depot_usd[s], "biomass_in", depot_in[j])
                   for j, s in flows["depots"]]
-    facilities += [facility("refinery", k, s, REFINERY_KT[s], REFINERY_USD[s], refinery_basis, refinery_through[k])
+    facilities += [facility("refinery", k, s, c.refinery_kt[s], c.refinery_usd[s], refinery_basis, refinery_through[k])
                    for k, s in flows["refineries"]]
     served = {i for i, _ in p.supply_km}
     stranded = [{"site_id": i, **nodes[i], "kt": kt - collected[i],
@@ -452,27 +671,39 @@ def _report(scenario, inputs, p: Problem, flows: dict) -> dict:
     surplus = [{"site_id": k, "kt": kt} for k, kt in flows["e"]]
     capex = sum(row["capex_usd"] for row in facilities)
     logistics = sum(row["cost_usd"] for row in rows)
-    variable = 1000 * (sum(DEPOT_VAR_USD_T[size] * depot_in[j] for j, size in flows["depots"])
-                       + sum(REFINERY_VAR_USD_T[size] * gate_in[k] for k, size in flows["refineries"]))
-    annual = capex * ANNUAL_FIXED_SHARE + variable + logistics
+    variable = 1000 * (sum(c.depot_var[size] * depot_in[j] for j, size in flows["depots"])
+                       + sum(c.refinery_var[size] * gate_in[k] for k, size in flows["refineries"]))
+    annual = capex * c.annual_share + variable + logistics
     return {"facilities": facilities, "flows": rows, "stranded": stranded, "surplus": surplus, "capex_usd": capex,
-            "logistics_annual_usd": logistics, "annualised_capex_usd": capex / CAPEX_YEARS,
-            "fixed_opex_usd": capex * FIXED_OPEX_SHARE, "variable_opex_usd": variable, "total_annual_usd": annual,
+            "logistics_annual_usd": logistics, "annualised_capex_usd": capex / c.capex_years,
+            "fixed_opex_usd": capex * c.fixed_share, "variable_opex_usd": variable, "total_annual_usd": annual,
             "total_horizon_usd": p.horizon * annual, "primal": p.horizon * annual}
 
 
-def resolve(scenario: Scenario, inputs=None, candidates=None, rates=RATE) -> Solution:
-    """Solve a scenario across all refinery mixes and label the result by what was actually proven."""
+def resolve(scenario: Scenario, inputs=None, candidates=None, rates=None, on_event=None, stop=None) -> Solution:
+    """Solve a scenario across all refinery mixes and label the result by what was actually proven.
+
+    `on_event` receives plain dicts as the run happens, from more than one thread. Setting the `stop` event abandons
+    the run: its workers end and SolveCancelled is raised.
+    """
     started = time.monotonic()
     inputs = load_inputs() if inputs is None else inputs
-    p = build_problem(scenario, inputs, SHORTLIST if candidates is None else candidates, rates)
+    p = build_problem(scenario, inputs, _refinery_pool(scenario, candidates), rates)
     n = len(p.refineries)
     if reason := infeasible_reason(p):
         return _empty_solution(scenario, inputs, n, started, reason)
 
     budget = min(scenario.time_limit_s, MAX_SOLVE_S)
     reserve = min(7.0, budget * 0.2)
-    mixes = run_portfolio(p, budget - reserve, grace_s=reserve * 0.3)
+    if on_event is None:
+        mixes = run_portfolio(p, budget - reserve, grace_s=reserve * 0.3)
+    else:
+        nodes = _nodes(inputs)
+        on_event({"type": "start", "budget_s": budget, "candidates": list(p.refineries), "n_depots": len(p.depots),
+                  "airports": [{"id": a, **nodes[a]} for a in p.demand]})
+        mixes = run_portfolio(p, budget - reserve, grace_s=reserve * 0.3, on_event=on_event, stop=stop)
+    if stop is not None and stop.is_set():
+        raise SolveCancelled
     portfolios = [portfolio_row(mix) for mix in mixes]
     found = [mix for mix in mixes if mix["primal"] is not None]
     if not found:
@@ -484,6 +715,8 @@ def resolve(scenario: Scenario, inputs=None, candidates=None, rates=RATE) -> Sol
 
     winner = min(found, key=lambda mix: mix["primal"])
     fixed = {"depots": set(winner["depots"]), "refineries": set(winner["refineries"])}
+    if on_event is not None:
+        on_event({"type": "phase", "phase": "polish"})
     try:
         clean = solve_mix(p, winner["n_large"], winner["n_small"], max(reserve * 0.7, 0.1), fixed=fixed)
     except Exception:
@@ -496,6 +729,8 @@ def resolve(scenario: Scenario, inputs=None, candidates=None, rates=RATE) -> Sol
     bound = primal if proven else min([primal, *open_bounds])
     gap = (primal - bound) / primal if primal else 0.0
     label = f"Optimal among {n} candidates" if proven else f"Best found, gap {gap:.2%}"
+    if scenario.parameters != Parameters():
+        label += " (custom parameters)"
     return Solution.model_validate({
         "run_id": uuid.uuid4().hex, "source": "live", "data_hash": inputs.data_hash,
         "scenario_hash": scenario.scenario_hash(), "status": "optimal" if proven else "best_found",
@@ -509,11 +744,19 @@ def main() -> None:
     parser.add_argument("--horizon", type=float, default=1)
     parser.add_argument("--yield", dest="yield_", type=float, default=0.20)
     parser.add_argument("--road-factor", type=float, default=1.3)
-    parser.add_argument("--time-limit", type=float, default=MAX_SOLVE_S)
+    parser.add_argument("--time-limit", type=float, default=Scenario.model_fields["time_limit_s"].default)
+    parser.add_argument("--haul-limit-km", type=float, default=HAUL_HAV_KM)
+    parser.add_argument("--refinery-candidates", help="comma-separated ids; default is the frozen shortlist")
+    parser.add_argument("--depot-candidates", help="comma-separated ids; default is all 69 onshore sites")
+    parser.add_argument("--parameters", default="{}", help='JSON overrides, such as \'{"depot_large_kt": 350}\'')
     args = parser.parse_args()
     scenario = Scenario.model_validate({"yield": args.yield_, "road_factor": args.road_factor,
                                         "horizon_years": args.horizon, "time_limit_s": args.time_limit,
-                                        "collection_policy": "optional", "capacity_basis": "biomass_input"})
+                                        "collection_policy": "optional", "capacity_basis": "biomass_input",
+                                        "haul_limit_km": args.haul_limit_km,
+                                        "refinery_candidates": args.refinery_candidates and args.refinery_candidates.split(","),
+                                        "depot_candidates": args.depot_candidates and args.depot_candidates.split(","),
+                                        "parameters": json.loads(args.parameters)})
     solution = resolve(scenario)
     for mix in solution.model_dump(by_alias=True)["portfolios"]:
         primal = "-" if mix["primal"] is None else f"${mix['primal'] / 1e6:,.1f}M"

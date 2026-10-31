@@ -3,14 +3,17 @@
 // Client-only map. Load it with dynamic(() => import('./Map'), { ssr: false }).
 // Every marker and line comes from the run data; nothing is hard-coded except site coordinates
 // (sites.json, from data/raw) and the offline land layer (borneo.json).
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import L from 'leaflet';
 import { CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer } from 'react-leaflet';
 import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
 import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
+import { legMaxima, legWidth, sceneFromProgress, sceneFromSolution } from '../lib/scene';
+import { isSolving, useSolveProgress, useSolving, type LiveNode, type SolveFeed } from '../lib/solveProgress';
 import { BAND_COLOR, flowKey, type Band } from '../lib/view';
+import FlowLayer from './FlowLayer';
 
 export interface MapProps {
     /** The run to draw. null draws sites only. */
@@ -27,6 +30,8 @@ export interface MapProps {
     showTiles?: boolean;
     /** Robustness band of a site's district; banded sites get a blue/orange ring. Absent = no rings. */
     bandFor?: (siteId: string) => Band | null;
+    /** The solver's progress: during a live run the map draws what the solver has found so far. */
+    feed: SolveFeed;
 }
 
 export const KALIMANTAN_BOUNDS: L.LatLngBoundsExpression = [
@@ -48,6 +53,8 @@ const DEPOT_AMBER = '#f0a30a';
 const REFINERY_CYAN = '#0ea5c6';
 const SEA = '#fbfbfd';
 const LAND = '#e8e8ed';
+/** If animation frames stop (hidden tab), the clickable layers still come back after this long. */
+const SETTLE_LIMIT_MS = 2_000;
 
 const AIRPORT_ICON = L.divIcon({
     className: 'saf-airport',
@@ -75,10 +82,45 @@ const EXCLUDED_ICON = L.divIcon({
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
-function PopupRows({ title, rows }: { title: string; rows: [string, string][] }) {
+// Required wherever the imagery shows (CC BY-NC-SA 4.0). The year follows LAYER in scripts/make-site-images.mjs.
+const SITE_IMAGE_CREDIT = 'EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025)';
+
+// Keeps tall image popups clear of the zoom control, which stacks above them.
+const IMAGE_POPUP_PADDING: [number, number] = [56, 8];
+
+// Fixed size so Leaflet places the popup correctly before the image loads. Relative src: the fallback runs from file://.
+function SiteImage({ siteId }: { siteId: string }) {
+    return (
+        <figure style={{ margin: '0 0 8px', width: 280 }}>
+            <div style={{ position: 'relative', height: 150, borderRadius: 8, overflow: 'hidden', background: '#e8e8ed' }}>
+                <img src={`sites/${siteId}.jpg`} alt={`Satellite view centred on ${siteId}`} width={280} height={150} style={{ display: 'block' }} />
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: 14,
+                        height: 14,
+                        marginTop: -7,
+                        marginLeft: -7,
+                        border: '2px solid #ffffff',
+                        borderRadius: '50%',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+                    }}
+                />
+            </div>
+            <figcaption style={{ marginTop: 4, fontSize: 12, lineHeight: 1.3, color: '#6e6e73' }}>
+                Satellite view at the site&apos;s coordinates, 5.6 km wide. Not a site photo. {SITE_IMAGE_CREDIT}
+            </figcaption>
+        </figure>
+    );
+}
+
+function PopupRows({ title, rows, imageSiteId }: { title: string; rows: [string, string][]; imageSiteId?: string }) {
     return (
         <div style={{ fontSize: 16, lineHeight: 1.4, minWidth: 230, color: '#1d1d1f' }}>
             <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: '-0.01em', marginBottom: 6, paddingRight: 22 }}>{title}</div>
+            {imageSiteId && <SiteImage siteId={imageSiteId} />}
             <table style={{ borderCollapse: 'collapse' }}>
                 <tbody>
                     {rows.map(([k, v]) => (
@@ -93,10 +135,47 @@ function PopupRows({ title, rows }: { title: string; rows: [string, string][] })
     );
 }
 
-export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, showTiles = false, bandFor }: MapProps) {
+const NO_AIRPORTS: LiveNode[] = [];
+
+/** The animated layer, on its own so the solver's events repaint this and not every marker. */
+function LiveFlows({ feed, solution, sites, resting, highlight, onSettled }: {
+    feed: SolveFeed;
+    solution: Solution | null;
+    sites: Site[];
+    resting: boolean;
+    highlight: ReadonlySet<string> | null;
+    onSettled: (id: unknown) => void;
+}) {
+    const live = useSolveProgress(feed);
+    const solving = isSolving(live);
+    const scene = useMemo(() => {
+        if (!solving || !live) return sceneFromSolution(solution);
+        const at = new Map(sites.map((s) => [s.id, s]));
+        return sceneFromProgress(live, (id) => at.get(id));
+    }, [solving, live, solution, sites]);
+    return <FlowLayer scene={scene} resting={resting} highlight={highlight} settleId={solving ? null : solution} onSettled={onSettled} colors={LEG_COLOR} />;
+}
+
+export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, showTiles = false, bandFor, feed }: MapProps) {
     const renderer = useMemo(() => L.canvas({ padding: 0.5, tolerance: 6 }), []);
     const flows = useMemo(() => solution?.flows ?? [], [solution]);
     const facilities = useMemo(() => solution?.facilities ?? [], [solution]);
+    const solving = useSolving(feed);
+    const liveAirports = useSyncExternalStore(feed.subscribe, () => feed.get()?.airports ?? NO_AIRPORTS, () => NO_AIRPORTS);
+
+    // The animated layer draws until it settles on this run; then the clickable Leaflet layers take over.
+    const [settled, setSettled] = useState<unknown>(null);
+    const resting = !solving && settled === solution;
+    const onSettled = useCallback((id: unknown) => setSettled(id), []);
+    useEffect(() => {
+        if (solving) return undefined;
+        const t = window.setTimeout(() => setSettled(solution), SETTLE_LIMIT_MS);
+        return () => window.clearTimeout(t);
+    }, [solving, solution]);
+    const shownFlows = resting ? flows : [];
+    const shownFacilities = resting ? facilities : [];
+    // Refineries can sit at an airport, which has no site image.
+    const siteIds = useMemo(() => new Set(sites.map((s) => s.id)), [sites]);
     const hl = highlight && highlight.size > 0 ? highlight : null;
     const dim = (id: string) => (hl ? !hl.has(id) : false);
 
@@ -111,17 +190,8 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
         return m;
     }, [flows]);
 
-    // Width proportional to kt, scaled within each leg.
-    const maxKt = useMemo(() => {
-        const m: Record<Leg, number> = { supply_depot: 1, depot_refinery: 1, refinery_airport: 1 };
-        for (const f of flows) m[f.leg] = Math.max(m[f.leg], f.kt);
-        return m;
-    }, [flows]);
-    const widthOf = (f: Flow) => {
-        const base = f.leg === 'supply_depot' ? 1.5 : f.leg === 'depot_refinery' ? 2 : 2.5;
-        const span = f.leg === 'supply_depot' ? 3 : 6;
-        return base + span * (f.kt / maxKt[f.leg]);
-    };
+    const maxKt = useMemo(() => legMaxima(flows), [flows]);
+    const widthOf = (f: Flow) => legWidth(f.leg, f.kt, maxKt[f.leg]);
 
     const facilityIds = new Set(facilities.map((f) => f.site_id));
     const excluded = solution?.scenario?.excluded_ids ?? [];
@@ -129,6 +199,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
     const siteById = useMemo(() => new Map(sites.map((s) => [s.id, s])), [sites]);
 
     // Airports come from the run's refinery→airport flow ends: the contract has no airport list.
+    // A live run names them up front, which covers a run that has no flows yet.
     const airports = useMemo(() => {
         const out = new Map<string, { id: string; label: string; lat: number; lon: number }>();
         for (const f of flows) {
@@ -136,8 +207,11 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                 out.set(f.to, { id: f.to, label: f.to_label, lat: f.to_lat, lon: f.to_lon });
             }
         }
+        for (const a of liveAirports) {
+            if (!out.has(a.id)) out.set(a.id, a);
+        }
         return [...out.values()];
-    }, [flows]);
+    }, [flows, liveAirports]);
 
     const demandOf = (id: string): number | undefined => {
         const d = solution?.scenario?.demand_kt;
@@ -172,8 +246,10 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                 />
             </Pane>
 
+            <LiveFlows feed={feed} solution={solution} sites={sites} resting={resting} highlight={resting ? hl : null} onSettled={onSettled} />
+
             {/* Flows, coloured by leg; 0 km co-located flows are kept in the data but not drawn. */}
-            {flows.map((f, i) => {
+            {shownFlows.map((f, i) => {
                 if (!(f.km > 0) || (f.from_lat === f.to_lat && f.from_lon === f.to_lon)) return null;
                 const key = flowKey(f);
                 const d = dim(key);
@@ -228,9 +304,10 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                         }}
                         eventHandlers={{ click: () => onSelectNode?.(s.id) }}
                     >
-                        <Popup>
+                        <Popup autoPanPaddingTopLeft={IMAGE_POPUP_PADDING}>
                             <PopupRows
                                 title={s.label}
+                                imageSiteId={s.id}
                                 rows={[
                                     ['Site ID', s.id],
                                     ['Availability', kt(s.kt, 2)],
@@ -282,7 +359,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             ))}
 
             {/* Depots: amber circle, larger when large. */}
-            {facilities
+            {shownFacilities
                 .filter((f) => f.type === 'depot')
                 .map((f) => {
                     const inKt = sum((flowsIn.get(f.site_id) ?? []).filter((x) => x.leg === 'supply_depot').map((x) => x.kt));
@@ -302,9 +379,10 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                             }}
                             eventHandlers={{ click: () => onSelectNode?.(f.site_id) }}
                         >
-                            <Popup>
+                            <Popup autoPanPaddingTopLeft={IMAGE_POPUP_PADDING}>
                                 <PopupRows
                                     title={`${f.size === 'large' ? 'Large' : 'Small'} depot`}
+                                    imageSiteId={siteIds.has(f.site_id) ? f.site_id : undefined}
                                     rows={[
                                         ['Site', f.label ?? f.site_id],
                                         ['Capacity', kt(f.capacity_kt, 0)],
@@ -321,7 +399,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                 })}
 
             {/* Refineries: cyan square, larger when large. */}
-            {facilities
+            {shownFacilities
                 .filter((f) => f.type === 'refinery')
                 .map((f) => {
                     const links = (flowsOut.get(f.site_id) ?? []).filter((x) => x.leg === 'refinery_airport');
@@ -332,9 +410,10 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                             icon={refineryIcon(f.size, dim(f.site_id))}
                             eventHandlers={{ click: () => onSelectNode?.(f.site_id) }}
                         >
-                            <Popup>
+                            <Popup autoPanPaddingTopLeft={IMAGE_POPUP_PADDING}>
                                 <PopupRows
                                     title={`${f.size === 'large' ? 'Large' : 'Small'} refinery`}
+                                    imageSiteId={siteIds.has(f.site_id) ? f.site_id : undefined}
                                     rows={[
                                         ['Site', f.label ?? f.site_id],
                                         ['SAF output', kt(sum(links.map((x) => x.kt)) + sum((solution?.surplus ?? []).filter((s) => s.site_id === f.site_id).map((s) => s.kt)), 2)],

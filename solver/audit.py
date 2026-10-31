@@ -3,8 +3,7 @@
 import math
 from collections import defaultdict
 
-from solver.contract import (AuditReport, CAPACITY_KT, CAPEX_USD, CAPEX_YEARS, FIXED_OPEX_SHARE, HAUL_HAV_KM, RATES,
-                             TRUCK_T, VARIABLE_OPEX_USD_T)
+from solver.contract import AuditReport
 from solver.inputs import load_inputs
 
 KT_TOL = 1e-6
@@ -27,6 +26,10 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
     def require(family, condition, context):
         check(family, 0 if condition else 1, context, tol=0)
 
+    parameters = scenario.parameters
+    capacity_kt, capex_usd = parameters.capacity_kt(), parameters.capex_usd()
+    variable_usd_t, rates, truck_t = parameters.variable_opex_usd_t(), parameters.rates(), parameters.truck_t()
+    capex_years, fixed_opex_share = parameters.capex_years, parameters.fixed_opex_share
     sites = {row["site_id"]: row for row in inputs.sites.to_dict("records")}
     airports = {row["iata"]: row for row in inputs.airports.to_dict("records")}
     nodes = {**sites, **airports}
@@ -47,12 +50,15 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
         eligible = bool(site and site["is_candidate"] and site["is_onshore"])
         if facility.type == "refinery" and facility.site_id in airports:
             eligible = True
+        allowed = scenario.refinery_candidates if facility.type == "refinery" else scenario.depot_candidates
+        if allowed is not None:
+            eligible = eligible and facility.site_id in allowed
         require("facility_selection", eligible and facility.site_id not in scenario.excluded_ids, f"eligible {key}")
-        capacity = CAPACITY_KT[facility.type][facility.size]
+        capacity = capacity_kt[facility.type][facility.size]
         check("capacity", facility.capacity_kt - capacity, f"declared capacity {key}")
         expected_basis = "saf_out" if facility.type == "refinery" and scenario.capacity_basis == "saf_output" else "biomass_in"
         require("capacity", facility.capacity_basis == expected_basis, f"basis {key}")
-        check("capex", facility.capex_usd - CAPEX_USD[facility.type][facility.size], f"facility cost {key}", USD_TOL)
+        check("capex", facility.capex_usd - capex_usd[facility.type][facility.size], f"facility cost {key}", USD_TOL)
         if facility.site_id in nodes:
             node = nodes[facility.site_id]
             check("flow_metadata", facility.lat - node["lat"], f"latitude {key}")
@@ -86,8 +92,8 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
         require("facility_selection", valid, context + " endpoints")
         expected_commodity = "saf" if flow.leg == "refinery_airport" else "biomass"
         require("flow_metadata", flow.commodity == expected_commodity, context + " commodity")
-        require("flow_metadata", flow.truck_t == TRUCK_T[flow.leg], context + " truck")
-        require("flow_metadata", flow.trips == math.ceil(flow.kt * 1000 / TRUCK_T[flow.leg]), context + " trips")
+        require("flow_metadata", flow.truck_t == truck_t[flow.leg], context + " truck")
+        require("flow_metadata", flow.trips == math.ceil(flow.kt * 1000 / truck_t[flow.leg]), context + " trips")
         for side, node_id in (("from", flow.from_id), ("to", flow.to)):
             for coord in ("lat", "lon"):
                 check("flow_metadata", getattr(flow, f"{side}_{coord}") - nodes[node_id][coord], context + f" {side}_{coord}")
@@ -99,9 +105,9 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
         if flow.road_km is not None:
             check("distance", flow.road_km - float(inputs.road_km[indices[flow.from_id], indices[flow.to]]), context + " reference road km")
         if flow.leg == "supply_depot":
-            check("haul_limit", max(0., hav - HAUL_HAV_KM), context)
-        check("rate", flow.rate_usd_per_t_km - RATES[flow.leg], context, tol=1e-12)
-        cost = flow.kt * 1000 * RATES[flow.leg] * km
+            check("haul_limit", max(0., hav - scenario.haul_limit_km), context)
+        check("rate", flow.rate_usd_per_t_km - rates[flow.leg], context, tol=1e-12)
+        cost = flow.kt * 1000 * rates[flow.leg] * km
         check("cost", flow.cost_usd - cost, context, USD_TOL)
         logistics += cost
 
@@ -128,7 +134,7 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
         surplus[row.site_id] += row.kt
 
     for (kind, node_id), facility in facilities.items():
-        capacity = CAPACITY_KT[kind][facility.size]
+        capacity = capacity_kt[kind][facility.size]
         if kind == "depot":
             check("depot_balance", scenario.depot_retention * depot_in[node_id] - depot_out[node_id], node_id)
             throughput = depot_in[node_id]
@@ -143,17 +149,17 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
     for airport in airports:
         check("demand", delivered[airport] - demand[airport], airport)
 
-    capex = sum(CAPEX_USD[f.type][f.size] for f in solution.facilities)
+    capex = sum(capex_usd[f.type][f.size] for f in solution.facilities)
     if solution.total_annual_usd is None:
         total = capex + scenario.horizon_years * logistics
     else:
         intake = {"depot": depot_in, "refinery": ref_in}
-        variable = 1000 * sum(VARIABLE_OPEX_USD_T[f.type][f.size] * intake[f.type][f.site_id]
+        variable = 1000 * sum(variable_usd_t[f.type][f.size] * intake[f.type][f.site_id]
                               for f in solution.facilities)
-        annual = capex / CAPEX_YEARS + capex * FIXED_OPEX_SHARE + variable + logistics
+        annual = capex / capex_years + capex * fixed_opex_share + variable + logistics
         total = scenario.horizon_years * annual
-        check("totals", (solution.annualised_capex_usd or 0) - capex / CAPEX_YEARS, "annualised CapEx", USD_TOL)
-        check("totals", (solution.fixed_opex_usd or 0) - capex * FIXED_OPEX_SHARE, "fixed OpEx", USD_TOL)
+        check("totals", (solution.annualised_capex_usd or 0) - capex / capex_years, "annualised CapEx", USD_TOL)
+        check("totals", (solution.fixed_opex_usd or 0) - capex * fixed_opex_share, "fixed OpEx", USD_TOL)
         check("totals", (solution.variable_opex_usd or 0) - variable, "variable OpEx", USD_TOL)
         check("totals", solution.total_annual_usd - annual, "annual total", USD_TOL)
     check("totals", solution.capex_usd - capex, "CapEx", USD_TOL)
