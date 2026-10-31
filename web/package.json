@@ -10,6 +10,7 @@
         "build": "next build",
         "build:static": "node scripts/build-static.mjs",
         "data:sites": "node scripts/make-sites.mjs",
+        "data:site-images": "node scripts/make-site-images.mjs",
         "data:land": "node scripts/make-borneo.mjs",
         "data:fixture": "node scripts/make-fixture.mjs"
     },

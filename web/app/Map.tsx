@@ -82,10 +82,45 @@ const EXCLUDED_ICON = L.divIcon({
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
-function PopupRows({ title, rows }: { title: string; rows: [string, string][] }) {
+// Required wherever the imagery shows (CC BY-NC-SA 4.0). The year follows LAYER in scripts/make-site-images.mjs.
+const SITE_IMAGE_CREDIT = 'EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025)';
+
+// Keeps tall image popups clear of the zoom control, which stacks above them.
+const IMAGE_POPUP_PADDING: [number, number] = [56, 8];
+
+// Fixed size so Leaflet places the popup correctly before the image loads. Relative src: the fallback runs from file://.
+function SiteImage({ siteId }: { siteId: string }) {
+    return (
+        <figure style={{ margin: '0 0 8px', width: 280 }}>
+            <div style={{ position: 'relative', height: 150, borderRadius: 8, overflow: 'hidden', background: '#e8e8ed' }}>
+                <img src={`sites/${siteId}.jpg`} alt={`Satellite view centred on ${siteId}`} width={280} height={150} style={{ display: 'block' }} />
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: 14,
+                        height: 14,
+                        marginTop: -7,
+                        marginLeft: -7,
+                        border: '2px solid #ffffff',
+                        borderRadius: '50%',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+                    }}
+                />
+            </div>
+            <figcaption style={{ marginTop: 4, fontSize: 12, lineHeight: 1.3, color: '#6e6e73' }}>
+                Satellite view at the site&apos;s coordinates, 5.6 km wide. Not a site photo. {SITE_IMAGE_CREDIT}
+            </figcaption>
+        </figure>
+    );
+}
+
+function PopupRows({ title, rows, imageSiteId }: { title: string; rows: [string, string][]; imageSiteId?: string }) {
     return (
         <div style={{ fontSize: 16, lineHeight: 1.4, minWidth: 230, color: '#1d1d1f' }}>
             <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: '-0.01em', marginBottom: 6, paddingRight: 22 }}>{title}</div>
+            {imageSiteId && <SiteImage siteId={imageSiteId} />}
             <table style={{ borderCollapse: 'collapse' }}>
                 <tbody>
                     {rows.map(([k, v]) => (
@@ -139,6 +174,8 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
     }, [solving, solution]);
     const shownFlows = resting ? flows : [];
     const shownFacilities = resting ? facilities : [];
+    // Refineries can sit at an airport, which has no site image.
+    const siteIds = useMemo(() => new Set(sites.map((s) => s.id)), [sites]);
     const hl = highlight && highlight.size > 0 ? highlight : null;
     const dim = (id: string) => (hl ? !hl.has(id) : false);
 
@@ -267,9 +304,10 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                         }}
                         eventHandlers={{ click: () => onSelectNode?.(s.id) }}
                     >
-                        <Popup>
+                        <Popup autoPanPaddingTopLeft={IMAGE_POPUP_PADDING}>
                             <PopupRows
                                 title={s.label}
+                                imageSiteId={s.id}
                                 rows={[
                                     ['Site ID', s.id],
                                     ['Availability', kt(s.kt, 2)],
@@ -341,9 +379,10 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                             }}
                             eventHandlers={{ click: () => onSelectNode?.(f.site_id) }}
                         >
-                            <Popup>
+                            <Popup autoPanPaddingTopLeft={IMAGE_POPUP_PADDING}>
                                 <PopupRows
                                     title={`${f.size === 'large' ? 'Large' : 'Small'} depot`}
+                                    imageSiteId={siteIds.has(f.site_id) ? f.site_id : undefined}
                                     rows={[
                                         ['Site', f.label ?? f.site_id],
                                         ['Capacity', kt(f.capacity_kt, 0)],
@@ -371,9 +410,10 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                             icon={refineryIcon(f.size, dim(f.site_id))}
                             eventHandlers={{ click: () => onSelectNode?.(f.site_id) }}
                         >
-                            <Popup>
+                            <Popup autoPanPaddingTopLeft={IMAGE_POPUP_PADDING}>
                                 <PopupRows
                                     title={`${f.size === 'large' ? 'Large' : 'Small'} refinery`}
+                                    imageSiteId={siteIds.has(f.site_id) ? f.site_id : undefined}
                                     rows={[
                                         ['Site', f.label ?? f.site_id],
                                         ['SAF output', kt(sum(links.map((x) => x.kt)) + sum((solution?.surplus ?? []).filter((s) => s.site_id === f.site_id).map((s) => s.kt)), 2)],
