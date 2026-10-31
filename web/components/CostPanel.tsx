@@ -8,6 +8,7 @@ import { LEG_LABEL, MISSING, orMissing, pct, seconds, statusLabel, usd } from '.
 import { legSums } from '../lib/trace';
 import { annualCost, CAPEX_YEARS, FIXED_OPEX_SHARE, type AnnualCost } from '../lib/annual';
 import { Tween } from './motion';
+import { preUpdateBasis } from '../lib/basis';
 import { Factory, ShieldCheck, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 
 const LEGS: Leg[] = ['supply_depot', 'depot_refinery', 'refinery_airport'];
@@ -170,6 +171,7 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
     const failures = s.validation?.failures ?? [];
     const refineries = (s.facilities ?? []).filter((f) => f.type === 'refinery').length;
     const depots = (s.facilities ?? []).filter((f) => f.type === 'depot').length;
+    const preUpdate = preUpdateBasis(s);
     return (
         <div id="cost-summary" className="text-base leading-snug" data-run-id={s.run_id} data-annual-source={annual.fromSolver ? 'solver' : 'recomputed'}>
             <div className="grid grid-cols-2 gap-2">
@@ -240,11 +242,19 @@ export function CostSummary({ solution, baseline }: { solution: Solution | null;
                 </div>
             </div>
             <div className="mt-1.5 px-1 leading-tight text-ink2" id="objective-note">
-                Organisers&apos; basis
-                {!annual.fromSolver && (
-                    <span className="font-medium text-ink3" title="Recomputed in the browser from this run's facilities and costs (lib/annual.ts), like the arc trace.">
-                        , recomputed from this run
+                {preUpdate ? (
+                    <span data-testid="pre-update-basis" title={`Stored run's scenario: ${preUpdate.full}.`}>
+                        Network solved before the 12:45 update ({preUpdate.short}); costs recomputed on the organisers&apos; annual basis
                     </span>
+                ) : (
+                    <>
+                        Organisers&apos; basis
+                        {!annual.fromSolver && (
+                            <span className="font-medium text-ink3" title="Recomputed in the browser from this run's facilities and costs (lib/annual.ts), like the arc trace.">
+                                , recomputed from this run
+                            </span>
+                        )}
+                    </>
                 )}
                 . One-off CapEx <span className="num">{usd(capex)}</span>; MILP objective <span className="num">{usd(horizonTotal)}</span> (H ={' '}
                 {orMissing(H, (h: number) => `${h} yr`)}).

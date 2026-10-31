@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import { baseEntry, solutionOf, storedRunCount } from '../lib/bundle';
 import { annualCost } from '../lib/annual';
+import { preUpdateBasis } from '../lib/basis';
 import { MISSING, pct, statusLabel, usd } from '../lib/format';
 import { storedBaselineFor } from './CostPanel';
 import { LEG_GLOW } from './heroNetwork';
@@ -77,6 +78,7 @@ export default function Landing() {
     const base = solutionOf(baseEntry()) ?? null;
     const baseline = storedBaselineFor(base);
     const total = base ? annualCost(base).total : null;
+    const baseBasis = preUpdateBasis(base);
     const baseTotal = baseline ? annualCost(baseline).total : null;
     const saving = finite(total) && finite(baseTotal) ? baseTotal - total : null;
     const audit = base?.validation ? (base.validation.passed ? 'PASSED' : 'FAILED') : MISSING;
@@ -188,7 +190,10 @@ export default function Landing() {
 
             <Block id="numbers" eyebrow="Key numbers" title="The base network, from the stored run." onShow={() => setCounting(true)}>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Stat label="Total annual cost" note="Organisers' basis, stored run">
+                    <Stat
+                        label="Total annual cost"
+                        note={baseBasis ? `Network solved before the 12:45 update (${baseBasis.short}); costs recomputed on the organisers' annual basis` : "Organisers' basis, stored run"}
+                    >
                         <Tween id="landing-total" value={total} format={usd} from={0} start={counting} duration={1600} />
                     </Stat>
                     <Stat label="Saving vs greedy baseline" note={saving !== null && finite(baseTotal) ? `${pct(saving / baseTotal, 1)} a year, stored run` : 'stored run'}>
