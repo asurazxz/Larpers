@@ -18,7 +18,7 @@ html,
 body {
     height: 100%;
     margin: 0;
-    background: #eef2f6;
+    background: #f6f7f9;
     color: #0b1f33;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI Variable', 'Segoe UI', Inter,
         system-ui, sans-serif;
@@ -29,9 +29,9 @@ body {
 }
 
 :focus-visible {
-    outline: 3px solid rgba(20, 184, 166, 0.65);
+    outline: 2px solid #0f766e;
     outline-offset: 2px;
-    border-radius: 8px;
+    border-radius: 6px;
 }
 
 input[type='radio'],
@@ -41,22 +41,22 @@ input[type='checkbox'] {
 
 @layer components {
     .card {
-        @apply rounded-card border border-hairline bg-white shadow-card;
+        @apply rounded-card border border-line bg-white;
     }
     .card-head {
         @apply flex items-center gap-2.5;
     }
     .card-icon {
-        @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-brand-mint to-[#e0f2fe] text-accent;
+        @apply hidden;
     }
     .tile {
-        @apply relative overflow-hidden rounded-[14px] border border-hairline bg-gradient-to-b from-white to-[#f7fafc] px-3.5 py-2.5 shadow-tile;
+        @apply relative overflow-hidden px-1 py-2.5;
     }
     .tile-icon {
-        @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px];
+        @apply hidden;
     }
     .badge {
-        @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-base font-semibold leading-snug;
+        @apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-base font-semibold leading-snug;
     }
     .eyebrow {
         @apply text-base font-medium text-ink2;
@@ -78,38 +78,38 @@ input[type='checkbox'] {
     }
     /* Segmented control: grey track, white thumb on the selected item. */
     .seg {
-        @apply inline-flex flex-wrap items-stretch gap-0.5 rounded-[12px] border border-hairline bg-track p-[3px] shadow-[inset_0_1px_2px_rgba(11,31,51,0.06)];
+        @apply inline-flex flex-wrap items-stretch gap-0.5 rounded-lg border border-line bg-[#f1f3f5] p-[3px];
     }
     .seg-btn {
-        @apply rounded-[9px] px-3 py-[3px] text-base font-medium leading-snug text-ink3 transition-colors duration-150;
+        @apply rounded-md px-3 py-[3px] text-base font-medium leading-snug text-ink3 transition-colors duration-150;
     }
     .seg-btn:hover:not(:disabled):not([aria-checked='true']) {
         background: rgba(255, 255, 255, 0.6);
         color: #0b1f33;
     }
     .seg-btn[aria-checked='true'] {
-        @apply bg-white font-semibold text-brand-ink shadow-thumb ring-1 ring-hairline;
+        @apply bg-white font-semibold text-brand-ink ring-1 ring-line;
     }
     .pill {
-        @apply inline-flex items-center justify-center gap-1.5 rounded-full border border-transparent px-4 py-1 text-base font-medium leading-snug transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50;
+        @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-transparent px-4 py-1 text-base font-medium leading-snug transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50;
     }
     .pill-primary {
-        @apply pill bg-gradient-to-b from-[#14a38f] to-accent text-white shadow-tile hover:from-accent hover:to-[#115e59];
+        @apply pill bg-accent text-white hover:bg-[#115e59];
     }
     .pill-secondary {
-        @apply pill border-hairline bg-white text-ink shadow-thumb hover:bg-[#f3f6f9];
+        @apply pill border-line bg-white text-ink hover:bg-[#f3f5f7];
     }
     .pill-link {
-        @apply pill bg-transparent px-2 text-accent hover:bg-brand-mint/60;
+        @apply pill bg-transparent px-2 text-accent hover:bg-[#eef6f5];
     }
     .field {
-        @apply w-full rounded-[10px] border border-[#cfd8e3] bg-white px-2.5 py-1 text-base text-ink shadow-[0_1px_1px_rgba(11,31,51,0.04)] transition-colors duration-150 hover:border-[#9fb0c3] focus:border-accent;
+        @apply w-full rounded-lg border border-[#cfd6de] bg-white px-2.5 py-1 text-base text-ink transition-colors duration-150 hover:border-[#9aa8b6] focus:border-accent;
     }
     .hair-t {
-        border-top: 1px solid rgba(11, 31, 51, 0.09);
+        border-top: 1px solid #e3e7ec;
     }
     .hair-b {
-        border-bottom: 1px solid rgba(11, 31, 51, 0.09);
+        border-bottom: 1px solid #e3e7ec;
     }
 }
 
@@ -145,15 +145,15 @@ details[open] > summary::before {
 /* ---- Leaflet, restyled ---- */
 .leaflet-container {
     font: inherit;
-    background: #f4f8fb;
+    background: #f8fafb;
 }
 
 .leaflet-bar {
     border: none !important;
-    border-radius: 12px !important;
+    border-radius: 8px !important;
     overflow: hidden;
-    border: 1px solid rgba(11, 31, 51, 0.1) !important;
-    box-shadow: 0 6px 18px -6px rgba(11, 31, 51, 0.3) !important;
+    border: 1px solid #d5dbe2 !important;
+    box-shadow: none !important;
 }
 .leaflet-bar a,
 .leaflet-bar a:hover {
@@ -163,12 +163,11 @@ details[open] > summary::before {
     font-size: 20px !important;
     font-weight: 400;
     color: #0b1f33 !important;
-    background: rgba(255, 255, 255, 0.94) !important;
-    backdrop-filter: saturate(180%) blur(12px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    background: #ffffff !important;
+    border-bottom: 1px solid #e3e7ec !important;
 }
 .leaflet-bar a:hover {
-    background: #ecfdf8 !important;
+    background: #f3f5f7 !important;
     color: #0f766e !important;
 }
 .leaflet-bar a:last-child {
@@ -180,9 +179,10 @@ details[open] > summary::before {
 }
 
 .leaflet-popup-content-wrapper {
-    border-radius: 16px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.06);
-    background: rgba(255, 255, 255, 0.97);
+    border-radius: 10px;
+    border: 1px solid #d5dbe2;
+    box-shadow: 0 8px 24px -12px rgba(11, 31, 51, 0.25);
+    background: #ffffff;
     color: #1d1d1f;
 }
 .leaflet-popup-content {
@@ -233,10 +233,10 @@ details[open] > summary::before {
     min-width: var(--radix-select-trigger-width);
     max-height: var(--radix-select-content-available-height);
     overflow: hidden;
-    border-radius: 12px;
-    border: 1px solid rgba(11, 31, 51, 0.12);
+    border-radius: 10px;
+    border: 1px solid #d5dbe2;
     background: #ffffff;
-    box-shadow: 0 18px 40px -12px rgba(11, 31, 51, 0.35), 0 2px 6px rgba(11, 31, 51, 0.08);
+    box-shadow: 0 8px 24px -12px rgba(11, 31, 51, 0.25);
 }
 .lp-select-item {
     display: flex;
@@ -244,7 +244,7 @@ details[open] > summary::before {
     gap: 0.5rem;
     padding: 0.3rem 0.6rem 0.3rem 2rem;
     position: relative;
-    border-radius: 8px;
+    border-radius: 6px;
     font-size: 1rem;
     line-height: 1.35;
     color: #0b1f33;
@@ -253,21 +253,29 @@ details[open] > summary::before {
     outline: none;
 }
 .lp-select-item[data-highlighted] {
-    background: #ecfdf8;
-    color: #0f766e;
+    background: #f1f3f5;
+    color: #0b1f33;
 }
 .lp-select-item[data-state='checked'] {
     font-weight: 600;
-}
-/* Auth on the navy app bar. */
-#auth-slot > div {
-    color: #ffffff;
-}
-#auth-slot span.text-ink2 {
-    color: rgba(255, 255, 255, 0.75);
 }
 
 .lp-select-item[data-disabled] {
     color: #94a3b8;
     cursor: not-allowed;
+}
+
+/* KPI stat rows: flat figures separated by hairlines, no nested cards or decorative strips. */
+#cost-summary .tile + .tile {
+    border-top: 1px solid #e3e7ec;
+}
+#cost-summary [data-kpi='network'] {
+    border-left: 1px solid #e3e7ec;
+    padding-left: 0.75rem;
+}
+#cost-summary [data-kpi] > span.absolute[aria-hidden='true'] {
+    display: none;
+}
+#cost-summary > .grid {
+    row-gap: 0;
 }
