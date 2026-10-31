@@ -47,8 +47,7 @@ export default function InfoTip({ label, children }: { label: string; children: 
                 onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (pos) hide();
-                    else show();
+                    show();
                 }}
             >
                 i
