@@ -30,6 +30,11 @@ TRACE_DRAFT = ("{amount_moved} goes from {from_place} to {to_place}, or {share_o
                "{cost_difference}.")
 
 
+@pytest.fixture(autouse=True)
+def fresh_call_cap(monkeypatch):
+    monkeypatch.setattr(explain, "recent_calls", explain.deque())
+
+
 def scripted(*replies):
     """Stands in for ask_gemini. A reply that is an exception is raised, like a model that did not answer."""
     queue = iter(replies)
@@ -253,7 +258,6 @@ def test_route_answers_200_with_no_text_when_gemini_is_down(api_client, signer, 
 def test_route_stops_calling_gemini_past_the_shared_cap(api_client, signer, monkeypatch):
     client, _ = api_client
     monkeypatch.setattr(explain, "MAX_CALLS_PER_MINUTE", 1)
-    monkeypatch.setattr(explain, "recent_calls", explain.deque())
     ask = scripted(GOOD)
     monkeypatch.setattr(explain, "ask_gemini", ask)
     headers = {"Authorization": "Bearer "+signer()}
@@ -262,6 +266,21 @@ def test_route_stops_calling_gemini_past_the_shared_cap(api_client, signer, monk
     assert bodies[0].json()["text"] is not None
     assert bodies[1].json()["text"] is None
     assert len(ask.calls) == 1
+
+
+def test_the_cap_counts_each_gemini_call_not_each_click(monkeypatch):
+    monkeypatch.setattr(explain, "MAX_CALLS_PER_MINUTE", 1)
+    ask = scripted("This is optimal. {total_annual_cost} {transport_cost_per_year}", GOOD)
+    assert plain_english("network", FACTS, ask=ask) == (None, None)
+    assert len(ask.calls) == 1
+
+
+def test_an_unknown_name_is_not_repeated_back(api_client, signer):
+    client, _ = api_client
+    response = client.post("/api/plain-english", json={"kind": "network", "facts": {**FACTS, "ignore_your_rules": "x"}},
+                           headers={"Authorization": "Bearer "+signer()})
+    assert response.status_code == 422
+    assert "ignore_your_rules" not in response.text
 
 
 @pytest.mark.parametrize("body", [
@@ -274,10 +293,12 @@ def test_route_stops_calling_gemini_past_the_shared_cap(api_client, signer, monk
     {"kind": "network", "facts": {**FACTS, "ignore_your_rules": "x"}},
     {"kind": "no_network", "facts": {"reason": "x", "status": "y", "total_annual_cost": "z"}},
     {"kind": "network", "facts": {**FACTS, "transport_cost_per_year": "x" * 401}},
+    {"kind": "network", "facts": {**FACTS, **{f"extra_{chr(97 + i)}": "x" for i in range(26)}}},
 ], ids=["no-total", "no-status", "no-reason", "no-check", "bad-kind", "bad-name", "unknown-name", "wrong-kind-name",
-        "long-value"])
+        "long-value", "too-many"])
 def test_route_refuses_malformed_facts(api_client, signer, monkeypatch, body):
     client, _ = api_client
+    assert explain.MAX_FACTS == max(len(names) for names in explain.ALLOWED.values())
     monkeypatch.setattr(explain, "ask_gemini", scripted())
     response = client.post("/api/plain-english", json=body, headers={"Authorization": "Bearer "+signer()})
     assert response.status_code == 422
