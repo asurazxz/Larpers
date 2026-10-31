@@ -201,7 +201,7 @@ export default function Landing() {
                     </Stat>
                 </div>
                 <p data-reveal className="mt-6 text-lg text-ink2">
-                    Base run: {int(nRef)} refineries and {int(nDep)} depots. Status: {base ? statusLabel(base) : MISSING}.
+                    Base run: {int(nRef)} {nRef === 1 ? 'refinery' : 'refineries'} and {int(nDep)} {nDep === 1 ? 'depot' : 'depots'}. Status: {base ? statusLabel(base) : MISSING}.
                 </p>
             </Block>
 
