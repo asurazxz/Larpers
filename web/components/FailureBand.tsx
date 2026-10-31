@@ -4,7 +4,8 @@
 // from the selected run (and, for cross-run checks, the stored bundle). Missing values say "not in this run".
 import type { Facility, Flow, Solution } from '../lib/contract';
 import { bundle, sites, solutionOf } from '../lib/bundle';
-import { km, kt, MISSING, pct, statusLabel, usd } from '../lib/format';
+import { km, kt, MISSING, pct, statusLabel } from '../lib/format';
+import { annualCost, CAPEX_YEARS, FIXED_OPEX_SHARE } from '../lib/annual';
 
 /** Bulungan, North Kalimantan. Tarakan ferry row only once Denzel confirms a second source. */
 const NORTH_KAL_IDS = ['KAL_SUP_18', 'KAL_SUP_70'];
@@ -31,15 +32,15 @@ function mix(facilities: Facility[]): string {
 
 function Cell({ title, id, children }: { title: string; id: string; children: React.ReactNode }) {
     return (
-        <div id={id} className="min-w-0 border-l border-gray-300 pl-2 first:border-l-0 first:pl-0">
-            <div className="font-bold">{title}</div>
-            <div className="text-gray-800">{children}</div>
+        <div id={id} className="min-w-0 rounded-2xl bg-white px-3 py-1.5 shadow-card">
+            <div className="font-semibold leading-tight tracking-[-0.01em] text-ink">{title}</div>
+            <div className="mt-0.5 text-ink3">{children}</div>
         </div>
     );
 }
 
 function How({ children }: { children: React.ReactNode }) {
-    return <span className="text-gray-500"> How you know: {children}</span>;
+    return <span className="text-ink2"> How you know: {children}</span>;
 }
 
 // ---------- (1) North Kalimantan ----------
@@ -119,67 +120,41 @@ function northKal(s: Solution): { rows: SiteRoute[]; meanUsdPerKt: number | null
     return { rows, meanUsdPerKt };
 }
 
-// ---------- (2) Refinery capacity step ----------
+// ---------- (2) Refinery capacity ----------
 
-function largeRefineryCapacity(s: Solution): { cap: number; basis?: string; from: string } | null {
-    const own = s.facilities.find((f) => f.type === 'refinery' && f.size === 'large' && finite(f.capacity_kt) && f.capacity_basis !== 'biomass_in');
-    if (own) return { cap: own.capacity_kt as number, basis: own.capacity_basis, from: 'this run' };
+/** Large-refinery biomass intake, kt/yr, from this run's facilities (else another stored run's). */
+function largeRefineryIntake(s: Solution): { intake: number; from: string } | null {
+    const intakeOf = (f: Facility, y: number | undefined): number | null => {
+        if (!finite(f.capacity_kt)) return null;
+        if (f.capacity_basis === 'biomass_in') return f.capacity_kt;
+        return finite(y) && y > 0 ? f.capacity_kt / y : null;
+    };
+    const find = (x: Solution) => {
+        for (const f of x.facilities) {
+            if (f.type !== 'refinery' || f.size !== 'large') continue;
+            const v = intakeOf(f, x.scenario?.yield);
+            if (v !== null) return v;
+        }
+        return null;
+    };
+    const own = find(s);
+    if (own !== null) return { intake: own, from: 'this run' };
     for (const o of storedSolutions()) {
-        const f = o.facilities.find((x) => x.type === 'refinery' && x.size === 'large' && finite(x.capacity_kt) && x.capacity_basis !== 'biomass_in');
-        if (f) return { cap: f.capacity_kt as number, basis: f.capacity_basis, from: `stored run ${o.run_id}` };
+        const v = find(o);
+        if (v !== null) return { intake: v, from: `stored run ${o.run_id}` };
     }
     return null;
 }
 
-// ---------- (3) Horizon flip ----------
-
-function sameExceptHorizon(s: Solution): string | null {
-    const sc = s.scenario;
-    if (!sc) return null;
-    return JSON.stringify([
-        sc.yield,
-        sc.road_factor,
-        sc.collection_policy,
-        sc.capacity_basis,
-        sc.depot_retention,
-        [...(sc.excluded_ids ?? [])].sort(),
-        sc.demand_kt,
-    ]);
-}
-
-interface Flip {
-    a: Solution;
-    b: Solution;
-    extraCapex: number;
-    annualSaving: number;
-    years: number | null;
-}
-
-function horizonFlip(current: Solution): Flip | null {
-    const pool = [current, ...storedSolutions().filter((x) => x !== current)].filter(
-        (x) => x.status !== 'infeasible' && x.status !== 'heuristic' && x.source !== 'baseline' && finite(x.scenario?.horizon_years),
-    );
-    const groups = new Map<string, Solution[]>();
-    for (const x of pool) {
-        const k = sameExceptHorizon(x);
-        if (k) groups.set(k, [...(groups.get(k) ?? []), x]);
+/** SAF required: the run's echoed demand, else the SAF it delivered. */
+function safRequired(s: Solution): { kt: number; basis: 'demand' | 'delivered' } | null {
+    const d = s.scenario?.demand_kt;
+    if (d) {
+        const vals = Object.values(d).filter(finite);
+        if (vals.length > 0) return { kt: sum(vals), basis: 'demand' };
     }
-    const ck = sameExceptHorizon(current);
-    const ordered = [...(ck && groups.has(ck) ? [groups.get(ck)!] : []), ...[...groups.entries()].filter(([k]) => k !== ck).map(([, v]) => v)];
-    for (const g of ordered) {
-        const hs = [...new Set(g.map((x) => x.scenario!.horizon_years))].sort((p, q) => p - q);
-        if (hs.length < 2) continue;
-        const hA = hs.includes(1) ? 1 : hs[0];
-        const hB = hs.includes(5) ? 5 : hs[hs.length - 1];
-        const a = g.find((x) => x.scenario!.horizon_years === hA)!;
-        const b = g.find((x) => x.scenario!.horizon_years === hB)!;
-        if (!finite(a.capex_usd) || !finite(b.capex_usd) || !finite(a.logistics_annual_usd) || !finite(b.logistics_annual_usd)) continue;
-        const extraCapex = b.capex_usd - a.capex_usd;
-        const annualSaving = a.logistics_annual_usd - b.logistics_annual_usd;
-        const years = extraCapex > 0 && annualSaving > 0 ? extraCapex / annualSaving : null;
-        return { a, b, extraCapex, annualSaving, years };
-    }
-    return null;
+    const delivered = sum(s.flows.filter((f) => f.leg === 'refinery_airport').map((f) => f.kt));
+    return delivered > 0 ? { kt: delivered, basis: 'delivered' } : null;
 }
 
 // ---------- band ----------
@@ -207,58 +182,64 @@ export default function FailureBand({ solution, onSelectFlow }: FailureBandProps
     const totalBiomass = sum(sites.map((x) => x.kt));
     const nkKt = sum(sites.filter((x) => NORTH_KAL_IDS.includes(x.id)).map((x) => x.kt));
 
-    // (2)
-    const cap = s ? largeRefineryCapacity(s) : null;
-    const breakEven = cap && totalBiomass > 0 ? cap.cap / totalBiomass : null;
+    // (2) refineries needed = biomass intake required / large refinery intake
     const y = s?.scenario?.yield;
-    const basis = s?.scenario?.capacity_basis;
-    const byYield = new Map<number, string>();
-    for (const x of [...stored, ...(s ? [s] : [])]) {
-        const yy = x.scenario?.yield;
-        if (finite(yy) && x.status !== 'infeasible' && x.source !== 'baseline' && x.status !== 'heuristic' && x.scenario?.road_factor === s?.scenario?.road_factor) {
-            byYield.set(yy, mix(x.facilities));
-        }
-    }
-    const yields = [...byYield.entries()].sort((p, q) => p[0] - q[0]);
+    const saf = s ? safRequired(s) : null;
+    const bioNeeded = saf && finite(y) && y > 0 ? saf.kt / y : null;
+    const cap = s ? largeRefineryIntake(s) : null;
+    const nNeeded = bioNeeded !== null && cap && cap.intake > 0 ? Math.ceil(bioNeeded / cap.intake - 1e-9) : null;
 
-    // (3)
-    const flip = s ? horizonFlip(s) : null;
+    // (3) annualisation, checked against this run
+    const ac = s ? annualCost(s) : null;
+    const impliedYears = s && ac && finite(s.capex_usd) && finite(ac.annualisedCapex) && ac.annualisedCapex > 0 ? s.capex_usd / ac.annualisedCapex : null;
+    const impliedFixed = s && ac && finite(s.capex_usd) && s.capex_usd > 0 && finite(ac.fixedOpex) ? ac.fixedOpex / s.capex_usd : null;
 
     return (
-        <div id="failure-band-content" className="text-xs leading-snug">
-            <div className="mb-0.5 flex flex-wrap items-baseline gap-x-3">
-                <span className="text-sm font-bold">Where this fails</span>
+        <div id="failure-band-content" className="text-base leading-tight">
+            <div className="mb-1 flex flex-wrap items-baseline gap-x-3 px-1">
+                <span className="font-semibold tracking-[-0.01em]">Where this fails</span>
                 {s ? (
-                    <span id="failure-run-state">
+                    <span
+                        className="text-ink2"
+                        id="failure-run-state"
+                        title={[nonZeroGap ? 'Not proven optimal.' : '', portfolioGaps > 0 ? `${portfolioGaps} portfolio(s) with non-zero gap.` : '']
+                            .filter(Boolean)
+                            .join(' ')}
+                    >
                         This run:{' '}
-                        <span className={`font-bold ${s.status === 'infeasible' || nonZeroGap ? 'text-orange-800' : 'text-blue-900'}`}>
+                        <span className={`font-semibold ${s.status === 'infeasible' || nonZeroGap ? 'text-orange-800' : 'text-blue-800'}`}>
                             {s.status === 'infeasible' ? 'No feasible network: the solver could not find one under these inputs' : statusLabel(s)}
                         </span>
-                        {nonZeroGap && ' (not proven optimal)'}
-                        {portfolioGaps > 0 && `; ${portfolioGaps} portfolio(s) with non-zero gap`}; stranded {kt(strandedKt, 1)}; surplus SAF{' '}
-                        {kt(surplusKt, 1)}. Stored runs: {storedGap} of {stored.length} with non-zero gap, {storedInfeasible} of {stored.length}{' '}
-                        infeasible.
+; stranded {kt(strandedKt, 1)}; surplus SAF {kt(surplusKt, 1)}.
+                        Stored: {storedGap} of {stored.length} gap &gt; 0, {storedInfeasible} of {stored.length} infeasible.
                     </span>
                 ) : (
                     <span>{MISSING}</span>
                 )}
             </div>
-            <div className="grid grid-cols-4 gap-3">
-                <Cell id="fail-north-kal" title={`1. North Kalimantan, ${kt(nkKt, 0)} (${pct(totalBiomass ? nkKt / totalBiomass : null, 1)})`}>
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-[1.3fr_1.2fr_0.95fr_0.85fr]">
+                <Cell id="fail-north-kal" title={`1. N. Kalimantan, ${kt(nkKt, 0)} (${pct(totalBiomass ? nkKt / totalBiomass : null, 1)})`}>
                     {nk ? (
                         <>
                             {nk.rows.map((r) => (
-                                <div key={r.id} data-site={r.id} title={r.label}>
-                                    <span className="font-medium">{r.id}</span>
+                                <div
+                                    key={r.id}
+                                    data-site={r.id}
+                                    title={
+                                        r.usdPerKt !== undefined
+                                            ? `${r.label}${r.depot !== r.id ? ` → ${r.depot} (${km(r.kmSupply, 0)})` : ''} → ${r.refinery ?? MISSING} (${km(r.kmOnward, 0)})`
+                                            : r.label
+                                    }
+                                >
+                                    <span className="font-medium text-ink">{r.id}</span>
                                     {r.usdPerKt !== undefined ? (
                                         <>
-                                            {r.depot !== r.id && ` → ${r.depot} (${km(r.kmSupply, 0)})`} → {r.refinery ?? MISSING} (
-                                            {km(r.kmOnward, 0)}): <span className="font-bold">{perT(r.usdPerKt)}</span>
+                                            : <span className="num font-semibold text-ink">{perT(r.usdPerKt)}</span>
                                             {nk.meanUsdPerKt ? `, ${(r.usdPerKt / nk.meanUsdPerKt).toFixed(1)}× mean` : ''}
                                             {onSelectFlow && r.traceIndex !== undefined && s && (
                                                 <button
                                                     type="button"
-                                                    className="ml-1 underline"
+                                                    className="ml-1 rounded-full px-1 text-accent hover:bg-blue-50"
                                                     onClick={() => onSelectFlow(s.flows[r.traceIndex!], r.traceIndex!)}
                                                 >
                                                     trace
@@ -267,7 +248,7 @@ export default function FailureBand({ solution, onSelectFlow }: FailureBandProps
                                             {r.stranded !== null && `; stranded ${kt(r.stranded, 1)}`}
                                         </>
                                     ) : r.stranded !== null ? (
-                                        <span className="font-bold text-orange-800" title={r.strandedReason}>
+                                        <span className="font-semibold text-orange-800" title={r.strandedReason}>
                                             : stranded {kt(r.stranded, 1)}
                                         </span>
                                     ) : (
@@ -275,10 +256,7 @@ export default function FailureBand({ solution, onSelectFlow }: FailureBandProps
                                     )}
                                 </div>
                             ))}
-                            <How>
-                                $/t biomass to the refinery gate vs network mean{' '}
-                                {nk.meanUsdPerKt !== null ? perT(nk.meanUsdPerKt) : MISSING}, or stranded kt.
-                            </How>
+                            <How>$/t vs mean {nk.meanUsdPerKt !== null ? perT(nk.meanUsdPerKt) : MISSING}.</How>
                         </>
                     ) : (
                         MISSING
@@ -286,58 +264,38 @@ export default function FailureBand({ solution, onSelectFlow }: FailureBandProps
                 </Cell>
                 <Cell
                     id="fail-capacity-step"
-                    title={breakEven !== null ? `2. Refinery capacity step at ${pct(breakEven, 3)} yield` : '2. Refinery capacity step'}
+                    title={nNeeded !== null ? `2. Capacity: ${nNeeded} large ${nNeeded === 1 ? 'refinery' : 'refineries'} needed` : '2. Refinery capacity'}
                 >
-                    {s && cap && breakEven !== null ? (
+                    {s && saf && bioNeeded !== null && cap ? (
                         <>
-                            <span id="break-even-yield" data-value={breakEven}>
-                                {kt(cap.cap, 0)} large refinery / {kt(totalBiomass, 0)} biomass
-                            </span>
-                            {cap.from !== 'this run' && <span className="text-gray-500"> (capacity from {cap.from})</span>}.{' '}
-                            {basis === 'biomass_input' && <span className="text-orange-800">Biomass-input capacity basis. </span>}
-                            This run: {pct(y, 2)}
-                            {finite(y) && (y > breakEven ? ', past the step' : ', below the step')} →{' '}
-                            <span className="font-bold">{mix(s.facilities)}</span>.{' '}
-                            {yields.length > 1 ? (
-                                <>Stored: {yields.map(([yy, m]) => `${pct(yy, 2)} → ${m}`).join('; ')}.</>
-                            ) : (
-                                <>Other yields: {MISSING}.</>
-                            )}
-                            <How>the refinery count changes as you step yield.</How>
+                            <span
+                                id="refineries-needed"
+                                data-value={nNeeded ?? undefined}
+                                title={`${kt(bioNeeded, 0)} biomass / ${kt(cap.intake, 0)} intake per large refinery${cap.from !== 'this run' ? ` (capacity from ${cap.from})` : ''}`}
+                            >
+                                {kt(saf.kt, 0)} SAF{saf.basis === 'delivered' ? ' delivered' : ''} at {pct(y, 0)} needs {kt(bioNeeded, 0)} biomass
+                                {totalBiomass > 0 && <> (of {kt(totalBiomass, 0)})</>}, {kt(cap.intake, 0)} per large refinery.
+                            </span>{' '}
+                            This run: <span className="font-semibold text-ink">{mix(s.facilities)}</span>.
                         </>
                     ) : (
-                        <>Large refinery capacity: {MISSING}</>
+                        <>
+                            Refineries needed: {MISSING}
+                            {s && !finite(y) ? ' (yield not in this run)' : ''}.
+                        </>
                     )}
                 </Cell>
-                <Cell id="fail-horizon-flip" title="3. Horizon flip">
-                    {flip ? (
-                        <>
-                            H = {flip.a.scenario!.horizon_years}: {mix(flip.a.facilities)}, CapEx {usd(flip.a.capex_usd)},{' '}
-                            {usd(flip.a.logistics_annual_usd)}/yr. H = {flip.b.scenario!.horizon_years}: {mix(flip.b.facilities)}, CapEx{' '}
-                            {usd(flip.b.capex_usd)}, {usd(flip.b.logistics_annual_usd)}/yr.{' '}
-                            {flip.years !== null ? (
-                                <>
-                                    Payback {usd(flip.extraCapex)} / {usd(flip.annualSaving)}/yr ={' '}
-                                    <span className="font-bold" id="horizon-flip-years">
-                                        {flip.years.toFixed(1)} yr
-                                    </span>
-                                    .
-                                </>
-                            ) : (
-                                <>No CapEx-for-logistics trade between these horizons.</>
-                            )}
-                            <How>the network changes when H crosses the payback.</How>
-                        </>
-                    ) : (
-                        <>
-                            Payback of the longer-horizon network: <span id="horizon-flip-years">{MISSING}</span> (needs stored runs at two
-                            horizons).
-                        </>
-                    )}
+                <Cell id="fail-annualisation" title="3. Annualisation">
+                    CapEx ÷ {CAPEX_YEARS} years, no interest; fixed OpEx {pct(FIXED_OPEX_SHARE, 0)}/yr, per the organisers&apos; basis.{' '}
+                    <span id="annualisation-check" className="text-ink2" title={ac ? (ac.fromSolver ? 'From the solver' : 'Recomputed from this run') : undefined}>
+                        This run: ÷ {impliedYears !== null ? impliedYears.toFixed(1) : MISSING} yr, {pct(impliedFixed, 1)}.
+                    </span>
                 </Cell>
                 <Cell id="fail-not-modelled" title="4. Not modelled">
-                    OpEx (none given), seasonality, moisture, road network (straight-line × road factor).
-                    <How>totals are transport plus CapEx only.</How>
+                    <span title="Distances are straight-line km × road factor; CapEx is annualised without interest.">
+                        Seasonality, moisture, road network, interest and financing.
+                    </span>
+                    <How>km are straight-line.</How>
                 </Cell>
             </div>
         </div>

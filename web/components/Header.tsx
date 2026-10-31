@@ -17,25 +17,35 @@ export interface HeaderProps {
     isLive: boolean;
 }
 
-function badgeFor(health: SolverHealth, isLive: boolean): { text: string; className: string; title: string } {
-    const stored = `STORED RUN: ${storedRunCount()} stored runs`;
+type BadgeKind = 'stored' | 'live' | 'checking' | 'offline';
+
+const BADGE_STYLE: Record<BadgeKind, { pill: string; dot: string }> = {
+    stored: { pill: 'bg-[#eef1f6] text-[#1d3557]', dot: 'bg-[#6e7f99]' },
+    live: { pill: 'bg-blue-50 text-blue-900', dot: 'bg-accent animate-pulse' },
+    checking: { pill: 'bg-blue-50 text-blue-900', dot: 'bg-blue-300' },
+    offline: { pill: 'bg-[#fbeeee] text-[#9b2c2c]', dot: 'bg-[#c94a4a]' },
+};
+
+function badgeFor(health: SolverHealth, isLive: boolean): { text: string; kind: BadgeKind; title: string } {
+    const n = storedRunCount();
+    const stored = `STORED RUN: ${n} stored run${n === 1 ? '' : 's'}`;
     if (health.state === 'down') {
         return {
             text: isLive ? 'SOLVER OFFLINE: last live result shown' : 'SOLVER OFFLINE: showing stored runs',
-            className: 'border-red-700 bg-red-50 text-red-800',
+            kind: 'offline',
             title: health.error ?? 'GET /api/health failed',
         };
     }
     if (isLive && health.state === 'up') {
-        return { text: 'LIVE SOLVE', className: 'border-sky-700 bg-sky-50 text-sky-900', title: 'Solved live by the MILP for this scenario' };
+        return { text: 'LIVE SOLVE', kind: 'live', title: 'Solved live by the MILP for this scenario' };
     }
     if (isLive) {
         // Live result on screen while the first health check is still pending.
-        return { text: 'LIVE RESULT: checking solver…', className: 'border-sky-700 bg-white text-sky-900', title: '' };
+        return { text: 'LIVE RESULT: checking solver…', kind: 'checking', title: '' };
     }
     return {
         text: stored,
-        className: 'border-gray-800 bg-white text-gray-900',
+        kind: 'stored',
         title: health.state === 'disabled' ? 'No solver on this URL' : 'Stored runs are always labelled stored',
     };
 }
@@ -51,34 +61,36 @@ export default function Header({ solution, view, health, isLive }: HeaderProps) 
             ? `${viewLabel(view)} (${solution.source})`
             : MISSING;
     const badge = badgeFor(health, isLive);
+    const style = BADGE_STYLE[badge.kind];
     const solverNote =
         health.state === 'up' && !isLive ? 'solver online' : health.state === 'checking' ? 'checking solver…' : null;
 
     return (
-        <header id="header" className="flex items-center justify-between gap-4 border-b border-gray-300 px-4 py-2">
+        <header id="header" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pb-1 pt-1.5 md:flex-nowrap">
             <div className="min-w-0">
-                <h1 className="text-xl font-bold">Kalimantan SAF Network Planner</h1>
-                <div id="run-label" className="truncate text-gray-700" title={runLabel}>
-                    Run: {runLabel}
-                    {solution && (
-                        <>
-                            {' '}| {statusLabel(solution)} | solve {seconds(solution.solve_seconds)} | run ID {solution.run_id}
-                        </>
-                    )}
+                <h1 className="text-[1.25rem] font-semibold leading-tight tracking-[-0.02em]">Kalimantan SAF Network Planner</h1>
+                {/* Status, solve time and run ID live in the provenance strip and the summary. */}
+                <div
+                    id="run-label"
+                    className="text-base leading-snug text-ink2"
+                    title={solution ? `${runLabel} | ${statusLabel(solution)} | solve ${seconds(solution.solve_seconds)} | run ID ${solution.run_id}` : runLabel}
+                >
+                    Run: <span className="text-ink">{runLabel}</span>
                 </div>
             </div>
-            <div className="flex shrink-0 items-center gap-3">
-                <div className="flex flex-col items-end">
+            <div className="flex flex-wrap items-center gap-3 md:shrink-0 md:flex-nowrap">
+                <div className="flex flex-wrap items-center gap-2.5">
+                    {solverNote && <span className="text-base text-ink2">{solverNote}</span>}
                     <div
                         id="header-badge"
                         data-badge={isLive && health.state === 'up' ? 'live' : health.state === 'down' ? 'offline' : 'stored'}
-                        className={`rounded border-2 px-3 py-1 font-bold ${badge.className}`}
+                        className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-base font-semibold tracking-[0.01em] ${style.pill}`}
                         title={badge.title}
                         aria-live="polite"
                     >
+                        <span aria-hidden="true" className={`inline-block h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
                         {badge.text}
                     </div>
-                    {solverNote && <span className="text-xs text-gray-500">{solverNote}</span>}
                 </div>
                 <div id="auth-slot">
                     <AuthButton getPendingInputs={getCurrentForm} />

@@ -39,26 +39,28 @@ const MAX_BOUNDS: L.LatLngBoundsExpression = [
 ];
 
 export const LEG_COLOR: Record<Leg, string> = {
-    supply_depot: '#2e9e44',
-    depot_refinery: '#e0a100',
-    refinery_airport: '#0aa5c2',
+    supply_depot: '#2f9e4f',
+    depot_refinery: '#e5a00d',
+    refinery_airport: '#0ea5c6',
 };
-const SITE_GREEN = '#2e9e44';
-const DEPOT_AMBER = '#e0a100';
-const REFINERY_CYAN = '#0aa5c2';
+const SITE_GREEN = '#2f9e4f';
+const DEPOT_AMBER = '#f0a30a';
+const REFINERY_CYAN = '#0ea5c6';
+const SEA = '#fbfbfd';
+const LAND = '#e8e8ed';
 
 const AIRPORT_ICON = L.divIcon({
     className: 'saf-airport',
-    html: '<div style="width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid #1f2937;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;color:#1f2937">&#9992;</div>',
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
+    html: '<div style="width:28px;height:28px;border-radius:50%;background:#fff;border:1.5px solid #1d1d1f;box-shadow:0 2px 6px rgba(0,0,0,0.18);display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;color:#1d1d1f">&#9992;</div>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
 });
 
 function refineryIcon(size: Facility['size'], dim: boolean): L.DivIcon {
     const px = size === 'large' ? 22 : 15;
     return L.divIcon({
         className: 'saf-refinery',
-        html: `<div style="width:${px}px;height:${px}px;background:${REFINERY_CYAN};border:2px solid #0b4f5c;opacity:${dim ? 0.35 : 1}"></div>`,
+        html: `<div style="width:${px}px;height:${px}px;background:${REFINERY_CYAN};border:2px solid #075e70;border-radius:3px;box-shadow:0 1px 4px rgba(0,0,0,0.2);opacity:${dim ? 0.35 : 1}"></div>`,
         iconSize: [px + 4, px + 4],
         iconAnchor: [(px + 4) / 2, (px + 4) / 2],
     });
@@ -66,7 +68,7 @@ function refineryIcon(size: Facility['size'], dim: boolean): L.DivIcon {
 
 const EXCLUDED_ICON = L.divIcon({
     className: 'saf-excluded',
-    html: '<div style="width:22px;height:22px;border:2px solid #c62828;border-radius:50%;background:rgba(255,255,255,0.7);display:flex;align-items:center;justify-content:center;color:#c62828;font-weight:700;font-size:16px;line-height:1">&#10005;</div>',
+    html: '<div style="width:22px;height:22px;border:2px solid #c0392b;border-radius:50%;background:rgba(255,255,255,0.9);box-shadow:0 1px 4px rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;color:#c0392b;font-weight:700;font-size:15px;line-height:1">&#10005;</div>',
     iconSize: [22, 22],
     iconAnchor: [11, 11],
 });
@@ -75,14 +77,14 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
 function PopupRows({ title, rows }: { title: string; rows: [string, string][] }) {
     return (
-        <div style={{ fontSize: 15, lineHeight: 1.35, minWidth: 220 }}>
-            <div style={{ fontWeight: 700, marginBottom: 4 }}>{title}</div>
-            <table>
+        <div style={{ fontSize: 16, lineHeight: 1.4, minWidth: 230, color: '#1d1d1f' }}>
+            <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: '-0.01em', marginBottom: 6, paddingRight: 22 }}>{title}</div>
+            <table style={{ borderCollapse: 'collapse' }}>
                 <tbody>
                     {rows.map(([k, v]) => (
                         <tr key={k}>
-                            <td style={{ paddingRight: 8, color: '#4b5563', verticalAlign: 'top' }}>{k}</td>
-                            <td>{v}</td>
+                            <td style={{ padding: '1px 12px 1px 0', color: '#6e6e73', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{k}</td>
+                            <td style={{ padding: '1px 0', fontVariantNumeric: 'tabular-nums' }}>{v}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -153,7 +155,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             preferCanvas
             renderer={renderer}
             attributionControl={showTiles}
-            style={{ height: '100%', width: '100%', background: '#d9ecf4' }}
+            style={{ height: '100%', width: '100%', background: SEA }}
         >
             {showTiles && (
                 <TileLayer
@@ -165,7 +167,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             <Pane name="land" style={{ zIndex: 150 }}>
                 <GeoJSON
                     data={borneo as unknown as FeatureCollection}
-                    style={{ color: '#9ca3af', weight: 0.8, fillColor: '#f3efe6', fillOpacity: 1 }}
+                    style={{ color: '#c7c7cc', weight: 0.8, fillColor: LAND, fillOpacity: 1 }}
                     interactive={false}
                 />
             </Pane>
@@ -185,7 +187,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                         pathOptions={{
                             color: LEG_COLOR[f.leg],
                             weight: widthOf(f) + (hl && !d ? 2 : 0),
-                            opacity: d ? 0.15 : 0.85,
+                            opacity: d ? 0.15 : 0.9,
                             lineCap: 'round',
                         }}
                         eventHandlers={{ click: () => onSelectFlow?.(f, i) }}
@@ -215,13 +217,13 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                     <CircleMarker
                         key={s.id}
                         center={[s.lat, s.lon]}
-                        radius={s.sea ? 4 : 3.5}
+                        radius={s.sea ? 4.5 : 3.5}
                         pathOptions={{
                             color: SITE_GREEN,
-                            weight: s.sea ? 1.5 : 1,
-                            fill: !s.sea,
-                            fillColor: SITE_GREEN,
-                            fillOpacity: d ? 0.25 : 0.9,
+                            weight: s.sea ? 2.5 : 1,
+                            fill: true,
+                            fillColor: s.sea ? '#ffffff' : SITE_GREEN,
+                            fillOpacity: s.sea ? (d ? 0.4 : 1) : d ? 0.25 : 0.9,
                             opacity: d ? 0.3 : 1,
                         }}
                         eventHandlers={{ click: () => onSelectNode?.(s.id) }}
@@ -264,7 +266,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                     key={`stranded-${s.site_id}`}
                     center={[s.lat, s.lon]}
                     radius={9}
-                    pathOptions={{ color: '#c62828', weight: 2, fill: false, dashArray: '3 3' }}
+                    pathOptions={{ color: '#c0392b', weight: 2, fill: false, dashArray: '3 3' }}
                     eventHandlers={{ click: () => onSelectNode?.(s.site_id) }}
                 >
                     <Popup>
@@ -292,7 +294,7 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                             center={[f.lat, f.lon]}
                             radius={f.size === 'large' ? 9 : 6}
                             pathOptions={{
-                                color: '#7a5600',
+                                color: '#8a5a00',
                                 weight: 1.5,
                                 fillColor: DEPOT_AMBER,
                                 fillOpacity: d ? 0.3 : 0.95,

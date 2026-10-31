@@ -15,21 +15,24 @@ import SweepPicker from '../components/SweepPicker';
 import Disrupt from '../components/Disrupt';
 import Robustness from '../components/Robustness';
 import { baseSolution, disruptHighlight, robustness, siteBandFn, type RobustKind } from '../lib/robustness';
-import CostPanel, { storedBaselineFor } from '../components/CostPanel';
+import CostPanel, { CostSummary, storedBaselineFor } from '../components/CostPanel';
 import Provenance from '../components/Provenance';
 import FailureBand from '../components/FailureBand';
 import Trace from '../components/Trace';
 
 const SafMap = dynamic(() => import('./Map'), {
     ssr: false,
-    loading: () => <div className="flex h-full items-center justify-center text-gray-500">Loading map…</div>,
+    loading: () => <div className="flex h-full items-center justify-center text-ink2">Loading map…</div>,
 });
 
-function Section({ id, title, children }: { id: string; title: string; children?: React.ReactNode }) {
+function Section({ id, title, aside, children }: { id: string; title: string; aside?: string; children?: React.ReactNode }) {
     return (
-        <section id={id} className="border-b border-gray-200 px-3 py-2">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-gray-600">{title}</h2>
-            <div className="mt-1">{children}</div>
+        <section id={id} className="card px-5 py-3.5">
+            <h2 className="flex items-baseline justify-between gap-3">
+                <span className="card-title">{title}</span>
+                {aside && <span className="text-base text-ink2">{aside}</span>}
+            </h2>
+            <div className="mt-1.5">{children}</div>
         </section>
     );
 }
@@ -64,18 +67,23 @@ export default function Page() {
         () => (view.kind === 'disrupt' && solution ? disruptHighlight(baseSolution(), solution, view.siteIds ?? []) : null),
         [view, solution],
     );
+    const costBaseline = view.kind === 'disrupt' ? null : (baselineSolution ?? storedBaselineFor(solution));
     const bandFor = useMemo(() => siteBandFn(robustKind === 'off' ? null : robustness(robustKind)), [robustKind]);
 
     return (
-        <div className="flex h-screen flex-col overflow-hidden" data-view={view.kind}>
-            {/* Header: run label, badge (#header-badge) and auth (#auth-slot), from components/Header.tsx */}
-            <Header solution={solution} view={view} health={solverHealth} isLive={isLive} />
-            {/* Provenance strip (components/Provenance.tsx): run, stored/live, hashes, trace count. */}
-            <Provenance solution={solution} entry={entry} live={isLive} />
+        <div className="flex min-h-screen flex-col bg-canvas text-ink md:h-screen md:overflow-hidden" data-view={view.kind}>
+            {/* Translucent header: run label, badge (#header-badge), auth (#auth-slot) and the provenance strip. */}
+            <div className="relative z-[1100] bg-white/80 backdrop-blur-xl backdrop-saturate-150 hair-b md:sticky md:top-0">
+                <Header solution={solution} view={view} health={solverHealth} isLive={isLive} />
+                <Provenance solution={solution} entry={entry} live={isLive} />
+            </div>
 
-            {/* Main: map ~65%, right column ~35% */}
-            <main className="flex min-h-0 flex-1">
-                <div id="map-slot" className="relative h-full" style={{ width: '65%' }}>
+            {/* Main: map 60%, right column 40% */}
+            <main className="flex flex-col gap-3 px-3 pt-3 md:min-h-0 md:flex-1 md:flex-row">
+                <div
+                    id="map-slot"
+                    className="relative h-[55vh] min-h-[320px] min-w-0 overflow-hidden rounded-card bg-white shadow-card md:h-full md:min-h-0 md:flex-[3_1_0%]"
+                >
                     <SafMap
                         solution={solution}
                         sites={sites}
@@ -84,49 +92,54 @@ export default function Page() {
                         onSelectFlow={(flow, index) => setSelected({ flow, index })}
                         onSelectNode={(id) => setPickedNode((p) => ({ id, seq: (p?.seq ?? 0) + 1 }))}
                     />
-                    {/* TRACE SLOT: arc-click trace panel, absolutely positioned over the map. */}
-                    <div id="trace-slot" className="pointer-events-none absolute bottom-2 left-2 z-[1000]">
+                    {/* Arc-click trace panel, floating over the map. */}
+                    <div id="trace-slot" className="pointer-events-none absolute bottom-3 left-3 z-[1000]">
                         <Trace solution={solution} selected={selected} onClose={() => setSelected(null)} />
                     </div>
                 </div>
 
-                <aside id="right-column" className="h-full overflow-y-auto border-l border-gray-300" style={{ width: '35%' }}>
-                    <Section id="panel-scenario" title="Scenario / Run">
-                        <ScenarioPanel
-                            solution={solution}
-                            health={solverHealth}
-                            isLive={isLive}
-                            setSolution={setSolution}
-                            setView={setView}
-                            onLiveRun={(run) => {
-                                setLiveRun(run);
-                                setSolution(run.solution);
-                            }}
-                            pickedNode={pickedNode}
-                        />
-                    </Section>
+                <aside id="right-column" className="min-w-0 pb-3 md:h-full md:flex-[2_1_0%] md:overflow-y-auto">
+                    {/* Pinned summary: total, status, audit and baseline stay visible while the column scrolls. */}
+                    <div id="panel-summary" className="z-10 bg-canvas pb-3 md:sticky md:top-0">
+                        <div className="card px-5 py-3">
+                            <CostSummary solution={solution} baseline={costBaseline} />
+                        </div>
+                    </div>
+                    <div className="space-y-3">
+                        <Section id="panel-scenario" title="Scenario and run">
+                            <ScenarioPanel
+                                solution={solution}
+                                health={solverHealth}
+                                isLive={isLive}
+                                setSolution={setSolution}
+                                setView={setView}
+                                onLiveRun={(run) => {
+                                    setLiveRun(run);
+                                    setSolution(run.solution);
+                                }}
+                                pickedNode={pickedNode}
+                            />
+                        </Section>
 
-                    <Section id="panel-cost" title="Cost (USD)">
-                        <CostPanel
-                            solution={solution}
-                            baseline={view.kind === 'disrupt' ? null : (baselineSolution ?? storedBaselineFor(solution))}
-                        />
-                    </Section>
+                        <Section id="panel-cost" title="Cost detail" aside="USD">
+                            <CostPanel solution={solution} baseline={costBaseline} />
+                        </Section>
 
-                    <Section id="panel-assumptions" title="Assumptions / Sweep">
-                        <SweepPicker view={view} onSelect={selectView} />
-                    </Section>
-                    <Section id="panel-disrupt" title="Disrupt (at base assumptions)">
-                        <Disrupt view={view} solution={solution} onSelect={selectView} focusSiteId={pickedNode?.id ?? null} />
-                    </Section>
-                    <Section id="panel-robustness" title="Robustness">
-                        <Robustness kind={robustKind} onKindChange={setRobustKind} />
-                    </Section>
+                        <Section id="panel-assumptions" title="Assumptions">
+                            <SweepPicker view={view} onSelect={selectView} />
+                        </Section>
+                        <Section id="panel-disrupt" title="Disrupt" aside="at base assumptions">
+                            <Disrupt view={view} solution={solution} onSelect={selectView} focusSiteId={pickedNode?.id ?? null} />
+                        </Section>
+                        <Section id="panel-robustness" title="Robustness">
+                            <Robustness kind={robustKind} onKindChange={setRobustKind} />
+                        </Section>
+                    </div>
                 </aside>
             </main>
 
             {/* Permanent failure band: never behind a click. */}
-            <footer id="failure-band" className="border-t-2 border-gray-800 bg-gray-50 px-4 py-2">
+            <footer id="failure-band" className="px-3 pb-2.5 pt-2">
                 <FailureBand solution={solution} onSelectFlow={(flow, index) => setSelected({ flow, index })} />
             </footer>
         </div>

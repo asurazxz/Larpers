@@ -6,12 +6,13 @@ import type { Leg, Portfolio, Solution } from '../lib/contract';
 import { bundle, solutionOf } from '../lib/bundle';
 import { LEG_LABEL, MISSING, orMissing, pct, seconds, statusLabel, usd } from '../lib/format';
 import { legSums } from '../lib/trace';
+import { annualCost, CAPEX_YEARS, FIXED_OPEX_SHARE, type AnnualCost } from '../lib/annual';
 
 const LEGS: Leg[] = ['supply_depot', 'depot_refinery', 'refinery_airport'];
 const LEG_BAR: Record<Leg, string> = {
-    supply_depot: '#2e9e44',
-    depot_refinery: '#e0a100',
-    refinery_airport: '#0aa5c2',
+    supply_depot: '#2f9e4f',
+    depot_refinery: '#e5a00d',
+    refinery_airport: '#0ea5c6',
 };
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -41,9 +42,9 @@ export function storedBaselineFor(solution: Solution | null | undefined): Soluti
 
 function Line({ k, v, strong, title }: { k: React.ReactNode; v: React.ReactNode; strong?: boolean; title?: string }) {
     return (
-        <div className="flex justify-between gap-3" title={title}>
-            <span className="text-gray-600">{k}</span>
-            <span className={`text-right ${strong ? 'font-bold' : 'font-medium'}`}>{v}</span>
+        <div className="flex justify-between gap-3 py-px" title={title}>
+            <span className="text-ink2">{k}</span>
+            <span className={`num text-right ${strong ? 'font-semibold' : 'font-medium'}`}>{v}</span>
         </div>
     );
 }
@@ -51,14 +52,23 @@ function Line({ k, v, strong, title }: { k: React.ReactNode; v: React.ReactNode;
 function Bar({ frac, color, label }: { frac: number; color: string; label?: string }) {
     const w = Math.max(0, Math.min(1, frac)) * 100;
     return (
-        <div className="h-2 w-full rounded-sm bg-gray-200" aria-label={label} title={label}>
-            <div className="h-2 rounded-sm" style={{ width: `${w}%`, background: color }} />
+        <div className="my-0.5 h-1.5 w-full rounded-full bg-track" aria-label={label} title={label}>
+            <div className="h-1.5 rounded-full" style={{ width: `${w}%`, background: color }} />
         </div>
     );
 }
 
 function Sub({ children }: { children: React.ReactNode }) {
-    return <h3 className="mt-2 text-xs font-bold uppercase tracking-wide text-gray-500">{children}</h3>;
+    return <h3 className="mt-3 text-sm font-semibold text-ink2">{children}</h3>;
+}
+
+function Fold({ title, children, id }: { title: React.ReactNode; children: React.ReactNode; id?: string }) {
+    return (
+        <details id={id} className="hair-t py-1.5 first:border-t-0 first:pt-0">
+            <summary className="text-base">{title}</summary>
+            <div className="mt-1.5 pb-1 pl-5 text-sm text-ink">{children}</div>
+        </details>
+    );
 }
 
 function portfolioStatus(p: Portfolio): string {
@@ -68,58 +78,166 @@ function portfolioStatus(p: Portfolio): string {
     return p.status.replace(/_/g, ' ');
 }
 
-function AuditBlock({ s }: { s: Solution }) {
+function Residuals({ s }: { s: Solution }) {
     const v = s.validation;
-    if (!v) return <div className="text-gray-600">Audit: {MISSING}</div>;
+    if (!v) return <div className="mt-1.5 text-ink2">Audit: {MISSING}</div>;
     const residuals = Object.entries(v.max_residuals ?? {});
+    return residuals.length > 0 ? (
+        <div className="mt-1.5 text-ink3">
+            Audit max residuals:{' '}
+            {residuals.map(([k, r], i) => (
+                <span key={k}>
+                    {i > 0 && ', '}
+                    {k} {orMissing(r, (x: number) => (x === 0 ? '0' : Math.abs(x) >= 0.01 ? x.toFixed(3) : x.toExponential(1)))}
+                </span>
+            ))}
+        </div>
+    ) : (
+        <div className="mt-1.5 text-ink3">Audit max residuals: {MISSING}</div>
+    );
+}
+
+function AuditBadge({ s }: { s: Solution }) {
+    const v = s.validation;
+    if (!v) return <span id="audit-result" className="text-base text-ink2">Audit: {MISSING}</span>;
     const failures = v.failures ?? [];
     return (
-        <div
+        <span
             id="audit-result"
             data-passed={v.passed ? 'true' : 'false'}
-            className={`mt-1 rounded border px-2 py-1 ${v.passed ? 'border-blue-700 bg-blue-50' : 'border-orange-700 bg-orange-50'}`}
+            title="Independent audit of the stored solution"
+            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-0.5 text-base font-semibold ${
+                v.passed ? 'bg-blue-50 text-blue-800' : 'bg-orange-100 text-orange-900'
+            }`}
         >
-            <div className="flex items-center justify-between gap-2">
-                <span className="font-bold">Independent audit</span>
-                <span className={`font-bold ${v.passed ? 'text-blue-800' : 'text-orange-800'}`}>
-                    {v.passed ? 'PASSED' : `FAILED (${failures.length})`}
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" className="shrink-0">
+                {v.passed ? (
+                    <path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                ) : (
+                    <path d="M8 3v6.5M8 12.5v.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                )}
+            </svg>
+            Audit {v.passed ? 'PASSED' : `FAILED (${failures.length})`}
+        </span>
+    );
+}
+
+interface Derived {
+    H: number | undefined;
+    capex: number | null;
+    logistics: number | null;
+    /** The solver's own objective over the horizon: what the MILP minimised. */
+    horizonTotal: number | null;
+    annual: AnnualCost;
+    /** Organisers' basis: total annual cost, like for like with the baseline's. */
+    total: number | null;
+    baseTotal: number | null;
+    saving: number | null;
+}
+
+function derive(s: Solution, baseline: Solution | null): Derived {
+    const annual = annualCost(s);
+    const total = finite(annual.total) ? annual.total : null;
+    const bt = baseline ? annualCost(baseline).total : null;
+    const baseTotal = finite(bt) ? bt : null;
+    return {
+        H: s.scenario?.horizon_years,
+        capex: finite(s.capex_usd) ? s.capex_usd : null,
+        logistics: finite(s.logistics_annual_usd) ? s.logistics_annual_usd : null,
+        horizonTotal: finite(s.total_horizon_usd) ? s.total_horizon_usd : null,
+        annual,
+        total,
+        baseTotal,
+        saving: baseTotal !== null && total !== null ? baseTotal - total : null,
+    };
+}
+
+const fin = (v: number | null | undefined) => (finite(v) ? v : null);
+const ANNUAL_ROWS = (a: AnnualCost): [string, string, number | null][] => [
+    ['annual-capex', `CapEx ÷ ${CAPEX_YEARS} yr`, fin(a.annualisedCapex)],
+    ['annual-fixed-opex', `Fixed OpEx ${pct(FIXED_OPEX_SHARE, 0)}`, fin(a.fixedOpex)],
+    ['annual-variable-opex', 'Variable OpEx', fin(a.variableOpex)],
+    ['annual-transport', 'Transport', fin(a.transport)],
+];
+
+/** Always-visible summary: total annual cost (organisers' basis), solver status, audit and the baseline saving. */
+export function CostSummary({ solution, baseline }: { solution: Solution | null; baseline: Solution | null }) {
+    if (!solution) return <div className="text-base text-ink2">No run selected: {MISSING}.</div>;
+    const s = solution;
+    const { H, capex, horizonTotal, annual, total, baseTotal, saving } = derive(s, baseline);
+    const failures = s.validation?.failures ?? [];
+    return (
+        <div id="cost-summary" className="text-base leading-snug" data-run-id={s.run_id} data-annual-source={annual.fromSolver ? 'solver' : 'recomputed'}>
+            <div className="flex items-center justify-between gap-3">
+                <span className="eyebrow">Total annual cost</span>
+                <AuditBadge s={s} />
+            </div>
+            <div className="mt-0.5 flex items-baseline justify-between gap-3">
+                <span className="flex items-baseline gap-1.5">
+                    <span id="cost-total" className="figure-xl">
+                        {usd(total)}
+                    </span>
+                    {total !== null && <span className="text-base text-ink2">/ yr</span>}
+                </span>
+                <span id="cost-status" className="text-right font-semibold">
+                    {statusLabel(s)}
                 </span>
             </div>
-            {residuals.length > 0 ? (
-                <div className="text-xs text-gray-700">
-                    Max residuals:{' '}
-                    {residuals.map(([k, r], i) => (
-                        <span key={k}>
-                            {i > 0 && ', '}
-                            {k} {orMissing(r, (x: number) => (x === 0 ? '0' : Math.abs(x) >= 0.01 ? x.toFixed(3) : x.toExponential(1)))}
-                        </span>
-                    ))}
-                </div>
-            ) : (
-                <div className="text-xs text-gray-700">Max residuals: {MISSING}</div>
-            )}
+            <div id="annual-rows" className="mt-1 grid grid-cols-2 gap-x-5 gap-y-0.5">
+                {ANNUAL_ROWS(annual).map(([id, k, v]) => (
+                    <div key={id} id={id} className="flex items-baseline justify-between gap-2">
+                        <span className="text-ink2">{k}</span>
+                        <span className="num font-medium">{usd(v)}</span>
+                    </div>
+                ))}
+            </div>
+            <div className="mt-1 leading-tight text-ink2" id="objective-note">
+                Organisers&apos; basis
+                {!annual.fromSolver && (
+                    <span className="font-medium text-ink3" title="Recomputed in the browser from this run's facilities and costs (lib/annual.ts), like the arc trace.">
+                        , recomputed from this run
+                    </span>
+                )}
+                . One-off CapEx <span className="num">{usd(capex)}</span>; MILP objective <span className="num">{usd(horizonTotal)}</span> (H ={' '}
+                {orMissing(H, (h: number) => `${h} yr`)}).
+            </div>
             {failures.length > 0 && (
-                <ul className="mt-1 list-disc pl-4 text-xs text-orange-900">
+                <ul className="mt-1 list-disc pl-5 text-orange-900">
                     {failures.map((f) => (
                         <li key={f}>{f}</li>
                     ))}
                 </ul>
             )}
+            {baseline && baseTotal !== null && total !== null ? (
+                <div id="baseline-compare" className="hair-t mt-1.5 flex items-baseline justify-between gap-3 pt-1.5">
+                    <span className="text-ink2">
+                        {saving !== null && saving >= 0 ? 'Saving vs greedy baseline' : 'Greedy baseline cheaper by'}
+                    </span>
+                    <span className="num font-semibold">
+                        {usd(saving !== null ? Math.abs(saving) : null)}/yr (
+                        {pct(saving !== null && baseTotal ? Math.abs(saving) / baseTotal : null, 1)})
+                    </span>
+                </div>
+            ) : (
+                <div id="baseline-compare" className="hair-t mt-1.5 pt-1.5 text-ink2">
+                    {baseline ? 'Greedy baseline annual total: not in this run' : 'Greedy baseline not in this run'}
+                </div>
+            )}
         </div>
     );
 }
 
+/** Detail behind closed <details>: per-leg breakdown, solver state, portfolios. */
 export default function CostPanel({ solution, baseline }: { solution: Solution | null; baseline: Solution | null }) {
-    if (!solution) return <div className="text-sm text-gray-600">No run selected: {MISSING}.</div>;
+    if (!solution) return <div className="text-base text-ink2">No run selected: {MISSING}.</div>;
     const s = solution;
-    const H = s.scenario?.horizon_years;
-    const capex = finite(s.capex_usd) ? s.capex_usd : null;
-    const logistics = finite(s.logistics_annual_usd) ? s.logistics_annual_usd : null;
-    const total = finite(s.total_horizon_usd) ? s.total_horizon_usd : null;
+    const { H, capex, logistics, horizonTotal, annual, total, baseTotal } = derive(s, baseline);
     const logisticsOverH = logistics !== null && finite(H) ? logistics * H : null;
     const recomputedTotal = capex !== null && logisticsOverH !== null ? capex + logisticsOverH : null;
     const totalMatches =
-        total !== null && recomputedTotal !== null ? Math.abs(total - recomputedTotal) <= Math.max(1, 1e-9 * Math.abs(total)) : null;
+        horizonTotal !== null && recomputedTotal !== null
+            ? Math.abs(horizonTotal - recomputedTotal) <= Math.max(1, 1e-9 * Math.abs(horizonTotal))
+            : null;
 
     const facilities = s.facilities ?? [];
     const capexRef = sum(facilities.filter((f) => f.type === 'refinery').map((f) => f.capex_usd ?? 0));
@@ -133,86 +251,88 @@ export default function CostPanel({ solution, baseline }: { solution: Solution |
     const nLarge = facilities.filter((f) => f.type === 'refinery' && f.size === 'large').length;
     const nSmall = facilities.filter((f) => f.type === 'refinery' && f.size === 'small').length;
 
-    const baseTotal = totalOf(baseline);
-    const saving = baseTotal !== null && total !== null ? baseTotal - total : null;
-
     return (
-        <div id="cost-panel" className="text-sm" data-run-id={s.run_id}>
-            <Line k="CapEx (one-off)" v={usd(capex)} />
-            {hasFacilityCapex && (
-                <div className="pl-3 text-xs text-gray-600">
-                    refineries {usd(capexRef)}, depots {usd(capexDepot)}
-                </div>
-            )}
-            <Line k="Logistics / year" v={usd(logistics)} />
-            {s.flows.length > 0 ? (
-                <div className="mb-1 space-y-0.5 pl-3 text-xs">
-                    {LEGS.map((l) => {
-                        const v = byLeg[l];
-                        return (
-                            <div key={l}>
-                                <div className="flex justify-between gap-2">
-                                    <span className="text-gray-600">{LEG_LABEL[l]}</span>
-                                    <span title={`Sum of ${l} flow costs`}>{usd(v)}</span>
-                                </div>
-                                <Bar frac={v / maxLeg} color={LEG_BAR[l]} label={LEG_LABEL[l]} />
-                            </div>
-                        );
-                    })}
-                    {legsMatch !== null && (
-                        <div className={legsMatch ? 'text-blue-800' : 'font-bold text-orange-800'}>
-                            {legsMatch ? 'Σ flows = logistics / year' : `Σ flows ${usd(legTotal)} ≠ logistics / year`}
-                        </div>
-                    )}
-                </div>
-            ) : (
-                <div className="pl-3 text-xs text-gray-600">Per-leg breakdown: {MISSING}</div>
-            )}
-            <Line k="OpEx" v="not provided" title="The challenge gives no operating cost; it is not modelled." />
-            <div className="mt-1 border-t border-gray-300 pt-1">
-                <Line
-                    k={<>Total over H = {orMissing(H, (h: number) => `${h} yr`)}</>}
-                    v={<span id="cost-total">{usd(total)}</span>}
-                    strong
-                />
-                <div className="text-xs text-gray-600">
-                    CapEx {usd(capex)} + {orMissing(H)} × {usd(logistics)} = {usd(recomputedTotal)}
-                    {totalMatches === true && <span className="text-blue-800"> = stored total</span>}
-                    {totalMatches === false && <span className="font-bold text-orange-800"> ≠ stored total</span>}
-                </div>
-                {total !== null && capex !== null && logisticsOverH !== null && total > 0 && (
-                    <div className="mt-1 flex h-2 w-full overflow-hidden rounded-sm bg-gray-200" title="CapEx vs H × logistics">
-                        <div style={{ width: `${(capex / total) * 100}%`, background: '#0b4f5c' }} />
-                        <div style={{ width: `${(logisticsOverH / total) * 100}%`, background: '#e0a100' }} />
+        <div id="cost-panel" data-run-id={s.run_id}>
+            <Fold
+                id="cost-breakdown"
+                title={
+                    <>
+                        Annual {usd(total)}: CapEx ÷ {CAPEX_YEARS} + OpEx + transport
+                    </>
+                }
+            >
+                <Line k={`Annualised CapEx (÷ ${CAPEX_YEARS} yr, no interest)`} v={usd(fin(annual.annualisedCapex))} />
+                <Line k={`Fixed OpEx (${pct(FIXED_OPEX_SHARE, 0)} of CapEx / yr)`} v={usd(fin(annual.fixedOpex))} />
+                <Line k="Variable OpEx ($/t biomass in)" v={usd(fin(annual.variableOpex))} />
+                <Line k="Transport / year" v={usd(logistics)} />
+                {hasFacilityCapex && (
+                    <div className="pl-3 text-ink2">
+                        refineries {usd(capexRef)}, depots {usd(capexDepot)}
                     </div>
                 )}
-                <AuditBlock s={s} />
-            </div>
-
-            <Sub>Against greedy baseline</Sub>
-            {baseline && baseTotal !== null && total !== null ? (
-                <div id="baseline-compare">
-                    <Line k="Greedy baseline total" v={usd(baseTotal)} />
-                    <Bar frac={baseTotal / Math.max(baseTotal, total)} color="#6b7280" label="greedy baseline" />
-                    <Line k="This run" v={usd(total)} />
-                    <Bar frac={total / Math.max(baseTotal, total)} color="#0b4f5c" label="this run" />
-                    <Line
-                        k={saving !== null && saving >= 0 ? 'Saving vs greedy baseline' : 'Greedy baseline is cheaper by'}
-                        v={`${usd(saving !== null ? Math.abs(saving) : null)} (${pct(saving !== null && baseTotal ? Math.abs(saving) / baseTotal : null, 1)})`}
-                        strong
-                    />
-                    <div className="text-xs text-gray-600">
-                        baseline run {baseline.run_id}, {baseline.source}
+                {s.flows.length > 0 ? (
+                    <div className="mb-1 space-y-1 pl-3">
+                        {LEGS.map((l) => {
+                            const v = byLeg[l];
+                            return (
+                                <div key={l}>
+                                    <div className="flex justify-between gap-2">
+                                        <span className="text-ink2">{LEG_LABEL[l]}</span>
+                                        <span className="num" title={`Sum of ${l} flow costs`}>{usd(v)}</span>
+                                    </div>
+                                    <Bar frac={v / maxLeg} color={LEG_BAR[l]} label={LEG_LABEL[l]} />
+                                </div>
+                            );
+                        })}
+                        {legsMatch !== null && (
+                            <div className={legsMatch ? 'text-blue-800' : 'font-semibold text-orange-800'}>
+                                {legsMatch ? 'Σ flows = logistics / year' : `Σ flows ${usd(legTotal)} ≠ logistics / year`}
+                            </div>
+                        )}
                     </div>
+                ) : (
+                    <div className="pl-3 text-ink2">Per-leg breakdown: {MISSING}</div>
+                )}
+                <Line k="Total annual cost" v={usd(total)} strong />
+                <div className="text-ink2">
+                    {annual.fromSolver ? 'From the solver’s annual fields.' : 'Recomputed from this run’s facilities and costs.'}
                 </div>
-            ) : (
-                <div id="baseline-compare" className="text-gray-600">
-                    {baseline ? 'Greedy baseline total: not in this run' : 'Greedy baseline not in this run'}
+                <Sub>What the MILP minimised (this run&apos;s objective)</Sub>
+                <Line k="CapEx (one-off)" v={usd(capex)} />
+                <div className="text-ink3">
+                    CapEx {usd(capex)} + {orMissing(H)} × {usd(logistics)} = {usd(recomputedTotal)}
+                    {totalMatches === true && <span className="text-blue-800"> = stored total</span>}
+                    {totalMatches === false && <span className="font-semibold text-orange-800"> ≠ stored total</span>}
                 </div>
-            )}
+                {horizonTotal !== null && capex !== null && logisticsOverH !== null && horizonTotal > 0 && (
+                    <div className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-track" title="CapEx vs H × logistics">
+                        <div style={{ width: `${(capex / horizonTotal) * 100}%`, background: '#1d1d1f' }} />
+                        <div style={{ width: `${(logisticsOverH / horizonTotal) * 100}%`, background: '#e5a00d' }} />
+                    </div>
+                )}
+                <Residuals s={s} />
+                {baseline && baseTotal !== null && total !== null && (
+                    <>
+                        <Sub>Against greedy baseline (annual, like for like)</Sub>
+                        <Line k="Greedy baseline total" v={usd(baseTotal)} />
+                        <Bar frac={baseTotal / Math.max(baseTotal, total)} color="#aeaeb2" label="greedy baseline" />
+                        <Line k="This run" v={usd(total)} />
+                        <Bar frac={total / Math.max(baseTotal, total)} color="#0071e3" label="this run" />
+                        <div className="text-ink2">
+                            baseline run {baseline.run_id}, {baseline.source}
+                        </div>
+                    </>
+                )}
+            </Fold>
 
-            <Sub>Solver state</Sub>
-            <div id="solver-state">
+            <Fold
+                id="solver-state"
+                title={
+                    <>
+                        Solver: {statusLabel(s)}, {seconds(s.solve_seconds)}
+                    </>
+                }
+            >
                 <Line k="Status" v={statusLabel(s)} strong />
                 <Line k="Primal (best total found)" v={usd(s.primal)} />
                 <Line k="Bound" v={usd(s.bound)} />
@@ -220,38 +340,39 @@ export default function CostPanel({ solution, baseline }: { solution: Solution |
                 <Line k="Facility candidates" v={orMissing(s.n_candidates)} />
                 <Line k="Solve time" v={seconds(s.solve_seconds)} />
                 <Line k="Refineries built" v={`${nLarge} large, ${nSmall} small`} />
-            </div>
-            {s.portfolios && s.portfolios.length > 0 ? (
-                <div className="mt-1 space-y-1 text-xs">
-                    <div className="text-gray-600">Refinery portfolios ({s.portfolios.length})</div>
-                    {s.portfolios.map((p, i) => {
-                        const chosen = p.n_large === nLarge && p.n_small === nSmall;
-                        return (
-                            <div
-                                key={i}
-                                className={`rounded border px-1.5 py-0.5 ${chosen ? 'border-gray-800 bg-gray-100' : 'border-gray-200'}`}
-                            >
-                                <div className="flex justify-between gap-2">
-                                    <span className="font-bold">
-                                        {p.n_large}L + {p.n_small}S{chosen ? ' (chosen)' : ''}
-                                    </span>
-                                    <span>{portfolioStatus(p)}</span>
-                                </div>
-                                {p.reason ? (
-                                    <div className="text-gray-600">{p.reason}</div>
-                                ) : (
-                                    <div className="text-gray-700">
-                                        Primal {usd(p.primal)} · bound {usd(p.bound)} · gap{' '}
-                                        {pct(p.gap, 2)} · {seconds(p.solve_seconds)}
+            </Fold>
+
+            <Fold id="portfolios" title={<>Refinery portfolios ({s.portfolios?.length ?? MISSING})</>}>
+                {s.portfolios && s.portfolios.length > 0 ? (
+                    <div className="space-y-1.5">
+                        {s.portfolios.map((p, i) => {
+                            const chosen = p.n_large === nLarge && p.n_small === nSmall;
+                            return (
+                                <div
+                                    key={i}
+                                    className={`rounded-xl px-2.5 py-1 ${chosen ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-canvas'}`}
+                                >
+                                    <div className="flex justify-between gap-2">
+                                        <span className="font-semibold">
+                                            {p.n_large}L + {p.n_small}S{chosen ? ' (chosen)' : ''}
+                                        </span>
+                                        <span>{portfolioStatus(p)}</span>
                                     </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            ) : (
-                <div className="text-xs text-gray-600">Portfolios: {MISSING}</div>
-            )}
+                                    {p.reason ? (
+                                        <div className="text-ink2">{p.reason}</div>
+                                    ) : (
+                                        <div className="num text-ink3">
+                                            Primal {usd(p.primal)} · bound {usd(p.bound)} · gap {pct(p.gap, 2)} · {seconds(p.solve_seconds)}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="text-ink2">Portfolios: {MISSING}</div>
+                )}
+            </Fold>
         </div>
     );
 }
