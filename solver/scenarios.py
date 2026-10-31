@@ -36,6 +36,30 @@ STRESS_N = 20
 STRESS_TIME_LIMIT_S = 60
 SCHEMA_VERSION = 1
 
+# Our settings before the organisers' 12:45 update, kept as one labelled sensitivity run.
+# Demand is the earlier production-derived split at 15% of 6,800 kt.
+EARLIER_ASSUMPTIONS = {
+    "yield": 0.15,
+    "road_factor": 1.9,
+    "collection_policy": "all",
+    "capacity_basis": "saf_output",
+    "demand_kt": {"BPN": 569.16, "PNK": 323.34, "TRK": 76.5, "PKN": 51.0},
+}
+
+
+def official_base(parameters):
+    """Scenario fields fixed by the organisers' 12:45 update; empty when no parameters are loaded."""
+    if not parameters:
+        return {}
+    return {
+        "yield": parameters["yield"],
+        "road_factor": parameters["road_factor"],
+        "depot_retention": parameters["depot_retention"],
+        "collection_policy": parameters["collection_policy"],
+        "capacity_basis": parameters["capacity_basis"],
+        "demand_kt": dict(parameters["demand_kt"]),
+    }
+
 
 @dataclass(frozen=True)
 class RunSpec:
@@ -56,9 +80,7 @@ def tier_specs(tier, base_solution, sites):
         specs = [
             BASE,
             RunSpec("baseline", "baseline", "T1", kind="baseline"),
-            RunSpec("yield_16", "capacity_step", "T1", {"yield": 0.16}),
-            RunSpec("h5", "horizon", "T1", {"horizon_years": 5}),
-            RunSpec("h10", "horizon", "T1", {"horizon_years": 10}),
+            RunSpec("earlier_assumptions", "our_assumptions", "T1", EARLIER_ASSUMPTIONS),
         ]
         refineries = sensitivity.facilities_of(base_solution, "refinery") if base_solution else []
         specs += [
@@ -72,37 +94,33 @@ def tier_specs(tier, base_solution, sites):
         specs += [
             RunSpec(f"no_depot_{d}", "disruption", "T2", {"excluded_ids": [d]}) for d in depots[:TOP_DEPOTS]
         ]
-        specs.append(RunSpec("optional_y16", "collection", "T2", {"yield": 0.16, "collection_policy": "optional"}))
+        specs.append(RunSpec("collect_all", "collection", "T2", {"collection_policy": "all"}))
         return specs
     if tier == "T3":
         specs = [RunSpec(f"no_depot_{d}", "disruption", "T3", {"excluded_ids": [d]}) for d in depots[TOP_DEPOTS:]]
-        specs.append(RunSpec("biomass_input", "capacity_basis", "T3", {"capacity_basis": "biomass_input"}))
-        specs.append(RunSpec("wet_y6", "yield", "T3", {"yield": 0.06}))
+        specs.append(RunSpec("saf_output", "capacity_basis", "T3", {"capacity_basis": "saf_output"}))
         return specs
     raise ValueError(f"unknown tier {tier}")
 
 
-def stress_scenarios(seed, candidate_ids, shares, total_kt):
-    """20 random scenarios with a fixed seed, plus one deliberately infeasible case."""
+def stress_scenarios(seed, candidate_ids, demand_kt):
+    """20 random scenarios around the official base with a fixed seed, plus one deliberately infeasible case."""
     rng = random.Random(seed)
     out = []
     for n in range(STRESS_N):
-        y = round(rng.uniform(0.12, 0.19), 4)
+        scale = round(rng.uniform(0.5, 1.0), 3)
         payload = {
-            "yield": y,
-            "road_factor": rng.choice((1.4, 1.9, 2.3)),
-            "horizon_years": rng.choice((1, 5, 10)),
-            "collection_policy": rng.choice(("all", "optional")),
-            "capacity_basis": rng.choice(("saf_output", "biomass_input")),
+            "yield": round(rng.uniform(0.15, 0.25), 4),
+            "road_factor": rng.choice((1.3, 1.6, 1.9)),
+            "collection_policy": rng.choice(("optional", "all")),
+            "capacity_basis": rng.choice(("biomass_input", "saf_output")),
             "excluded_ids": sorted(rng.sample(list(candidate_ids), rng.randint(0, 3))),
+            "demand_kt": {a: round(d * scale, 3) for a, d in demand_kt.items()},
             "time_limit_s": STRESS_TIME_LIMIT_S,
         }
-        if rng.random() < 0.5:
-            scale = round(rng.uniform(0.3, 1.0), 3)
-            payload["demand_kt"] = {a: round(s * y * total_kt * scale, 3) for a, s in shares.items()}
         out.append((f"stress_{n:02d}", payload))
-    # Demand far above what any yield can make from 6,800 kt.
-    out.append(("stress_infeasible", {"demand_kt": {a: 1000.0 for a in shares}, "time_limit_s": STRESS_TIME_LIMIT_S}))
+    # 4,000 kt SAF needs 20,000 kt biomass at 20%: far above the 6,800 kt supply.
+    out.append(("stress_infeasible", {"demand_kt": {a: 1000.0 for a in demand_kt}, "time_limit_s": STRESS_TIME_LIMIT_S}))
     return out
 
 
@@ -147,6 +165,7 @@ class Runner:
         self.stub = stub
         self.clock = clock
         self.log = log
+        self.base_overrides = official_base(getattr(inputs, "parameters", None))
         self.bundle = load_bundle(self.out)
         self.bundle.setdefault("runs", {})
         self.table = []  # (tier, family, slug, outcome)
@@ -167,7 +186,7 @@ class Runner:
             self.table.append((spec.tier, spec.family, spec.slug, "resumed"))
             return self.bundle["runs"][spec.slug]
         started = time.monotonic()
-        scenario, solution, report = self._solve(spec.kind, dict(spec.overrides))
+        scenario, solution, report = self._solve(spec.kind, {**self.base_overrides, **spec.overrides})
         if not report.get("passed"):
             self.table.append((spec.tier, spec.family, spec.slug, "audit_failed"))
             self.log(f"  {spec.slug}: audit failed, not written: {report.get('failures')}")
@@ -185,6 +204,7 @@ class Runner:
             "precomputed": True,
             "stub": self.stub,
             "overrides": dict(spec.overrides),
+            "base": "official_12_45" if self.base_overrides else "contract_defaults",
             "scenario": as_dict(scenario),
             "solution": solution,
         }
@@ -201,11 +221,11 @@ class Runner:
             return done
         sites = self.inputs.sites
         candidates = list(sites.loc[sites["is_candidate"], "site_id"])
-        shares = dict(zip(self.inputs.airports["iata"], self.inputs.airports["demand_share"]))
-        total_kt = float(sites["kt"].sum())
+        demand = self.base_overrides.get("demand_kt") or dict(
+            zip(self.inputs.airports["iata"], self.inputs.airports["demand_kt"]))
         rows = []
-        for slug, payload in stress_scenarios(seed, candidates, shares, total_kt):
-            _, solution, report = self._solve("resolve", payload)
+        for slug, payload in stress_scenarios(seed, candidates, demand):
+            _, solution, report = self._solve("resolve", {**self.base_overrides, **payload})
             row = {
                 "slug": slug,
                 "status": solution.get("status"),

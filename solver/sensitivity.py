@@ -9,8 +9,10 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-YIELDS = (0.13, 0.15, 0.1598, 0.16, 0.17, 0.19)
-ROAD_FACTORS = (1.4, 1.9, 2.3)
+# Around the official 0.20 yield ("15-25% for biomass-to-jet routes") and 1.3 road factor,
+# up to the 1.9 we measured on OSRM.
+YIELDS = (0.15, 0.175, 0.20, 0.225, 0.25)
+ROAD_FACTORS = (1.3, 1.6, 1.9)
 LOST_DISTRICTS = ("Ketapang", "Kutai Kartanegara")
 BULUNGAN = ("KAL_SUP_18", "KAL_SUP_70")
 SOLVED = ("optimal", "best_found", "heuristic")

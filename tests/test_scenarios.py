@@ -13,15 +13,15 @@ from solver.scenarios import BASE, RunSpec, Runner, run_all, tier_specs
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def fake_inputs(data_hash="h1"):
+def fake_inputs(data_hash="h1", parameters=None):
     sites = pd.DataFrame({
         "site_id": ["S1", "S2", "S3", "S4", "S5"],
         "district": ["Ketapang", "Ketapang", "Kutai Kartanegara", "Paser", "Ketapang"],
         "kt": [100.0, 100.0, 100.0, 100.0, 100.0],
         "is_candidate": [True, True, True, True, False],
     })
-    airports = pd.DataFrame({"iata": ["PNK", "PKN", "BPN", "TRK"], "demand_share": [0.317, 0.05, 0.558, 0.075]})
-    return SimpleNamespace(sites=sites, airports=airports, data_hash=data_hash)
+    airports = pd.DataFrame({"iata": ["PNK", "PKN", "BPN", "TRK"], "demand_kt": [300.0] * 4, "demand_share": [0.25] * 4})
+    return SimpleNamespace(sites=sites, airports=airports, data_hash=data_hash, parameters=parameters)
 
 
 def fake_solution(status="optimal", refineries=(("S3", "large"),), depots=(("S1", 300.0), ("S2", 200.0))):
@@ -54,11 +54,11 @@ def test_tier_order_and_removals_follow_base(tmp_path):
     run_all(runner, stress=False)
     slugs = [slug for _, _, slug, _ in runner.table]
     tiers = [tier for tier, _, _, _ in runner.table]
-    assert slugs[:5] == ["base", "baseline", "yield_16", "h5", "h10"]
+    assert slugs[:3] == ["base", "baseline", "earlier_assumptions"]
     assert "no_refinery_S3" in slugs
     assert tiers == sorted(tiers, key=scenarios.TIERS.index)
-    assert slugs.index("no_depot_S1") < slugs.index("biomass_input")
-    assert slugs[-1] == "wet_y6"
+    assert slugs.index("no_depot_S1") < slugs.index("saf_output")
+    assert slugs[-1] == "saf_output"
 
 
 def test_time_cut_drops_last_tier_only(tmp_path):
@@ -66,17 +66,17 @@ def test_time_cut_drops_last_tier_only(tmp_path):
     run_all(runner, tiers=("T1", "T2"), stress=False)
     tiers = {tier for tier, _, _, _ in runner.table}
     assert tiers == {"T1", "T2"}
-    assert "wet_y6" not in runner.bundle["runs"]
+    assert "saf_output" not in runner.bundle["runs"]
 
 
 def test_t2_grid_and_district_lost(tmp_path):
     specs = tier_specs("T2", fake_solution(), fake_inputs().sites)
     slugs = [s.slug for s in specs]
-    assert sum(s.family == "sensitivity" for s in specs) == 18
-    assert "sweep_y1598_rf19" in slugs
+    assert sum(s.family == "sensitivity" for s in specs) == 15
+    assert "sweep_y2000_rf13" in slugs
     lost = {s.slug: s.overrides["excluded_ids"] for s in specs if s.family == "district_lost"}
     assert lost == {"district_lost_ketapang": ["S1", "S2"], "district_lost_kutai_kartanegara": ["S3"]}
-    assert slugs[-1] == "optional_y16"
+    assert slugs[-1] == "collect_all"
 
 
 def test_top_depots_split_between_t2_and_t3():
@@ -90,15 +90,15 @@ def test_top_depots_split_between_t2_and_t3():
 
 def test_failed_audit_is_not_written(tmp_path):
     def audit(scenario, solution):
-        ok = scenario.get("horizon_years") != 5
+        ok = scenario.get("yield") != 0.15
         return {"passed": ok, "max_residuals": {}, "failures": [] if ok else ["cost"]}
 
     runner = make_runner(tmp_path, audit_fn=audit)
     run_all(runner, tiers=("T1",), stress=False)
     stored = json.loads((tmp_path / "bundle.json").read_text())
-    assert "h5" not in stored["runs"]
-    assert ("T1", "horizon", "h5", "audit_failed") in runner.table
-    assert stored["runs"]["h10"]["solution"]["validation"]["passed"] is True
+    assert "earlier_assumptions" not in stored["runs"]
+    assert ("T1", "our_assumptions", "earlier_assumptions", "audit_failed") in runner.table
+    assert stored["runs"]["base"]["solution"]["validation"]["passed"] is True
 
 
 def test_infeasible_is_stored(tmp_path):
@@ -153,7 +153,7 @@ def test_stress_counts_and_infeasible_case(tmp_path):
 
 
 def test_stress_scenarios_are_seeded():
-    args = (2026, ["S1", "S2", "S3", "S4"], {"BPN": 0.6, "PNK": 0.4}, 6800.0)
+    args = (2026, ["S1", "S2", "S3", "S4"], {"BPN": 300.0, "PNK": 300.0})
     assert scenarios.stress_scenarios(*args) == scenarios.stress_scenarios(*args)
     assert len(scenarios.stress_scenarios(*args)) == 21
 
@@ -215,3 +215,33 @@ def test_stub_refuses_output_under_web(tmp_path):
     )
     assert result.returncode != 0
     assert "outside web/" in result.stderr
+
+
+OFFICIAL = {"yield": 0.20, "road_factor": 1.3, "depot_retention": 1.0, "collection_policy": "optional",
+            "capacity_basis": "biomass_input", "demand_kt": {a: 300.0 for a in ("PNK", "PKN", "BPN", "TRK")}}
+
+
+def test_official_base_is_merged_into_every_run(tmp_path):
+    runner = make_runner(tmp_path, inputs=fake_inputs(parameters=OFFICIAL))
+    run_all(runner, tiers=("T1",), stress=False)
+    runs = runner.bundle["runs"]
+    assert runs["base"]["scenario"] == scenarios.official_base(OFFICIAL)
+    assert runs["base"]["base"] == "official_12_45"
+    earlier = runs["earlier_assumptions"]["scenario"]
+    assert (earlier["yield"], earlier["road_factor"], earlier["collection_policy"]) == (0.15, 1.9, "all")
+    assert runs["no_refinery_S3"]["scenario"]["yield"] == 0.20
+    assert runs["no_refinery_S3"]["scenario"]["excluded_ids"] == ["S3"]
+
+
+def test_stress_runs_on_official_base(tmp_path):
+    seen = []
+
+    def resolve(scenario):
+        seen.append(scenario)
+        return fake_solution()
+
+    runner = make_runner(tmp_path, resolve_fn=resolve, inputs=fake_inputs(parameters=OFFICIAL))
+    runner.stress()
+    assert len(seen) == 21
+    assert all(s["depot_retention"] == 1.0 for s in seen)
+    assert seen[-1]["demand_kt"] == {a: 1000.0 for a in ("PNK", "PKN", "BPN", "TRK")}
