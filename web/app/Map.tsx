@@ -3,13 +3,13 @@
 // Client-only map. Load it with dynamic(() => import('./Map'), { ssr: false }).
 // Every marker and line comes from the run data; nothing is hard-coded except site coordinates
 // (sites.json, from data/raw) and the offline land layer (borneo.json).
-import { Fragment, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import L from 'leaflet';
-import { CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Marker, Pane, Polyline, Popup, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
 import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
-import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
+import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd } from '../lib/format';
 import { roadPath, type LatLon } from '../lib/routes';
 import { legMaxima, legWidth, sceneFromProgress, sceneFromSolution } from '../lib/scene';
 import { isSolving, useSolveProgress, useSolving, type LiveNode, type SolveFeed } from '../lib/solveProgress';
@@ -32,6 +32,15 @@ export interface MapProps {
     bandFor?: (siteId: string) => Band | null;
     /** The solver's progress: during a live run the map draws what the solver has found so far. */
     feed: SolveFeed;
+    /** Corner for the zoom +/- buttons. Default 'topleft' (Leaflet's own control). */
+    zoomPosition?: L.ControlPosition;
+    /** Space popups keep clear of at the top left, for overlays drawn over the map (e.g. the Explorer's layers panel). */
+    popupPaddingTopLeft?: [number, number];
+    /** Static thumbnail: no popups, no pan or zoom, no controls; any click calls onPreviewClick. */
+    preview?: boolean;
+    onPreviewClick?: () => void;
+    /** Called when the empty map is clicked, so the app can drop its selection (and the dimming). */
+    onClearSelection?: () => void;
 }
 
 const ESRI_ATTRIBUTION = 'Tiles &copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, &copy; OpenStreetMap contributors';
@@ -96,59 +105,108 @@ function flowPaths(f: Flow): { solid: LatLon[] | null; dashed: LatLon[][] } {
 }
 
 // Required wherever the imagery shows (CC BY-NC-SA 4.0). The year follows LAYER in scripts/make-site-images.mjs.
-const SITE_IMAGE_CREDIT = 'EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2025)';
+// The credit is kept to one line in the popup; the link goes to the full EOxCloudless attribution page.
+const SITE_IMAGE_CREDIT = 'EOxCloudless 2025, EOX IT Services, contains modified Copernicus Sentinel data';
 
-// Keeps tall image popups clear of the zoom control, which stacks above them.
+// Keeps popups clear of the zoom control, which stacks above them.
 const IMAGE_POPUP_PADDING: [number, number] = [56, 8];
 
 // Fixed size so Leaflet places the popup correctly before the image loads. Relative src: the fallback runs from file://.
 function SiteImage({ siteId }: { siteId: string }) {
     return (
-        <figure style={{ margin: '0 0 8px', width: 280 }}>
-            <div style={{ position: 'relative', height: 150, borderRadius: 8, overflow: 'hidden', background: '#e8e8ed' }}>
-                <img src={`sites/${siteId}.jpg`} alt={`Satellite view centred on ${siteId}`} width={280} height={150} style={{ display: 'block' }} />
+        <figure style={{ margin: '6px 0 0', width: 220 }}>
+            <div style={{ position: 'relative', height: 110, borderRadius: 6, overflow: 'hidden', background: '#e8e8ed' }}>
+                <img src={`sites/${siteId}.jpg`} alt={`Satellite view centred on ${siteId}`} width={220} height={110} style={{ display: 'block', objectFit: 'cover' }} />
                 <div
                     style={{
                         position: 'absolute',
                         top: '50%',
                         left: '50%',
-                        width: 14,
-                        height: 14,
-                        marginTop: -7,
-                        marginLeft: -7,
+                        width: 12,
+                        height: 12,
+                        marginTop: -6,
+                        marginLeft: -6,
                         border: '2px solid #ffffff',
                         borderRadius: '50%',
                         boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
                     }}
                 />
             </div>
-            <figcaption style={{ marginTop: 4, fontSize: 12, lineHeight: 1.3, color: '#6e6e73' }}>
-                Satellite view at the site&apos;s coordinates, 5.6 km wide. Not a site photo. {SITE_IMAGE_CREDIT}
+            <figcaption style={{ marginTop: 3, fontSize: 10.5, lineHeight: 1.3, color: '#6e6e73' }}>
+                Satellite view, 5.6 km wide. Not a site photo.{' '}
+                <a href="https://cloudless.eox.at" target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>
+                    {SITE_IMAGE_CREDIT}
+                </a>
+                .
             </figcaption>
         </figure>
     );
 }
 
-function PopupRows({ title, rows, imageSiteId }: { title: string; rows: [string, string][]; imageSiteId?: string }) {
+// Title and rows come first so they are visible in a small map; the image follows.
+function PopupRows({ title, subtitle, rows, imageSiteId }: { title: string; subtitle?: string; rows: [string, ReactNode][]; imageSiteId?: string }) {
     return (
-        <div style={{ fontSize: 16, lineHeight: 1.4, minWidth: 230, color: '#1d1d1f' }}>
-            <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: '-0.01em', marginBottom: 6, paddingRight: 22 }}>{title}</div>
-            {imageSiteId && <SiteImage siteId={imageSiteId} />}
-            <table style={{ borderCollapse: 'collapse' }}>
+        <div style={{ fontSize: 13, lineHeight: 1.35, minWidth: 200, color: '#1d1d1f' }}>
+            <div style={{ fontWeight: 600, fontSize: 14, letterSpacing: '-0.01em', paddingRight: 20 }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 11.5, color: '#6e6e73', marginBottom: 4 }}>{subtitle}</div>}
+            <table style={{ borderCollapse: 'collapse', marginTop: subtitle ? 0 : 4 }}>
                 <tbody>
                     {rows.map(([k, v]) => (
                         <tr key={k}>
-                            <td style={{ padding: '1px 12px 1px 0', color: '#6e6e73', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{k}</td>
+                            <td style={{ padding: '1px 10px 1px 0', color: '#6e6e73', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{k}</td>
                             <td style={{ padding: '1px 0', fontVariantNumeric: 'tabular-nums' }}>{v}</td>
                         </tr>
                     ))}
                 </tbody>
             </table>
+            {imageSiteId && <SiteImage siteId={imageSiteId} />}
         </div>
     );
 }
 
+/** The preview click and the empty-map click, on the map itself. Closing a popup keeps the selection: the
+ * Explorer's inspector shows it. Clicking empty map is the deliberate deselect. */
+function MapEvents({ preview, onPreviewClick, onClearSelection }: { preview: boolean; onPreviewClick?: () => void; onClearSelection?: () => void }) {
+    useMapEvents({
+        click: () => (preview ? onPreviewClick?.() : onClearSelection?.()),
+    });
+    return null;
+}
+
+/** Reset-view button under the zoom buttons: auto-pan can leave the map displaced. */
+function FitControl({ position }: { position: L.ControlPosition }) {
+    const map = useMap();
+    useEffect(() => {
+        const Fit = L.Control.extend({
+            onAdd() {
+                const bar = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+                const a = L.DomUtil.create('a', '', bar) as HTMLAnchorElement;
+                a.href = '#';
+                a.title = 'Fit network';
+                a.setAttribute('role', 'button');
+                a.setAttribute('aria-label', 'Fit network');
+                a.innerHTML = '&#8962;';
+                L.DomEvent.disableClickPropagation(bar);
+                L.DomEvent.on(a, 'click', (e) => {
+                    L.DomEvent.preventDefault(e);
+                    map.fitBounds(KALIMANTAN_BOUNDS);
+                });
+                return bar;
+            },
+        });
+        const c = new Fit({ position });
+        c.addTo(map);
+        return () => {
+            c.remove();
+        };
+    }, [map, position]);
+    return null;
+}
+
 const NO_AIRPORTS: LiveNode[] = [];
+
+const isBarge = (f: Flow) => f.from === 'TRK' || f.to === 'TRK';
+const BARGE_MODE = 'Barge (Tarakan is an island; trucks cannot reach it)';
 
 /** The animated layer, on its own so the solver's events repaint this and not every marker. */
 function LiveFlows({ feed, solution, sites, resting, highlight, onSettled }: {
@@ -169,8 +227,11 @@ function LiveFlows({ feed, solution, sites, resting, highlight, onSettled }: {
     return <FlowLayer scene={scene} resting={resting} highlight={highlight} settleId={solving ? null : solution} onSettled={onSettled} colors={LEG_COLOR} />;
 }
 
-export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, bandFor, feed }: MapProps) {
-    const renderer = useMemo(() => L.canvas({ padding: 0.5, tolerance: 6 }), []);
+export default function SafMap({ solution, sites, highlight, onSelectFlow, onSelectNode, bandFor, feed, zoomPosition = 'topleft', popupPaddingTopLeft = IMAGE_POPUP_PADDING, preview = false, onPreviewClick, onClearSelection }: MapProps) {
+    // Leaflet reads zoomControl once, at creation; each page passes a fixed corner, so that is enough.
+    const defaultZoom = zoomPosition === 'topleft';
+    const POPUP_PROPS = { maxWidth: 260, maxHeight: 260, autoPanPaddingTopLeft: popupPaddingTopLeft };
+    const renderer = useMemo(() => L.canvas({ padding: 0.5, tolerance: 10 }), []);
     const flows = useMemo(() => solution?.flows ?? [], [solution]);
     const facilities = useMemo(() => solution?.facilities ?? [], [solution]);
     const solving = useSolving(feed);
@@ -203,12 +264,16 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
         return m;
     }, [flows]);
 
+    // Preview: nothing is interactive, so the map's own click event catches every click.
+    const live = !preview;
     const maxKt = useMemo(() => legMaxima(flows), [flows]);
     const widthOf = (f: Flow) => legWidth(f.leg, f.kt, maxKt[f.leg]);
 
     const facilityIds = new Set(facilities.map((f) => f.site_id));
     const excluded = solution?.scenario?.excluded_ids ?? [];
     const strandedIds = new Set((solution?.stranded ?? []).map((s) => s.site_id));
+    const strandedKt = new Map((solution?.stranded ?? []).map((s) => [s.site_id, s.kt]));
+    const strandedWhy = new Map((solution?.stranded ?? []).map((s) => [s.site_id, s.reason]));
     const siteById = useMemo(() => new Map(sites.map((s) => [s.id, s])), [sites]);
 
     // Airports come from the run's refinery→airport flow ends: the contract has no airport list.
@@ -241,8 +306,19 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
             zoomSnap={0.25}
             preferCanvas
             renderer={renderer}
+            zoomControl={defaultZoom && !preview}
+            className={preview ? 'saf-preview' : undefined}
+            dragging={!preview}
+            scrollWheelZoom={!preview}
+            doubleClickZoom={!preview}
+            boxZoom={!preview}
+            keyboard={!preview}
+            touchZoom={!preview}
             style={{ height: '100%', width: '100%', background: SEA }}
         >
+            {!defaultZoom && !preview && <ZoomControl position={zoomPosition} />}
+            {!preview && <FitControl position={zoomPosition} />}
+            <MapEvents preview={preview} onPreviewClick={onPreviewClick} onClearSelection={onClearSelection} />
             {/* The only basemap: Esri World Street Map, free with roads built in, no API key. Attribution always shown. */}
             <TileLayer
                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
@@ -287,28 +363,33 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                             opacity: d ? 0.15 : 0.9,
                             lineCap: 'round',
                             lineJoin: 'round',
-                            dashArray: solid ? undefined : '6 6',
+                            dashArray: solid ? undefined : isBarge(f) ? '2 6' : '6 6',
                         }}
+                        interactive={live}
+                        bubblingMouseEvents={false}
                         eventHandlers={{ click: () => onSelectFlow?.(f, i) }}
                     >
-                        <Popup>
-                            <PopupRows
-                                title={`${LEG_LABEL[f.leg]}`}
-                                rows={[
-                                    ['From', f.from_label ?? f.from],
-                                    ['To', f.to_label ?? f.to],
-                                    [f.commodity === 'saf' ? 'SAF kt/year' : 'kt/year', kt(f.kt, 2)],
-                                    isOsrmLeg(f)
-                                        ? ['Distance', `OSRM road (car) ${km(f.road_km ?? f.km)}, costed ${km(f.km)}`]
-                                        : ['Distance', `${km(f.hav_km)} × ${f.road_factor} = ${km(f.km)}`],
-                                    ...(!isOsrmLeg(f) && typeof f.road_km === 'number'
-                                        ? ([['OSRM road (car)', `${km(f.road_km)}, reference only`]] as [string, string][])
-                                        : []),
-                                    ['Rate', `$${f.rate_usd_per_t_km}/t/km`],
-                                    ['Cost/year', usdExact(f.cost_usd)],
-                                ]}
-                            />
-                        </Popup>
+                        {live && (
+                            <Popup {...POPUP_PROPS}>
+                                <PopupRows
+                                    title={`${LEG_LABEL[f.leg]}`}
+                                    rows={[
+                                        ...(isBarge(f) ? ([['Mode', BARGE_MODE]] as [string, string][]) : []),
+                                        ['From', f.from_label ?? f.from],
+                                        ['To', f.to_label ?? f.to],
+                                        [f.commodity === 'saf' ? 'SAF kt/year' : 'kt/year', kt(f.kt, 1)],
+                                        isOsrmLeg(f)
+                                            ? ['Distance', `OSRM road (car) ${km(f.road_km ?? f.km)}, costed ${km(f.km)}`]
+                                            : ['Distance', `${km(f.hav_km)} × ${f.road_factor} = ${km(f.km)}`],
+                                        ...(!isOsrmLeg(f) && !isBarge(f) && typeof f.road_km === 'number'
+                                            ? ([['OSRM road (car)', `${km(f.road_km)}, reference only`]] as [string, string][])
+                                            : []),
+                                        ['Rate', `$${f.rate_usd_per_t_km}/t/km`],
+                                        ['Cost/year', <span title={`$${Math.round(f.cost_usd).toLocaleString('en-US')}`}>{usd(f.cost_usd)}</span>],
+                                    ]}
+                                />
+                            </Popup>
+                        )}
                     </Polyline>
                     </Fragment>
                 );
@@ -331,21 +412,27 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                             fillOpacity: s.sea ? (d ? 0.4 : 1) : d ? 0.25 : 0.9,
                             opacity: d ? 0.3 : 1,
                         }}
+                        interactive={live}
+                        bubblingMouseEvents={false}
                         eventHandlers={{ click: () => onSelectNode?.(s.id) }}
                     >
-                        <Popup autoPanPaddingTopLeft={IMAGE_POPUP_PADDING}>
-                            <PopupRows
-                                title={s.label}
-                                imageSiteId={s.id}
-                                rows={[
-                                    ['Site ID', s.id],
-                                    ['Availability', kt(s.kt, 2)],
-                                    ['Quantity used', solution ? kt(used, 2) : MISSING],
-                                    ...(strandedIds.has(s.id) ? ([['Stranded', 'Not collected in this run']] as [string, string][]) : []),
-                                    ...(s.sea ? ([['Note', 'Offshore, not a facility candidate']] as [string, string][]) : []),
-                                ]}
-                            />
-                        </Popup>
+                        {live && (
+                            <Popup {...POPUP_PROPS}>
+                                <PopupRows
+                                    title={s.label}
+                                    subtitle={`Biomass supply site · ${s.id}`}
+                                    imageSiteId={s.id}
+                                    rows={[
+                                        ['Availability', kt(s.kt, 1)],
+                                        ['Quantity used', solution ? kt(used, 1) : MISSING],
+                                        ...(strandedIds.has(s.id)
+                                            ? ([['Stranded', `${kt(strandedKt.get(s.id), 1)} not collected${strandedWhy.get(s.id) ? `: ${strandedWhy.get(s.id)}` : ''}`]] as [string, string][])
+                                            : []),
+                                        ...(s.sea ? ([['Note', 'Offshore, not a facility candidate']] as [string, string][]) : []),
+                                    ]}
+                                />
+                            </Popup>
+                        )}
                     </CircleMarker>
                 );
             })}
@@ -366,25 +453,16 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                     );
                 })}
 
-            {/* Stranded supply: hollow red ring. */}
+            {/* Stranded supply: hollow red ring. Not interactive, so it never covers the site marker's click;
+                the site popup carries the stranded row. */}
             {(solution?.stranded ?? []).map((s) => (
                 <CircleMarker
                     key={`stranded-${s.site_id}`}
                     center={[s.lat, s.lon]}
                     radius={9}
+                    interactive={false}
                     pathOptions={{ color: '#c0392b', weight: 2, fill: false, dashArray: '3 3' }}
-                    eventHandlers={{ click: () => onSelectNode?.(s.site_id) }}
-                >
-                    <Popup>
-                        <PopupRows
-                            title={s.label ?? s.site_id}
-                            rows={[
-                                ['Stranded', kt(s.kt, 2)],
-                                ['Reason', orMissing(s.reason)],
-                            ]}
-                        />
-                    </Popup>
-                </CircleMarker>
+                />
             ))}
 
             {/* Depots: amber circle, larger when large. */}
@@ -406,23 +484,27 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                                 fillOpacity: d ? 0.3 : 0.95,
                                 opacity: d ? 0.3 : 1,
                             }}
+                            interactive={live}
+                            bubblingMouseEvents={false}
                             eventHandlers={{ click: () => onSelectNode?.(f.site_id) }}
                         >
-                            <Popup autoPanPaddingTopLeft={IMAGE_POPUP_PADDING}>
-                                <PopupRows
-                                    title={`${f.size === 'large' ? 'Large' : 'Small'} depot`}
-                                    imageSiteId={siteIds.has(f.site_id) ? f.site_id : undefined}
-                                    rows={[
-                                        ['Site', f.label ?? f.site_id],
-                                        ['Capacity', kt(f.capacity_kt, 0)],
-                                        ['Throughput', kt(f.throughput_kt, 2)],
-                                        ['Utilisation', pct(f.utilisation)],
-                                        ['Inbound', `${kt(inKt, 2)} from ${(flowsIn.get(f.site_id) ?? []).filter((x) => x.leg === 'supply_depot').length} sites`],
-                                        ['Outbound', outFlows.map((x) => `${kt(x.kt, 2)} to ${x.to}`).join('; ') || MISSING],
-                                        ['CapEx', usd(f.capex_usd)],
-                                    ]}
-                                />
-                            </Popup>
+                            {live && (
+                                <Popup {...POPUP_PROPS}>
+                                    <PopupRows
+                                        title={f.label ?? f.site_id}
+                                        subtitle={`${f.size === 'large' ? 'Large' : 'Small'} depot · ${f.site_id}`}
+                                        imageSiteId={siteIds.has(f.site_id) ? f.site_id : undefined}
+                                        rows={[
+                                            ['Capacity', kt(f.capacity_kt, 1)],
+                                            ['Throughput', kt(f.throughput_kt, 1)],
+                                            ['Utilisation', pct(f.utilisation)],
+                                            ['Inbound', `${kt(inKt, 1)} from ${(flowsIn.get(f.site_id) ?? []).filter((x) => x.leg === 'supply_depot').length} sites`],
+                                            ['Outbound', outFlows.map((x) => `${kt(x.kt, 1)} to ${x.to_label ?? x.to}`).join('; ') || MISSING],
+                                            ['CapEx', usd(f.capex_usd)],
+                                        ]}
+                                    />
+                                </Popup>
+                            )}
                         </CircleMarker>
                     );
                 })}
@@ -437,22 +519,28 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                             key={`ref-${f.site_id}`}
                             position={[f.lat, f.lon]}
                             icon={refineryIcon(f.size, dim(f.site_id))}
+                            title={f.label ?? f.site_id}
+                            alt={`${f.size} refinery ${f.label ?? f.site_id}`}
+                            interactive={live}
+                            zIndexOffset={1000}
                             eventHandlers={{ click: () => onSelectNode?.(f.site_id) }}
                         >
-                            <Popup autoPanPaddingTopLeft={IMAGE_POPUP_PADDING}>
-                                <PopupRows
-                                    title={`${f.size === 'large' ? 'Large' : 'Small'} refinery`}
-                                    imageSiteId={siteIds.has(f.site_id) ? f.site_id : undefined}
-                                    rows={[
-                                        ['Site', f.label ?? f.site_id],
-                                        ['SAF output', kt(sum(links.map((x) => x.kt)) + sum((solution?.surplus ?? []).filter((s) => s.site_id === f.site_id).map((s) => s.kt)), 2)],
-                                        ['Capacity', `${kt(f.capacity_kt, 0)} (${orMissing(f.capacity_basis)})`],
-                                        ['Utilisation', pct(f.utilisation)],
-                                        ['Airport links', links.map((x) => `${x.to} ${kt(x.kt, 1)}`).join('; ') || MISSING],
-                                        ['CapEx', usd(f.capex_usd)],
-                                    ]}
-                                />
-                            </Popup>
+                            {live && (
+                                <Popup {...POPUP_PROPS}>
+                                    <PopupRows
+                                        title={f.label ?? f.site_id}
+                                        subtitle={`${f.size === 'large' ? 'Large' : 'Small'} refinery · ${f.site_id}`}
+                                        imageSiteId={siteIds.has(f.site_id) ? f.site_id : undefined}
+                                        rows={[
+                                            ['SAF output', kt(sum(links.map((x) => x.kt)) + sum((solution?.surplus ?? []).filter((s) => s.site_id === f.site_id).map((s) => s.kt)), 1)],
+                                            ['Capacity', `${kt(f.capacity_kt, 1)} (${orMissing(f.capacity_basis)})`],
+                                            ['Utilisation', pct(f.utilisation)],
+                                            ['Airport links', links.map((x) => `${x.to_label ?? x.to} ${kt(x.kt, 1)}`).join('; ') || MISSING],
+                                            ['CapEx', usd(f.capex_usd)],
+                                        ]}
+                                    />
+                                </Popup>
+                            )}
                         </Marker>
                     );
                 })}
@@ -465,18 +553,24 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                         key={`apt-${a.id}`}
                         position={[a.lat, a.lon]}
                         icon={AIRPORT_ICON}
+                        title={a.label ?? a.id}
+                        alt={`Airport ${a.label ?? a.id}`}
+                        interactive={live}
                         eventHandlers={{ click: () => onSelectNode?.(a.id) }}
                     >
-                        <Popup>
-                            <PopupRows
-                                title={a.label ?? a.id}
-                                rows={[
-                                    ['Demand', kt(demandOf(a.id), 1)],
-                                    ['Delivered', kt(sum(inbound.map((x) => x.kt)), 2)],
-                                    ['From refineries', inbound.map((x) => x.from_label ?? x.from).join('; ') || MISSING],
-                                ]}
-                            />
-                        </Popup>
+                        {live && (
+                            <Popup {...POPUP_PROPS}>
+                                <PopupRows
+                                    title={a.label ?? a.id}
+                                    subtitle={`Airport · ${a.id}`}
+                                    rows={[
+                                        ['Demand', kt(demandOf(a.id), 1)],
+                                        ['Delivered', kt(sum(inbound.map((x) => x.kt)), 1)],
+                                        ['From refineries', inbound.map((x) => x.from_label ?? x.from).join('; ') || MISSING],
+                                    ]}
+                                />
+                            </Popup>
+                        )}
                     </Marker>
                 );
             })}
@@ -486,16 +580,19 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                 const s = siteById.get(id);
                 if (!s || facilityIds.has(id)) return null;
                 return (
-                    <Marker key={`excl-${id}`} position={[s.lat, s.lon]} icon={EXCLUDED_ICON}>
-                        <Popup>
-                            <PopupRows
-                                title={`Excluded: ${s.label}`}
-                                rows={[
-                                    ['Why', 'Excluded in this scenario (excluded_ids): site unavailable at design stage'],
-                                    ['Still supplies', kt(s.kt, 2)],
-                                ]}
-                            />
-                        </Popup>
+                    <Marker key={`excl-${id}`} position={[s.lat, s.lon]} icon={EXCLUDED_ICON} title={`Excluded: ${s.label}`} alt={`Excluded site ${s.label}`} interactive={live}>
+                        {live && (
+                            <Popup {...POPUP_PROPS}>
+                                <PopupRows
+                                    title={s.label}
+                                    subtitle={`Excluded facility site · ${s.id}`}
+                                    rows={[
+                                        ['Why', 'Excluded in this scenario (excluded_ids): site unavailable at design stage'],
+                                        ['Still supplies', kt(s.kt, 1)],
+                                    ]}
+                                />
+                            </Popup>
+                        )}
                     </Marker>
                 );
             })}

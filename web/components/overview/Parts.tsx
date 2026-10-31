@@ -69,16 +69,34 @@ export function Tile({ tone, children, size = 'lg' }: { tone: 'blue' | 'green' |
     return <div className={`flex shrink-0 items-center justify-center ${s} ${t}`}>{children}</div>;
 }
 
-export function Kpi({ tone, icon, label, value, children }: { tone: 'blue' | 'green' | 'amber' | 'red' | 'orange' | 'violet'; icon: ReactNode; label: string; value: ReactNode; children?: ReactNode }) {
-    return (
-        <div className="flex min-w-0 items-center gap-3 rounded-xl border border-line bg-white p-4 shadow-sm">
+const focusRing = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+
+export function Kpi({ tone, icon, label, value, children, onClick, hint }: { tone: 'blue' | 'green' | 'amber' | 'red' | 'orange' | 'violet'; icon: ReactNode; label: string; value: ReactNode; children?: ReactNode; onClick?: () => void; hint?: string }) {
+    const body = (
+        <>
             <Tile tone={tone}>{icon}</Tile>
             <div className="min-w-0">
                 <div className="truncate text-[12.5px] text-muted">{label}</div>
                 <div className="num truncate text-[24px] font-bold leading-tight text-deep">{value}</div>
                 {children && <div className="mt-0.5 text-[12px] leading-snug text-muted">{children}</div>}
             </div>
-        </div>
+        </>
+    );
+    const cls = 'flex min-w-0 items-center gap-3 rounded-xl border border-line bg-white p-4 text-left shadow-sm';
+    if (!onClick) return <div className={cls} title={hint}>{body}</div>;
+    return (
+        <button type="button" onClick={onClick} title={hint} className={`${cls} transition hover:border-primary hover:bg-blue-50/40 hover:shadow-md ${focusRing}`}>
+            {body}
+        </button>
+    );
+}
+
+/** A row that reads as a link: whole row is a button with hover and focus styles. */
+export function RowButton({ onClick, hint, className = '', children }: { onClick: () => void; hint?: string; className?: string; children: ReactNode }) {
+    return (
+        <button type="button" onClick={onClick} title={hint} className={`-mx-2 flex w-[calc(100%+1rem)] rounded-lg px-2 py-1 text-left transition hover:bg-blue-50 ${focusRing} ${className}`}>
+            {children}
+        </button>
     );
 }
 
