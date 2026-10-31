@@ -25,6 +25,13 @@ import Trace from '../components/Trace';
 import Landing from '../components/Landing';
 import Explanation from '../components/Explanation';
 import { reducedMotion } from '../components/motion';
+import { AppProvider, PAGES as WORKSPACE_PAGES } from '../lib/store';
+import AppShell from '../components/layout/AppShell';
+import OverviewPage from '../components/pages/OverviewPage';
+import NetworkExplorerPage from '../components/pages/NetworkExplorerPage';
+import ScenarioPlannerPage from '../components/pages/ScenarioPlannerPage';
+import ResultsPage from '../components/pages/ResultsPage';
+import ReliabilityPage from '../components/pages/ReliabilityPage';
 import { FlaskConical, Receipt, ShieldCheck, SlidersHorizontal, Zap, type LucideIcon } from 'lucide-react';
 
 const SafMap = dynamic(() => import('./Map'), {
@@ -58,8 +65,26 @@ const onHash = (cb: () => void) => {
 export default function Page() {
     const hash = useSyncExternalStore(onHash, () => window.location.hash, () => null);
     if (hash === null) return <div className="min-h-screen bg-canvas" />;
-    return hash === '#planner' ? <Planner /> : <Landing />;
+    if (hash === '#planner') return <Planner />;
+    // Five-page workspace (#overview, #network, #scenarios, #results, #reliability, each with an optional /tab).
+    const page = hash.replace(/^#\/?/, '').split('/')[0];
+    if ((WORKSPACE_PAGES as readonly string[]).includes(page)) {
+        return (
+            <AppProvider>
+                <AppShell pages={WORKSPACE} />
+            </AppProvider>
+        );
+    }
+    return <Landing />;
 }
+
+const WORKSPACE = {
+    overview: OverviewPage,
+    network: NetworkExplorerPage,
+    scenarios: ScenarioPlannerPage,
+    results: ResultsPage,
+    reliability: ReliabilityPage,
+};
 
 function Planner() {
     const entry = baseEntry();

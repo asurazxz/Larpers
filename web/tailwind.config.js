@@ -58,6 +58,15 @@ module.exports = {
                 leg3: '#0ea5c6',
                 robust: '#0071e3',
                 fragile: '#e8710a',
+                navy: '#102A43',
+                primary: '#2563EB',
+                deep: '#0F172A',
+                muted: '#64748B',
+                app: '#F8FAFC',
+                line: '#E2E8F0',
+                success: '#16A34A',
+                warning: '#D97706',
+                danger: '#DC2626',
             },
             fontFamily: {
                 sans: [

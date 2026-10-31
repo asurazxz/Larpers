@@ -363,3 +363,32 @@ details[open] > :not(summary) {
     color: #94a3b8;
     cursor: not-allowed;
 }
+
+/* Five-page workspace (#overview, #network, #scenarios, #results, #reliability). Sized in px so the
+   workspace keeps 14px body text whatever the root font-size the landing and #planner screens set. */
+@layer components {
+    .chip {
+        @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-medium;
+    }
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    }
+    .btn-primary {
+        @apply btn bg-primary text-white hover:brightness-110;
+    }
+    .btn-secondary {
+        @apply btn border border-line bg-white text-deep hover:bg-slate-50;
+    }
+    .input {
+        @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-[14px] text-deep focus:border-primary focus:outline-none;
+    }
+    .tbl th {
+        @apply border-b border-line bg-slate-50 px-3 py-2 text-left text-[13px] font-medium text-muted;
+    }
+    .tbl td {
+        @apply border-b border-line px-3 py-2 text-[14px] text-deep;
+    }
+    .legacy {
+        font-size: 14px;
+    }
+}
