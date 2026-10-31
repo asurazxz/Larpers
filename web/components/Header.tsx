@@ -80,12 +80,12 @@ export default function Header({ solution, view, health, isLive }: HeaderProps) 
                 <div className="min-w-0">
                 <h1 className="flex items-baseline gap-3 text-[1.1rem] font-semibold leading-tight tracking-[-0.02em]">
                     <a
-                        href="#home"
+                        href="#overview"
                         id="home-link"
                         className="inline-flex shrink-0 items-center gap-1 rounded-full text-base font-medium text-[#5eead4] transition-opacity hover:opacity-80"
-                        title="Back to the front page"
+                        title="Back to the dashboard"
                     >
-                        <ArrowLeft size={16} strokeWidth={2.5} aria-hidden="true" /> Home
+                        <ArrowLeft size={16} strokeWidth={2.5} aria-hidden="true" /> Dashboard
                     </a>
                     <span>Kalimantan SAF Network Planner</span>
                 </h1>
