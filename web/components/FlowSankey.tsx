@@ -96,7 +96,7 @@ export default function FlowSankey({ solution, className = '' }: { solution: Sol
 
     const layout = useMemo(() => {
         if (w < 200 || h < 160 || graph.links.length === 0) return null;
-        const left = Math.min(200, w * 0.24);
+        const left = Math.min(240, w * 0.3);
         const right = Math.min(120, w * 0.14);
         const gen = sankey<N, L>()
             .nodeId((d) => d.id)
@@ -176,7 +176,7 @@ export default function FlowSankey({ solution, className = '' }: { solution: Sol
             {hover && (
                 <div
                     className="num pointer-events-none absolute z-10 whitespace-nowrap rounded-md border border-line bg-white px-2.5 py-1 text-base text-ink"
-                    style={{ left: Math.min(hover.x + 12, Math.max(0, w - 320)), top: hover.y + 14 }}
+                    style={{ left: hover.x, top: hover.y + 16, transform: hover.x > w / 2 ? 'translateX(calc(-100% - 8px))' : 'translateX(8px)' }}
                     role="status"
                 >
                     {hover.text}

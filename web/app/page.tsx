@@ -122,7 +122,7 @@ function Planner() {
                     className="relative h-[55vh] min-h-[320px] min-w-0 overflow-hidden rounded-card border border-line bg-white md:h-full md:min-h-0 md:flex-[3_1_0%]"
                     data-mode={mapMode}
                 >
-                    <div className="absolute right-3 top-3 z-[1001]">
+                    <div className="absolute right-3 top-3 z-[1003]">
                         <div className="seg bg-white" role="radiogroup" aria-label="Map or flow view">
                             {(['map', 'flows'] as const).map((m) => (
                                 <button
@@ -140,7 +140,7 @@ function Planner() {
                         </div>
                     </div>
                     {mapMode === 'flows' && (
-                        <div className="absolute inset-0 z-[1000] flex flex-col bg-white px-4 pb-3 pt-4">
+                        <div className="absolute inset-0 z-[1002] flex flex-col bg-white px-4 pb-3 pt-4">
                             <div className="pr-40 text-base text-ink2">
                                 <span className="font-semibold text-ink">Material flow, kt per year.</span> Biomass to the refineries, SAF to the airports; widths from this run&apos;s flows.
                             </div>
