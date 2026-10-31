@@ -67,6 +67,8 @@ const ORGANISER_YIELDS = [0.15, 0.2, 0.25];
 const ROAD_OPTIONS = [1.3, 1.9];
 
 const formFor = (sc: Scenario | undefined | null): ScenarioForm => formFromScenario(sc ?? ORGANISER_SCENARIO);
+/** Stored runs predate the 12:45 update, so the live form starts from the organisers' basis unless a live run is showing. */
+const seedForm = (sol: Solution | null, live: boolean): ScenarioForm => formFor(live ? sol?.scenario : null);
 
 function storedYields(): number[] {
     const out = [...ORGANISER_YIELDS];
@@ -149,7 +151,7 @@ function StoredRuns({ solution, isLive, onPick, name }: { solution: Solution | n
 
 export default function ScenarioPanel({ solution, health, isLive, setSolution, setView, onLiveRun, pickedNode }: ScenarioPanelProps) {
     const session = useSession();
-    const [form, setForm] = useState<ScenarioForm>(() => formFor(solution?.scenario));
+    const [form, setForm] = useState<ScenarioForm>(() => seedForm(solution, isLive));
     const yieldOptions = useMemo(storedYields, []);
     const [note, setNote] = useState<string | null>(null);
     const [pickMode, setPickMode] = useState(false);
@@ -169,13 +171,13 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
         }
     }, []);
 
-    // Default the inputs to the displayed run's echoed scenario whenever the displayed run changes.
+    // Re-seed the inputs whenever the displayed run changes: the live run's scenario, else the organisers' basis.
     useEffect(() => {
         const id = solution?.run_id ?? null;
         if (id === syncedRunId.current) return;
         syncedRunId.current = id;
-        setForm(formFor(solution?.scenario));
-    }, [solution]);
+        setForm(seedForm(solution, isLive));
+    }, [solution, isLive]);
 
     useEffect(() => {
         setCurrentForm(form);
@@ -260,7 +262,7 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
             )}
             {st.phase === 'error' && (
                 <div role="alert" className="rounded-xl bg-red-50 px-3 py-1.5 text-red-800">
-                    {st.message}
+                    {st.message?.replace(/^Solver API error 422: /, 'Solver refused: ')}
                 </div>
             )}
             {st.phase === 'auth' && (
