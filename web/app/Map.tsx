@@ -10,6 +10,7 @@ import type { FeatureCollection } from 'geojson';
 import borneo from '../data/borneo.json';
 import type { Facility, Flow, Leg, Site, Solution } from '../lib/contract';
 import { kt, km, LEG_LABEL, MISSING, orMissing, pct, usd, usdExact } from '../lib/format';
+import { isOsrmLeg } from '../lib/trace';
 import { BAND_COLOR, flowKey, type Band, type Basemap } from '../lib/view';
 
 export interface MapProps {
@@ -206,7 +207,12 @@ export default function SafMap({ solution, sites, highlight, onSelectFlow, onSel
                                     ['From', f.from_label ?? f.from],
                                     ['To', f.to_label ?? f.to],
                                     [f.commodity === 'saf' ? 'SAF kt/year' : 'kt/year', kt(f.kt, 2)],
-                                    ['Distance', `${km(f.hav_km)} × ${f.road_factor} = ${km(f.km)}`],
+                                    isOsrmLeg(f)
+                                        ? ['Distance', `OSRM road (car) ${km(f.road_km ?? f.km)}, costed ${km(f.km)}`]
+                                        : ['Distance', `${km(f.hav_km)} × ${f.road_factor} = ${km(f.km)}`],
+                                    ...(!isOsrmLeg(f) && typeof f.road_km === 'number'
+                                        ? ([['OSRM road (car)', `${km(f.road_km)}, reference only`]] as [string, string][])
+                                        : []),
                                     ['Rate', `$${f.rate_usd_per_t_km}/t/km`],
                                     ['Cost/year', usdExact(f.cost_usd)],
                                 ]}

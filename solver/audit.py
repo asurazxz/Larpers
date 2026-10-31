@@ -96,6 +96,9 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
                 check("flow_metadata", getattr(flow, f"{side}_{coord}") - nodes[node_id][coord], context + f" {side}_{coord}")
         hav = float(inputs.hav_km[indices[flow.from_id], indices[flow.to]])
         km = hav * scenario.road_factor
+        if scenario.distance_basis == "osrm" and "TRK" not in (flow.from_id, flow.to):
+            km = max(float(inputs.road_km[indices[flow.from_id], indices[flow.to]]), hav)
+        require("distance", flow.distance_basis == scenario.distance_basis, context + " basis")
         check("distance", flow.hav_km - hav, context + " haversine")
         check("distance", flow.road_factor - scenario.road_factor, context + " factor")
         check("distance", flow.km - km, context + " model km")

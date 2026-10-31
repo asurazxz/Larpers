@@ -9,7 +9,8 @@ at the gate, costless; zD_j,s and zR_k,s binary; qD_j,s and qR_k,s >= 0 biomass 
 Minimise H * [ sum 0.10 CapEx z + 1000 sum v q + 1000 ( r1 sum d_ij P_i x_ij + r2 sum d_jk f_jk + r3 sum d_ka g_ka ) ],
 one year by default. 0.10 is CapEx / 20 years plus fixed OpEx of 5% of CapEx. v is variable OpEx per tonne in: depot $5/$4,
 refinery $60/$55 (small/large). d = haversine km * road factor, rates r = 0.10, 0.12, 0.08 USD/t/km; the Tarakan barge
-uses the same rate and distance rule.
+uses the same rate and distance rule. Under distance_basis "osrm", d = max(OSRM car road km, haversine km), except the
+Tarakan barge, which keeps haversine * road factor.
 
 Subject to:
     Collection        sum_j x_ij = 1 (all) or <= 1 (optional, the official default)
@@ -91,10 +92,18 @@ class Problem:
     ineligible: tuple[str, ...] = ()
 
 
+def leg_km(inputs, at, a, b, road_factor, basis) -> float:
+    """Costed km for one leg. OSRM snaps both ends to roads, so its km can fall below the straight line; never allow that."""
+    hav = float(inputs.hav_km[at[a], at[b]])
+    if basis == "osrm" and not NO_TRUCK_ACCESS & {a, b}:
+        return max(float(inputs.road_km[at[a], at[b]]), hav)
+    return hav * road_factor
+
+
 def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem:
     s = scenario.model_dump(by_alias=True)
     at = {n: i for i, n in enumerate(inputs.node_ids.tolist())}
-    hav, road_factor = inputs.hav_km, s["road_factor"]
+    hav = inputs.hav_km
     supply = dict(zip(inputs.sites.site_id.tolist(), inputs.sites.kt.tolist()))
     airports = inputs.airports.iata.tolist()
     excluded = set(s["excluded_ids"])
@@ -109,7 +118,7 @@ def build_problem(scenario: Scenario, inputs, candidates, rates=RATE) -> Problem
         demand = {a: AIRPORT_DEMAND_KT for a in airports}
     else:
         demand = {a: float(s["demand_kt"][a]) for a in airports}
-    km = lambda a, b: float(hav[at[a], at[b]]) * road_factor
+    km = lambda a, b: leg_km(inputs, at, a, b, s["road_factor"], s["distance_basis"])
     return Problem(
         supply=supply,
         depots=depots,
@@ -428,7 +437,7 @@ def _report(scenario, inputs, p: Problem, flows: dict) -> dict:
 
     def add(leg, n, commodity, a, b, kt):
         hav, road_factor = float(inputs.hav_km[at[a], at[b]]), s["road_factor"]
-        km, road = hav * road_factor, float(inputs.road_km[at[a], at[b]])
+        km, road = leg_km(inputs, at, a, b, road_factor, s["distance_basis"]), float(inputs.road_km[at[a], at[b]])
         rows.append({
             "leg": leg, "commodity": commodity, "from": a, "to": b,
             "from_lat": nodes[a]["lat"], "from_lon": nodes[a]["lon"],
@@ -437,7 +446,7 @@ def _report(scenario, inputs, p: Problem, flows: dict) -> dict:
             "kt": kt, "hav_km": hav, "road_factor": road_factor, "km": km,
             "rate_usd_per_t_km": p.rates[n], "cost_usd": kt * 1000 * p.rates[n] * km,
             "truck_t": TRUCK_T[n], "trips": math.ceil(kt * 1000 / TRUCK_T[n]),
-            "road_km": road if math.isfinite(road) else None,
+            "road_km": road if math.isfinite(road) else None, "distance_basis": s["distance_basis"],
         })
 
     collected = defaultdict(float)
@@ -529,6 +538,7 @@ def main() -> None:
     parser.add_argument("--horizon", type=float, default=1)
     parser.add_argument("--yield", dest="yield_", type=float, default=0.20)
     parser.add_argument("--road-factor", type=float, default=1.3)
+    parser.add_argument("--distance-basis", choices=("factor", "osrm"), default="factor")
     parser.add_argument("--time-limit", type=float, default=Scenario.model_fields["time_limit_s"].default)
     parser.add_argument("--haul-limit-km", type=float, default=HAUL_HAV_KM)
     parser.add_argument("--refinery-candidates", help="comma-separated ids; default is the frozen shortlist")
@@ -537,7 +547,7 @@ def main() -> None:
     scenario = Scenario.model_validate({"yield": args.yield_, "road_factor": args.road_factor,
                                         "horizon_years": args.horizon, "time_limit_s": args.time_limit,
                                         "collection_policy": "optional", "capacity_basis": "biomass_input",
-                                        "haul_limit_km": args.haul_limit_km,
+                                        "haul_limit_km": args.haul_limit_km, "distance_basis": args.distance_basis,
                                         "refinery_candidates": args.refinery_candidates and args.refinery_candidates.split(","),
                                         "depot_candidates": args.depot_candidates and args.depot_candidates.split(",")})
     solution = resolve(scenario)

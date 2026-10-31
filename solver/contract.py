@@ -32,6 +32,8 @@ class Scenario(ContractModel):
     yield_fraction: Finite = Field(default=0.20, alias="yield", gt=0, le=1)
     depot_retention: Finite = Field(default=1.0, gt=0, le=1)
     road_factor: Finite = Field(default=1.3, ge=1)
+    # "factor": haversine x road_factor (official). "osrm": OSRM car road km, never below haversine; TRK barge stays on factor.
+    distance_basis: Literal["factor", "osrm"] = "factor"
     horizon_years: Finite = Field(default=1, ge=1)
     collection_policy: Literal["all", "optional"] = "optional"
     capacity_basis: Literal["saf_output", "biomass_input"] = "biomass_input"
@@ -64,6 +66,8 @@ class Scenario(ContractModel):
         # Settings left at their defaults stay out, so stored runs keep their hash.
         if self.haul_limit_km == HAUL_HAV_KM:
             del fields["haul_limit_km"]
+        if self.distance_basis == "factor":
+            del fields["distance_basis"]
         for name in ("refinery_candidates", "depot_candidates"):
             if fields[name] is None:
                 del fields[name]
@@ -120,6 +124,7 @@ class Flow(ContractModel):
     truck_t: Literal[9, 30, 32]
     trips: int
     road_km: Finite | None = None
+    distance_basis: Literal["factor", "osrm"] = "factor"
 
 
 class Stranded(ContractModel):

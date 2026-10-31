@@ -24,14 +24,14 @@ def test_defaults_keep_the_base_case():
 
 def test_default_scenarios_keep_their_hash_so_stored_runs_stay_valid():
     payload = Scenario().model_dump(mode="json", by_alias=True)
-    for field in ("haul_limit_km", "refinery_candidates", "depot_candidates"):
+    for field in ("haul_limit_km", "refinery_candidates", "depot_candidates", "distance_basis"):
         payload.pop(field)
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
     assert Scenario().scenario_hash() == hashlib.sha256(blob.encode()).hexdigest()
 
 
 @pytest.mark.parametrize("change", [{"haul_limit_km": 300.0}, {"refinery_candidates": ["BPN"]},
-                                    {"depot_candidates": ["KAL_SUP_01"]}])
+                                    {"depot_candidates": ["KAL_SUP_01"]}, {"distance_basis": "osrm"}])
 def test_a_changed_setting_changes_the_hash(change):
     assert Scenario(**change).scenario_hash() != Scenario().scenario_hash()
 
@@ -130,3 +130,44 @@ def test_time_limit_can_exceed_the_old_90_second_cap(monkeypatch):
 @pytest.mark.parametrize("cores, plan", [(15, (5, 7)), (8, (4, 2)), (2, (1, 2)), (1, (1, 2))])
 def test_worker_plan_fits_the_machine(cores, plan):
     assert worker_plan(cores) == plan
+
+
+def test_osrm_basis_costs_legs_on_road_km_not_the_factor():
+    inputs = line([60.0, 60.0], spacing=100.0)
+    factor = build_problem(official(), inputs, [B], RATE)
+    osrm = build_problem(official(distance_basis="osrm"), inputs, [B], RATE)
+    assert factor.supply_km[(A, B)] == pytest.approx(100.0 * 1.3)
+    assert osrm.supply_km[(A, B)] == pytest.approx(100.0 * 1.9)
+
+
+def test_osrm_km_is_never_below_the_straight_line_and_tarakan_stays_on_the_factor():
+    inputs = line([60.0, 60.0], spacing=100.0)
+    inputs.road_km = inputs.hav_km * 0.5
+    osrm = build_problem(official(distance_basis="osrm"), inputs, [B], RATE)
+    assert osrm.supply_km[(A, B)] == pytest.approx(100.0)
+    inputs.road_km = inputs.hav_km * 5.0
+    osrm = build_problem(official(distance_basis="osrm"), inputs, [A], RATE)
+    assert osrm.airport_km[(A, "TRK")] == pytest.approx(100.0 * 1.3)
+    assert osrm.airport_km[(A, "BPN")] == pytest.approx(100.0 * 5.0)
+
+
+def test_osrm_basis_solves_passes_the_audit_and_catches_a_tampered_km():
+    inputs = line([60.0, 60.0], spacing=100.0)
+    scenario = official(demand_kt=demand(BPN=20.0), distance_basis="osrm", excluded_ids=[A])
+    solution = resolve(scenario, inputs=inputs, candidates=[B])
+    assert solution.status == "optimal"
+    assert all(f.distance_basis == "osrm" for f in solution.flows)
+    assert audit(scenario, solution, inputs=inputs).passed
+    moving = next(f for f in solution.flows if f.km > 0)
+    moving.km = moving.hav_km * scenario.road_factor
+    report = audit(scenario, solution, inputs=inputs)
+    assert not report.passed
+    assert any(f.startswith("distance") for f in report.failures)
+
+
+def test_baseline_follows_the_osrm_basis():
+    inputs = line([60.0, 60.0], spacing=100.0)
+    scenario = official(demand_kt=demand(BPN=20.0), distance_basis="osrm")
+    result = baseline(scenario, inputs=inputs)
+    moving = [f for f in result.flows if f.km > 0]
+    assert moving and all(f.km == pytest.approx(f.hav_km * 1.9) for f in moving)
