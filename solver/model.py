@@ -52,6 +52,7 @@ THREADS = 2
 WORKERS = max(1, min(8, (os.cpu_count() or 2) // THREADS))
 EPS = 1e-9
 RESOLVED = {"proven", "infeasible", "skipped_capacity", "skipped_capex", "dominated"}
+MIX_STATUS = {"proven": "optimal", "infeasible": "infeasible", "best_found": "best_found"}
 
 
 @dataclass(frozen=True)
@@ -303,11 +304,20 @@ def _nodes(inputs) -> dict[str, dict]:
     return nodes
 
 
+def portfolio_row(mix: dict) -> dict:
+    """One `portfolios[]` row: the contract's status, with the raw engine state kept in `reason`."""
+    return {"n_large": mix["n_large"], "n_small": mix["n_small"], "capex_usd": mix["capex_usd"],
+            "status": MIX_STATUS.get(mix["state"], "skipped"), "primal": mix["primal"], "bound": mix["bound"],
+            "gap": mix["gap"], "solve_seconds": mix["seconds"] or 0, "reason": mix["state"]}
+
+
 def _empty_solution(scenario, inputs, n_candidates, started, reason, portfolios=()) -> Solution:
     return Solution.model_validate({
-        "run_id": uuid.uuid4().hex, "source": "solved", "data_hash": inputs.data_hash,
+        "run_id": uuid.uuid4().hex, "source": "live", "data_hash": inputs.data_hash,
         "scenario_hash": scenario.scenario_hash(), "status": "infeasible", "status_reason": reason,
-        "n_candidates": n_candidates, "solve_seconds": time.monotonic() - started, "portfolios": list(portfolios),
+        "primal": None, "bound": None, "gap": None, "n_candidates": n_candidates,
+        "solve_seconds": time.monotonic() - started, "facilities": [], "flows": [], "stranded": [], "surplus": [],
+        "capex_usd": 0.0, "logistics_annual_usd": 0.0, "total_horizon_usd": 0.0, "portfolios": list(portfolios),
     })
 
 
@@ -328,7 +338,7 @@ def _report(scenario, inputs, p: Problem, flows: dict) -> dict:
             "from_label": nodes[a]["label"], "to_label": nodes[b]["label"],
             "kt": kt, "hav_km": hav, "road_factor": road_factor, "km": km,
             "rate_usd_per_t_km": p.rates[n], "cost_usd": kt * 1000 * p.rates[n] * km,
-            "truck_t": TRUCK_T[n], "trips": math.ceil(kt * 1000 / TRUCK_T[n] - EPS),
+            "truck_t": TRUCK_T[n], "trips": math.ceil(kt * 1000 / TRUCK_T[n]),
             "road_km": road if math.isfinite(road) else None,
         })
 
@@ -361,7 +371,7 @@ def _report(scenario, inputs, p: Problem, flows: dict) -> dict:
     stranded = [{"site_id": i, **nodes[i], "kt": kt - collected[i],
                  "reason": "not needed for demand" if i in served else "no depot in range"}
                 for i, kt in p.supply.items() if kt - collected[i] > 1e-6]
-    surplus = [{"site_id": k, **nodes[k], "kt": kt} for k, kt in flows["e"]]
+    surplus = [{"site_id": k, "kt": kt} for k, kt in flows["e"]]
     capex = sum(row["capex_usd"] for row in facilities)
     logistics = sum(row["cost_usd"] for row in rows)
     total = capex + p.horizon * logistics
@@ -380,8 +390,7 @@ def resolve(scenario: Scenario, inputs=None, candidates=None, rates=RATE) -> Sol
 
     budget = min(scenario.time_limit_s, MAX_SOLVE_S)
     mixes = run_portfolio(p, budget * 0.9)
-    public = ("n_large", "n_small", "capex_usd", "state", "primal", "bound", "gap", "seconds")
-    portfolios = [{key: mix.get(key) for key in public} for mix in mixes]
+    portfolios = [portfolio_row(mix) for mix in mixes]
     found = [mix for mix in mixes if mix["primal"] is not None]
     if not found:
         unresolved = any(mix["state"] not in RESOLVED for mix in mixes)
@@ -401,7 +410,7 @@ def resolve(scenario: Scenario, inputs=None, candidates=None, rates=RATE) -> Sol
     gap = 0.0 if proven else (primal - bound) / primal
     label = f"Optimal among {n} candidates" if proven else f"Best found, gap {gap:.2%}"
     return Solution.model_validate({
-        "run_id": uuid.uuid4().hex, "source": "solved", "data_hash": inputs.data_hash,
+        "run_id": uuid.uuid4().hex, "source": "live", "data_hash": inputs.data_hash,
         "scenario_hash": scenario.scenario_hash(), "status": "optimal" if proven else "best_found",
         "status_reason": label, "bound": bound, "gap": gap, "n_candidates": n,
         "solve_seconds": time.monotonic() - started, "opex": "not_provided", "portfolios": portfolios, **report,
@@ -418,11 +427,11 @@ def main() -> None:
     scenario = Scenario.model_validate({"yield": args.yield_, "road_factor": args.road_factor,
                                         "horizon_years": args.horizon, "time_limit_s": args.time_limit})
     solution = resolve(scenario)
-    for mix in solution.portfolios:
+    for mix in solution.model_dump(by_alias=True)["portfolios"]:
         primal = "-" if mix["primal"] is None else f"${mix['primal'] / 1e6:,.1f}M"
         lower = "-" if mix["bound"] is None else f"${mix['bound'] / 1e6:,.1f}M"
         print(f"  L{mix['n_large']:>2} S{mix['n_small']:>2}  capex ${mix['capex_usd'] / 1e6:>7,.0f}M  "
-              f"{mix['state']:<17} primal {primal:>11}  bound {lower:>11}")
+              f"{mix['reason']:<17} primal {primal:>11}  bound {lower:>11}")
     print(f"status     {solution.status} ({solution.status_reason})")
     print(f"objective  {solution.primal}")
     print(f"gap        {solution.gap}")
