@@ -1,7 +1,9 @@
 """API boundary checks using real signatures and a local JWKS-client substitute."""
 
 import importlib
+import json
 import ssl
+import threading
 import time
 from types import SimpleNamespace
 
@@ -364,3 +366,126 @@ def test_validate_still_audits_a_scenario_the_precheck_would_refuse(api_client, 
     response = client.post("/api/validate", json={"scenario": scenario.model_dump(by_alias=True),
                                                   "solution": solution.model_dump(by_alias=True)})
     assert response.status_code == 200
+
+
+def stream_lines(response):
+    return [json.loads(line) for line in response.text.splitlines()]
+
+
+def test_stream_requires_a_session(api_client):
+    client, _ = api_client
+    assert client.post("/api/solve/stream", json={}).status_code == 401
+
+
+def test_stream_rejects_a_bad_scenario_before_streaming(api_client, signer):
+    client, _ = api_client
+    response = client.post("/api/solve/stream", json={"yield": 0}, headers={"Authorization": "Bearer "+signer()})
+    assert response.status_code == 422
+
+
+def test_stream_refuses_infeasible_input_before_any_solve(api_client, signer, monkeypatch):
+    from api import main
+
+    def must_not_run(*args, **kwargs):
+        raise AssertionError("no solve should start")
+
+    monkeypatch.setattr(main, "resolve", must_not_run)
+    monkeypatch.setattr(main, "precheck", lambda scenario, inputs: "Demand exceeds supply")
+    client, _ = api_client
+    response = client.post("/api/solve/stream", json={}, headers={"Authorization": "Bearer "+signer()})
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Demand exceeds supply"
+
+
+def test_stream_refuses_a_run_when_the_solver_is_full(api_client, signer, monkeypatch):
+    from api import main
+
+    def must_not_run(*args, **kwargs):
+        raise AssertionError("no solve should start")
+
+    monkeypatch.setattr(main, "resolve", must_not_run)
+    monkeypatch.setattr(main, "live_solves", threading.BoundedSemaphore(1))
+    assert main.live_solves.acquire(blocking=False)
+    client, _ = api_client
+    response = client.post("/api/solve/stream", json={}, headers={"Authorization": "Bearer "+signer()})
+    assert response.status_code == 429
+    assert response.json()["run_id"]
+
+
+@pytest.mark.parametrize("outcome", ["finishes", "fails", "cancelled"])
+def test_stream_gives_its_slot_back_however_the_run_ends(api_client, signer, monkeypatch, outcome):
+    from api import main
+    client, inputs = api_client
+
+    def run(scenario, on_event, stop):
+        if outcome == "fails":
+            raise RuntimeError("boom")
+        if outcome == "cancelled":
+            raise main.SolveCancelled
+        return baseline(scenario, inputs=inputs)
+
+    monkeypatch.setattr(main, "resolve", run)
+    monkeypatch.setattr(main, "live_solves", threading.BoundedSemaphore(1))
+    headers = {"Authorization": "Bearer "+signer()}
+    for _ in range(3):
+        assert client.post("/api/solve/stream", json={}, headers=headers).status_code == 200
+
+
+def test_stream_ends_in_the_same_audited_result_as_solve(api_client, signer, monkeypatch):
+    from api import main
+    client, inputs = api_client
+
+    def fake(scenario, on_event, stop):
+        on_event({"type": "start", "candidates": []})
+        on_event({"type": "incumbent", "primal": 1.0, "depots": [], "refineries": [], "flows": []})
+        return baseline(scenario, inputs=inputs)
+
+    monkeypatch.setattr(main, "resolve", fake)
+    headers = {"Authorization": "Bearer "+signer()}
+    response = client.post("/api/solve/stream", json={}, headers=headers)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    events = stream_lines(response)
+    assert [e["type"] for e in events] == ["start", "incumbent", "phase", "result"]
+    assert all(e["t"] >= 0 for e in events)
+    solution = events[-1]["solution"]
+    assert solution["run_id"] == response.headers["X-Run-ID"]
+    assert solution["validation"]["failures"] != ["Not audited"]
+
+
+def test_stream_reports_failure_without_the_diagnostic(api_client, signer, monkeypatch):
+    from api import main
+
+    def fail(scenario, on_event, stop):
+        raise RuntimeError("internal-only solver diagnostic")
+
+    monkeypatch.setattr(main, "resolve", fail)
+    client, _ = api_client
+    response = client.post("/api/solve/stream", json={}, headers={"Authorization": "Bearer "+signer()})
+    assert response.status_code == 200
+    assert "internal-only" not in response.text
+    last = stream_lines(response)[-1]
+    assert last["type"] == "error"
+    assert last["run_id"] == response.headers["X-Run-ID"]
+
+
+def test_stream_stays_quiet_when_a_run_is_cancelled(api_client, signer, monkeypatch):
+    from api import main
+
+    def cancelled(scenario, on_event, stop):
+        raise main.SolveCancelled
+
+    monkeypatch.setattr(main, "resolve", cancelled)
+    client, _ = api_client
+    response = client.post("/api/solve/stream", json={}, headers={"Authorization": "Bearer "+signer()})
+    assert response.status_code == 200
+    assert response.text == ""
+
+
+def test_stream_uses_the_labelled_fixture_when_the_solver_is_missing(api_client, signer, monkeypatch):
+    from api import main, stub_resolve
+    monkeypatch.setattr(main, "resolve", stub_resolve.resolve)
+    monkeypatch.setattr(main, "SOLVER_AVAILABLE", False)
+    client, _ = api_client
+    response = client.post("/api/solve/stream", json={}, headers={"Authorization": "Bearer "+signer()})
+    assert stream_lines(response)[-1]["solution"]["source"] == "fixture"

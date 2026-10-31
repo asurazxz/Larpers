@@ -4,19 +4,23 @@
 
 /* Designed for 1280x720 in a lit room: light theme, minimum 18px text. System fonts only (file:// offline). */
 html {
-    font-size: 16px;
+    font-size: 18px;
 }
 
 /* Projector (1920x1080): scale the rem-based type up a step. */
-
+@media (min-width: 1600px) and (min-height: 960px) {
+    html {
+        font-size: 20px;
+    }
+}
 
 html,
 body {
     height: 100%;
     margin: 0;
-    background: #f8fafc;
-    color: #0f172a;
-    font-family: Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI Variable', 'Segoe UI', Inter,
+    background: #eef2f6;
+    color: #0b1f33;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI Variable', 'Segoe UI', Inter,
         system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -25,43 +29,34 @@ body {
 }
 
 :focus-visible {
-    outline: 3px solid rgba(0, 113, 227, 0.6);
+    outline: 3px solid rgba(20, 184, 166, 0.65);
     outline-offset: 2px;
     border-radius: 8px;
 }
 
 input[type='radio'],
 input[type='checkbox'] {
-    accent-color: #0071e3;
+    accent-color: #0f766e;
 }
 
 @layer components {
-    .chip {
-        @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-medium;
-    }
-    .btn {
-        @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
-    }
-    .btn-primary {
-        @apply btn bg-primary text-white hover:bg-blue-700;
-    }
-    .btn-secondary {
-        @apply btn border border-line bg-white text-deep hover:bg-slate-50;
-    }
-    .input {
-        @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-deep focus:border-primary focus:outline-none;
-    }
-    .tbl th {
-        @apply border-b border-line bg-slate-50 px-3 py-2 text-left text-[13px] font-medium text-muted;
-    }
-    .tbl td {
-        @apply border-b border-line px-3 py-2 text-sm text-deep;
-    }
-    .legacy {
-        font-size: 14px;
-    }
     .card {
-        @apply rounded-card bg-white shadow-card;
+        @apply rounded-card border border-hairline bg-white shadow-card;
+    }
+    .card-head {
+        @apply flex items-center gap-2.5;
+    }
+    .card-icon {
+        @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-brand-mint to-[#e0f2fe] text-accent;
+    }
+    .tile {
+        @apply relative overflow-hidden rounded-[14px] border border-hairline bg-gradient-to-b from-white to-[#f7fafc] px-3.5 py-2.5 shadow-tile;
+    }
+    .tile-icon {
+        @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px];
+    }
+    .badge {
+        @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-base font-semibold leading-snug;
     }
     .eyebrow {
         @apply text-base font-medium text-ink2;
@@ -83,37 +78,38 @@ input[type='checkbox'] {
     }
     /* Segmented control: grey track, white thumb on the selected item. */
     .seg {
-        @apply inline-flex flex-wrap items-stretch gap-0.5 rounded-[11px] bg-track p-[3px];
+        @apply inline-flex flex-wrap items-stretch gap-0.5 rounded-[12px] border border-hairline bg-track p-[3px] shadow-[inset_0_1px_2px_rgba(11,31,51,0.06)];
     }
     .seg-btn {
-        @apply rounded-[8px] px-3 py-[3px] text-base leading-snug text-ink transition-colors duration-150;
+        @apply rounded-[9px] px-3 py-[3px] text-base font-medium leading-snug text-ink3 transition-colors duration-150;
     }
     .seg-btn:hover:not(:disabled):not([aria-checked='true']) {
-        background: rgba(255, 255, 255, 0.55);
+        background: rgba(255, 255, 255, 0.6);
+        color: #0b1f33;
     }
     .seg-btn[aria-checked='true'] {
-        @apply bg-white font-semibold shadow-thumb;
+        @apply bg-white font-semibold text-brand-ink shadow-thumb ring-1 ring-hairline;
     }
     .pill {
         @apply inline-flex items-center justify-center gap-1.5 rounded-full border border-transparent px-4 py-1 text-base font-medium leading-snug transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50;
     }
     .pill-primary {
-        @apply pill bg-accent text-white hover:bg-[#0077ed];
+        @apply pill bg-gradient-to-b from-[#14a38f] to-accent text-white shadow-tile hover:from-accent hover:to-[#115e59];
     }
     .pill-secondary {
-        @apply pill bg-track text-ink hover:bg-[#dcdce1];
+        @apply pill border-hairline bg-white text-ink shadow-thumb hover:bg-[#f3f6f9];
     }
     .pill-link {
-        @apply pill bg-transparent px-2 text-accent hover:bg-blue-50;
+        @apply pill bg-transparent px-2 text-accent hover:bg-brand-mint/60;
     }
     .field {
-        @apply w-full rounded-[10px] border border-gray-300 bg-white px-2.5 py-1 text-base text-ink transition-colors duration-150 focus:border-accent;
+        @apply w-full rounded-[10px] border border-[#cfd8e3] bg-white px-2.5 py-1 text-base text-ink shadow-[0_1px_1px_rgba(11,31,51,0.04)] transition-colors duration-150 hover:border-[#9fb0c3] focus:border-accent;
     }
     .hair-t {
-        border-top: 1px solid rgba(0, 0, 0, 0.08);
+        border-top: 1px solid rgba(11, 31, 51, 0.09);
     }
     .hair-b {
-        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        border-bottom: 1px solid rgba(11, 31, 51, 0.09);
     }
 }
 
@@ -131,8 +127,8 @@ details > summary::before {
     width: 0.45em;
     height: 0.45em;
     margin: 0 0.6em 0.12em 0.1em;
-    border-right: 2px solid #86868b;
-    border-bottom: 2px solid #86868b;
+    border-right: 2px solid #0f766e;
+    border-bottom: 2px solid #0f766e;
     transform: rotate(-45deg);
     transition: transform 150ms ease;
 }
@@ -143,20 +139,21 @@ details[open] > summary::before {
 /* Thin, quiet scrollbars. */
 #right-column {
     scrollbar-width: thin;
-    scrollbar-color: #d2d2d7 transparent;
+    scrollbar-color: #c3cfdb transparent;
 }
 
 /* ---- Leaflet, restyled ---- */
 .leaflet-container {
     font: inherit;
-    background: #fbfbfd;
+    background: #f4f8fb;
 }
 
 .leaflet-bar {
     border: none !important;
     border-radius: 12px !important;
     overflow: hidden;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12) !important;
+    border: 1px solid rgba(11, 31, 51, 0.1) !important;
+    box-shadow: 0 6px 18px -6px rgba(11, 31, 51, 0.3) !important;
 }
 .leaflet-bar a,
 .leaflet-bar a:hover {
@@ -165,13 +162,14 @@ details[open] > summary::before {
     line-height: 36px !important;
     font-size: 20px !important;
     font-weight: 400;
-    color: #1d1d1f !important;
-    background: rgba(255, 255, 255, 0.9) !important;
+    color: #0b1f33 !important;
+    background: rgba(255, 255, 255, 0.94) !important;
     backdrop-filter: saturate(180%) blur(12px);
     border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 .leaflet-bar a:hover {
-    background: #ffffff !important;
+    background: #ecfdf8 !important;
+    color: #0f766e !important;
 }
 .leaflet-bar a:last-child {
     border-bottom: none !important;
@@ -210,6 +208,98 @@ details[open] > summary::before {
     background: #e8e8ed;
 }
 
+/* ---- Motion ---- */
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes sink {
+    to {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.985);
+    }
+}
+@keyframes live-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(15, 118, 110, 0.5);
+    }
+    100% {
+        box-shadow: 0 0 0 7px rgba(15, 118, 110, 0);
+    }
+}
+@keyframes mix-pulse {
+    50% {
+        opacity: 0.45;
+    }
+}
+@keyframes result-glow {
+    0% {
+        box-shadow: inset 0 0 0 2px rgba(15, 118, 110, 0.6), inset 0 0 26px rgba(15, 118, 110, 0.1);
+    }
+    100% {
+        box-shadow: inset 0 0 0 2px rgba(15, 118, 110, 0), inset 0 0 26px rgba(15, 118, 110, 0);
+    }
+}
+
+.rise,
+#run-status-block > *,
+#disrupt-result,
+details[open] > :not(summary) {
+    animation: rise 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.solve-panel {
+    animation: rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.solve-panel-out {
+    animation: sink 240ms ease-in both;
+}
+.result-in {
+    animation: result-glow 1100ms ease-out both;
+}
+.pill {
+    transition-property: color, background-color, border-color, transform;
+}
+.pill:active:not(:disabled) {
+    transform: scale(0.965);
+}
+.live-dot {
+    width: 9px;
+    height: 9px;
+    flex: none;
+    border-radius: 50%;
+    background: #0f766e;
+    animation: live-pulse 1.3s ease-out infinite;
+}
+.mix-cell {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    transition: background-color 280ms ease;
+}
+.mix-running {
+    animation: mix-pulse 900ms ease-in-out infinite;
+}
+.mix-leader {
+    outline: 1.5px solid #0b1f33;
+    outline-offset: 0.5px;
+}
+.flow-fx {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+}
+.flow-fx-zooming {
+    opacity: 0;
+}
+
 /* DivIcon wrappers: no default white box. */
 .saf-airport,
 .saf-refinery,
@@ -226,5 +316,79 @@ details[open] > summary::before {
         animation-duration: 0ms !important;
         animation-iteration-count: 1 !important;
         scroll-behavior: auto !important;
+    }
+}
+
+/* Larpers custom select (Radix): above the map and header layers. */
+.lp-select-content {
+    z-index: 3000;
+    min-width: var(--radix-select-trigger-width);
+    max-height: var(--radix-select-content-available-height);
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid rgba(11, 31, 51, 0.12);
+    background: #ffffff;
+    box-shadow: 0 18px 40px -12px rgba(11, 31, 51, 0.35), 0 2px 6px rgba(11, 31, 51, 0.08);
+}
+.lp-select-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.6rem 0.3rem 2rem;
+    position: relative;
+    border-radius: 8px;
+    font-size: 1rem;
+    line-height: 1.35;
+    color: #0b1f33;
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+}
+.lp-select-item[data-highlighted] {
+    background: #ecfdf8;
+    color: #0f766e;
+}
+.lp-select-item[data-state='checked'] {
+    font-weight: 600;
+}
+/* Auth on the navy app bar. */
+#auth-slot > div {
+    color: #ffffff;
+}
+#auth-slot span.text-ink2 {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.lp-select-item[data-disabled] {
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+/* Five-page workspace (#overview, #network, #scenarios, #results, #reliability). Sized in px so the
+   workspace keeps 14px body text whatever the root font-size the landing and #planner screens set. */
+@layer components {
+    .chip {
+        @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-medium;
+    }
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    }
+    .btn-primary {
+        @apply btn bg-primary text-white hover:brightness-110;
+    }
+    .btn-secondary {
+        @apply btn border border-line bg-white text-deep hover:bg-slate-50;
+    }
+    .input {
+        @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-[14px] text-deep focus:border-primary focus:outline-none;
+    }
+    .tbl th {
+        @apply border-b border-line bg-slate-50 px-3 py-2 text-left text-[13px] font-medium text-muted;
+    }
+    .tbl td {
+        @apply border-b border-line px-3 py-2 text-[14px] text-deep;
+    }
+    .legacy {
+        font-size: 14px;
     }
 }

@@ -24,7 +24,7 @@ def test_defaults_keep_the_base_case():
 
 def test_default_scenarios_keep_their_hash_so_stored_runs_stay_valid():
     payload = Scenario().model_dump(mode="json", by_alias=True)
-    for field in ("haul_limit_km", "refinery_candidates", "depot_candidates"):
+    for field in ("haul_limit_km", "refinery_candidates", "depot_candidates", "parameters"):
         payload.pop(field)
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
     assert Scenario().scenario_hash() == hashlib.sha256(blob.encode()).hexdigest()

@@ -10,9 +10,10 @@ import { DEFAULT_VIEW, flowKey, type Basemap, type View } from './view';
 import { isLiveDisplayed, useSolverHealth, type LiveRun, type SolverHealth } from './useLive';
 import { baseSolution, disruptHighlight, robustness, siteBandFn, type RobustKind } from './robustness';
 import { storedBaselineFor } from '../components/CostPanel';
+import { createSolveFeed, type SolveFeed } from './solveProgress';
 import type { Band } from './view';
 
-export const PAGES = ['overview', 'network', 'planner', 'results', 'reliability'] as const;
+export const PAGES = ['overview', 'network', 'scenarios', 'results', 'reliability'] as const;
 export type PageKey = (typeof PAGES)[number];
 
 export interface SelectedFlow {
@@ -52,6 +53,8 @@ export interface AppState {
     /** True when the scenario form differs from the displayed run's inputs (set by the planner). */
     dirty: boolean;
     setDirty: (d: boolean) => void;
+    /** Live solve progress: the map draws what the solver has found so far during a run. */
+    feed: SolveFeed;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -91,6 +94,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [pickedNode, setPickedNode] = useState<{ id: string; seq: number } | null>(null);
     const [robustKind, setRobustKind] = useState<RobustKind>('off');
     const [dirty, setDirty] = useState(false);
+    const feed = useMemo(createSolveFeed, []);
 
     const selectFlow = useCallback((f: SelectedFlow | null) => {
         setSelectedFlow(f);
@@ -162,6 +166,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         bandFor,
         dirty,
         setDirty,
+        feed,
     };
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

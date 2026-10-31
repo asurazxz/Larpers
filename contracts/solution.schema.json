@@ -194,13 +194,9 @@
           "type": "number"
         },
         "truck_t": {
-          "enum": [
-            9,
-            30,
-            32
-          ],
+          "exclusiveMinimum": 0,
           "title": "Truck T",
-          "type": "integer"
+          "type": "number"
         },
         "trips": {
           "title": "Trips",

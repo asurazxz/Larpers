@@ -25,6 +25,7 @@ enabled.
 | `GET /api/data` | Public | Sites, airports, distance matrices, data hash, scenario defaults |
 | `GET /api/health` | Public | `ok`, `available`, solver/data availability, version and source |
 | `POST /api/solve` | Signed in | Scenario JSON → independently audited Solution |
+| `POST /api/solve/stream` | Signed in | Scenario JSON → NDJSON of the run as it happens, ending in the same audited Solution |
 | `POST /api/baseline` | Signed in | Scenario JSON → audited greedy Solution |
 | `POST /api/validate` | Public | `{ "scenario": ..., "solution": ... }` → flat AuditReport |
 
@@ -40,6 +41,18 @@ contract fixture. Health then reports `ok: false`, `available: false`, and
 `source: "fixture"`; returned solutions also remain labelled `fixture`. A fixture
 is not an audited network or a live solver result. Restart the API after the real
 solver becomes available.
+
+`POST /api/solve/stream` sends one JSON object per line, each with `type` and `t`
+(seconds since the start). `start` names the candidates and airports, `portfolio`
+lists every refinery mix, `mix` reports a mix starting or finishing, `incumbent`
+carries each improving network HiGHS finds with its facilities and flows, `bound`
+reports a mix's lower bound and search nodes, and `phase` marks the polish and audit
+steps. `tick` is a keepalive, sent after 2 s of silence. The last line is `result`,
+holding the audited Solution, or `error`. Progress lines carry `best`, `lower_bound`,
+`gap`, `settled`, `total` and `nodes` across the whole portfolio. Only `result` can
+say optimal. Closing the connection ends the solve and its workers. Two streams can
+run at once; a third gets a 429. Plain `POST /api/solve` is unchanged, and the
+frontend falls back to it on a 404 or 405.
 
 The default baseline is the approved single-assignment greedy network, with
 split depot/refinery and refinery/airport legs when capacity requires them. It
@@ -60,9 +73,24 @@ client. They do not need Supabase credentials, browser login, or network access.
 The pinned Starlette/HTTPX test stack currently emits an upstream deprecation
 warning; tests continue using the repository's declared dependencies.
 
+## Organiser values and overrides
+
+`Scenario.parameters` holds the organisers' values as defaults, and any of them can be overridden. Send only what changes, such as `{"parameters": {"depot_large_kt": 350}}`; every other value stays official. Unknown names and impossible values such as a zero capacity return `422`.
+
+| Group | Fields |
+|---|---|
+| Rates, USD/t/km | `rate_supply_depot`, `rate_depot_refinery`, `rate_refinery_airport` |
+| Trucks, t | `truck_supply_depot_t`, `truck_depot_refinery_t`, `truck_refinery_airport_t` |
+| Capacity, kt | `depot_small_kt`, `depot_large_kt`, `refinery_small_kt`, `refinery_large_kt` |
+| CapEx, USD | `depot_small_capex_usd`, `depot_large_capex_usd`, `refinery_small_capex_usd`, `refinery_large_capex_usd` |
+| Variable OpEx, USD/t in | `depot_small_var_usd_t`, `depot_large_var_usd_t`, `refinery_small_var_usd_t`, `refinery_large_var_usd_t` |
+| Annualisation | `capex_years`, `fixed_opex_share` |
+
+Yield, road factor, demand, collection, capacity basis and depot retention are already top-level `Scenario` fields, with organiser defaults. The model, audit and baseline all read the same values, and a run with overrides says "(custom parameters)" in `status_reason`.
+
 ## Our own settings
 
-The organisers fix yield, capacities, costs, rates, road factor and demand. These settings are ours, so `POST /api/solve`, `POST /api/baseline` and the audit accept them as optional `Scenario` fields:
+These settings did not come from the organisers. `POST /api/solve`, `POST /api/baseline` and the audit accept them as optional `Scenario` fields:
 
 | Field | Default | Meaning |
 |---|---|---|

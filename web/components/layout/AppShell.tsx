@@ -1,7 +1,7 @@
 'use client';
 
 // Shared application shell: navy sidebar, top bar, and the active workspace page.
-import { useState, type ComponentType } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import AuthButton from '../AuthButton';
 import { getCurrentForm } from '../../lib/useLive';
 import { useApp, type PageKey } from '../../lib/store';
@@ -15,7 +15,7 @@ import { IconBell, IconChart, IconCheckCircle, IconChevronDown, IconCollapse, Ic
 export const NAV: { key: PageKey; label: string; icon: ComponentType }[] = [
     { key: 'overview', label: 'Overview', icon: IconHome },
     { key: 'network', label: 'Network Explorer', icon: IconMap },
-    { key: 'planner', label: 'Scenario Planner', icon: IconSliders },
+    { key: 'scenarios', label: 'Scenario Planner', icon: IconSliders },
     { key: 'results', label: 'Results & Comparison', icon: IconChart },
     { key: 'reliability', label: 'Reliability & Audit', icon: IconShield },
 ];
@@ -138,7 +138,7 @@ function Notifications() {
     const { dirty, solverHealth, solution, go } = useApp();
     const [open, setOpen] = useState(false);
     const items: { text: string; action?: () => void }[] = [];
-    if (dirty) items.push({ text: 'Scenario inputs changed: the displayed results are outdated.', action: () => go('planner') });
+    if (dirty) items.push({ text: 'Scenario inputs changed: the displayed results are outdated.', action: () => go('scenarios') });
     if (solverHealth.state === 'down') items.push({ text: `Solver API offline: ${solverHealth.error ?? 'health check failed'}. Showing stored runs.` });
     if (solution && solution.validation?.passed === false) items.push({ text: 'Independent audit reported failures for this run.', action: () => go('reliability', 'solver') });
     if ((solution?.stranded.length ?? 0) > 0) items.push({ text: `${solution!.stranded.length} supply sites have stranded biomass.`, action: () => go('results', 'demand') });
@@ -229,6 +229,16 @@ export default function AppShell({ pages }: { pages: Record<PageKey, ComponentTy
     const { page } = useApp();
     const [collapsed, setCollapsed] = useState(false);
     const Page = pages[page];
+    // globals.css sizes the root for the landing and #planner projector screens (18-20px); the
+    // workspace is designed at a 16px root, so set it while mounted and restore it on the way out.
+    useEffect(() => {
+        const root = document.documentElement;
+        const prev = root.style.fontSize;
+        root.style.fontSize = '16px';
+        return () => {
+            root.style.fontSize = prev;
+        };
+    }, []);
     return (
         <div className="flex h-screen overflow-hidden bg-app text-deep">
             <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />

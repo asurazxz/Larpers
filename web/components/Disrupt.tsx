@@ -7,10 +7,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Facility, Scenario, Solution } from '../lib/contract';
 import { DEFAULT_SCENARIO } from '../lib/contract';
 import { getSolution } from '../lib/bundle';
-import { AuthRequiredError, health, liveEnabled, solve } from '../lib/api';
-import { signInWithGoogle } from '../lib/auth';
+import { AuthRequiredError, health, liveEnabled, solveStream } from '../lib/api';
+import { signInWithGoogle, useSession } from '../lib/auth';
+import { getCurrentForm } from '../lib/useLive';
 import { pct, statusLabel, usd } from '../lib/format';
+import { annualCost } from '../lib/annual';
 import { baseSolution, compareToBase, runIndex } from '../lib/robustness';
+import type { SolveFeed } from '../lib/solveProgress';
+import { RESULT_LINGER_MS } from '../lib/useLive';
 import { baseView, disruptView, liveDisruptSlug, type View } from '../lib/view';
 
 export interface DisruptProps {
@@ -21,6 +25,8 @@ export interface DisruptProps {
     onSelect: (view: View, solution: Solution | null) => void;
     /** Site clicked on the map; its row is focused in the list. */
     focusSiteId?: string | null;
+    /** Receives the solver's progress during a live re-solve. */
+    feed: SolveFeed;
 }
 
 /** Rows shown before the "more" fold. */
@@ -38,13 +44,14 @@ function signedPct(v: number | null): string {
     return v > 0 ? `+${pct(v, 2)}` : pct(v, 2);
 }
 
-export default function Disrupt({ view, solution, onSelect, focusSiteId }: DisruptProps) {
+export default function Disrupt({ view, solution, onSelect, focusSiteId, feed }: DisruptProps) {
     const idx = runIndex();
     const base = baseSolution();
     const [liveOk, setLiveOk] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [authNeeded, setAuthNeeded] = useState(false);
+    const session = useSession();
     const abortRef = useRef<AbortController | null>(null);
     const rowRefs = useRef(new Map<string, HTMLLIElement>());
     const [moreOpen, setMoreOpen] = useState(false);
@@ -100,6 +107,11 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
 
     const resolveLive = async (siteId: string) => {
         if (!base) return;
+        if (session.status === 'signed_out') {
+            setAuthNeeded(true);
+            setError('Sign in with Google to re-solve. The current run stays on screen.');
+            return;
+        }
         setBusy(siteId);
         setError(null);
         setAuthNeeded(false);
@@ -107,11 +119,14 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
         abortRef.current = ctrl;
         const baseScenario: Scenario = { ...DEFAULT_SCENARIO, ...(base.scenario ?? {}) };
         const excluded_ids = [...new Set([...(baseScenario.excluded_ids ?? []), siteId])];
+        feed.begin();
         try {
             const scenario = { ...baseScenario, excluded_ids };
-            const s = await solve(scenario, { signal: ctrl.signal });
+            const s = await solveStream(scenario, { signal: ctrl.signal, onEvent: feed.push });
+            feed.end(RESULT_LINGER_MS);
             onSelect(disruptView(liveDisruptSlug([siteId], s.run_id), [siteId], true), s.scenario ? s : { ...s, scenario });
         } catch (e) {
+            feed.end();
             if (e instanceof AuthRequiredError) {
                 setAuthNeeded(true);
                 setError(e.message);
@@ -139,6 +154,10 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
         });
         const infeasible = solution.status === 'infeasible';
         const cmp = base && !infeasible ? compareToBase(base, solution) : null;
+        const annualBase = base && cmp ? annualCost(base).total : null;
+        const annualNow = cmp ? annualCost(solution).total : null;
+        const annualDelta = annualBase !== null && annualNow !== null ? annualNow - annualBase : null;
+        const horizonLabel = cmp?.costField === 'total_horizon_usd' ? 'Total horizon cost' : 'Objective';
         result = (
             <div id="disrupt-result" className="mt-2.5 rounded-2xl bg-blue-50 px-4 py-3" data-status={solution.status}>
                 <div className="text-sm font-medium text-blue-800">
@@ -153,18 +172,40 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
                     </div>
                 ) : cmp ? (
                     <div className="mt-1.5 space-y-0.5" data-testid="disrupt-delta">
-                        <div className="flex justify-between gap-2">
-                            <span className="text-ink2">{cmp.costField === 'total_horizon_usd' ? 'Total horizon cost' : 'Objective'}</span>
-                            <span className="num">
-                                {usd(cmp.base)} → {usd(cmp.disrupted)}
-                            </span>
-                        </div>
-                        <div className="flex justify-between gap-2">
-                            <span className="text-ink2">Change against base</span>
-                            <span className={`num font-semibold ${cmp.delta !== null && cmp.delta > 0 ? 'text-orange-800' : 'text-blue-800'}`} data-testid="disrupt-delta-value">
-                                {signedUsd(cmp.delta)} ({signedPct(cmp.deltaFraction)})
-                            </span>
-                        </div>
+                        {annualDelta !== null ? (
+                            <>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-ink2">Total annual cost</span>
+                                    <span className="num">
+                                        {usd(annualBase)} → {usd(annualNow)}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-ink2">Change against base</span>
+                                    <span className={`num font-semibold ${annualDelta > 0 ? 'text-orange-800' : 'text-blue-800'}`} data-testid="disrupt-delta-value">
+                                        {signedUsd(annualDelta)}/yr ({signedPct(annualBase ? annualDelta / annualBase : null)})
+                                    </span>
+                                </div>
+                                <div className="text-sm text-ink3" data-testid="disrupt-delta-horizon">
+                                    {horizonLabel}: {usd(cmp.base)} → {usd(cmp.disrupted)} ({signedUsd(cmp.delta)})
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-ink2">{horizonLabel}</span>
+                                    <span className="num">
+                                        {usd(cmp.base)} → {usd(cmp.disrupted)}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between gap-2">
+                                    <span className="text-ink2">Change against base</span>
+                                    <span className={`num font-semibold ${cmp.delta !== null && cmp.delta > 0 ? 'text-orange-800' : 'text-blue-800'}`} data-testid="disrupt-delta-value">
+                                        {signedUsd(cmp.delta)} ({signedPct(cmp.deltaFraction)})
+                                    </span>
+                                </div>
+                            </>
+                        )}
                         <div className="flex justify-between gap-2">
                             <span className="text-ink2">Supply sites moved</span>
                             <span className="num" data-testid="disrupt-moved">
@@ -298,7 +339,11 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId }: Disru
                     {authNeeded && (
                         <button
                             type="button"
-                            onClick={() => void signInWithGoogle()}
+                            onClick={() =>
+                                void signInWithGoogle(getCurrentForm() ?? undefined).catch((e) =>
+                                    setError(e instanceof Error ? e.message : 'Sign-in failed.'),
+                                )
+                            }
                             className="pill-primary ml-2 py-0.5 text-sm"
                         >
                             Sign in with Google

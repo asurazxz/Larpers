@@ -44,7 +44,7 @@ function Field({ label, hint, tag, error, children }: { label: string; hint?: st
 }
 
 export default function ScenarioPlannerPage() {
-    const { solution, selectView, solverHealth, isLive, onLiveRun, pickedNode, setDirty, go } = useApp();
+    const { solution, selectView, solverHealth, isLive, onLiveRun, pickedNode, setDirty, go, feed } = useApp();
     const session = useSession();
 
     const displayed = useMemo(() => formFromScenario(solution?.scenario), [solution]);
@@ -60,7 +60,7 @@ export default function ScenarioPlannerPage() {
     const runner = useLiveRunner((run) => {
         onLiveRun(run);
         go('results');
-    });
+    }, feed);
     const st = runner.state;
     const running = st.phase === 'running';
     const liveMode = liveEnabled && (solverHealth.state === 'up' || running);

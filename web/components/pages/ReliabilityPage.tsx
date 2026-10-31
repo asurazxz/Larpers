@@ -28,7 +28,7 @@ const fmtNum = (v: number | null | undefined, dp = 0) =>
 
 export default function ReliabilityPage() {
     const app = useApp();
-    const { solution, view, go, selectView, selectFlow, robustKind, setRobustKind, selectedNode, isLive } = app;
+    const { solution, view, go, selectView, selectFlow, robustKind, setRobustKind, selectedNode, isLive, feed } = app;
     const active: TabKey = (TABS.find((t) => t.key === app.tab)?.key ?? 'solver') as TabKey;
 
     return (
@@ -53,7 +53,7 @@ export default function ReliabilityPage() {
                 )}
                 {active === 'disruptions' && (
                     <Card title="Site disruptions">
-                        <div className="legacy"><Disrupt view={view} solution={solution} onSelect={selectView} focusSiteId={selectedNode} /></div>
+                        <div className="legacy"><Disrupt view={view} solution={solution} onSelect={selectView} feed={feed} focusSiteId={selectedNode} /></div>
                     </Card>
                 )}
                 {active === 'routing' && <RoutingTab />}

@@ -62,7 +62,8 @@ export default function NetworkMap({ interactive = true, layers }: { interactive
             sites={layers && !layers.sites ? [] : sites}
             highlight={app.highlight}
             bandFor={app.bandFor}
-            basemap={app.basemap}
+            showTiles={app.basemap !== 'none'}
+            feed={app.feed}
             onSelectFlow={interactive ? selectFlow : undefined}
             onSelectNode={interactive ? (id) => app.selectNode(id) : undefined}
         />
