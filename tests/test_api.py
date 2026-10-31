@@ -275,3 +275,31 @@ def test_auth_allows_loopback_development(api_client, signer, monkeypatch, proje
     monkeypatch.setenv("SUPABASE_URL", project_url)
     response = client.post("/api/solve", json={}, headers={"Authorization": "Bearer "+signer(iss=project_url+"/auth/v1")})
     assert response.status_code == 200
+
+
+def test_resolver_can_omit_validation_before_audit():
+    from solver.contract import Solution
+    _, _, solution = tiny_case()
+    payload = solution.model_dump(by_alias=True)
+    payload.pop("validation")
+    result = Solution.model_validate(payload)
+    assert not result.validation.passed
+    assert result.validation.failures == ["Not audited"]
+    assert result.validation.max_residuals == {}
+    other = Solution.model_validate(payload)
+    result.validation.failures.append("first result only")
+    assert other.validation.failures == ["Not audited"]
+
+
+def test_proof_reason_and_portfolio_capex_survive_solution_round_trip():
+    from solver.contract import Solution
+    _, _, solution = tiny_case()
+    payload = solution.model_dump(by_alias=True)
+    payload["status_reason"] = "Best found, gap 2%"
+    payload["portfolios"] = [{"n_large": 2, "n_small": 0, "status": "skipped", "capex_usd": 1_530_000_000, "reason": "skipped_capex", "solve_seconds": 0}]
+    result = Solution.model_validate(payload)
+    wire = result.model_dump(mode="json", by_alias=True)
+    assert wire["status_reason"] == "Best found, gap 2%"
+    assert wire["portfolios"][0]["capex_usd"] == 1_530_000_000
+    assert wire["portfolios"][0]["reason"] == "skipped_capex"
+    assert Solution.model_validate(wire) == result
