@@ -3,8 +3,8 @@
 import math
 from collections import defaultdict
 
-from solver.contract import (AuditReport, CAPACITY_KT, CAPEX_USD, CAPEX_YEARS, FIXED_OPEX_SHARE, HAUL_HAV_KM, RATES,
-                             TRUCK_T, VARIABLE_OPEX_USD_T)
+from solver.contract import (AuditReport, CAPACITY_KT, CAPEX_USD, CAPEX_YEARS, FIXED_OPEX_SHARE, RATES, TRUCK_T,
+                             VARIABLE_OPEX_USD_T)
 from solver.inputs import load_inputs
 
 KT_TOL = 1e-6
@@ -47,6 +47,9 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
         eligible = bool(site and site["is_candidate"] and site["is_onshore"])
         if facility.type == "refinery" and facility.site_id in airports:
             eligible = True
+        allowed = scenario.refinery_candidates if facility.type == "refinery" else scenario.depot_candidates
+        if allowed is not None:
+            eligible = eligible and facility.site_id in allowed
         require("facility_selection", eligible and facility.site_id not in scenario.excluded_ids, f"eligible {key}")
         capacity = CAPACITY_KT[facility.type][facility.size]
         check("capacity", facility.capacity_kt - capacity, f"declared capacity {key}")
@@ -99,7 +102,7 @@ def audit(scenario, solution, *, inputs=None) -> AuditReport:
         if flow.road_km is not None:
             check("distance", flow.road_km - float(inputs.road_km[indices[flow.from_id], indices[flow.to]]), context + " reference road km")
         if flow.leg == "supply_depot":
-            check("haul_limit", max(0., hav - HAUL_HAV_KM), context)
+            check("haul_limit", max(0., hav - scenario.haul_limit_km), context)
         check("rate", flow.rate_usd_per_t_km - RATES[flow.leg], context, tol=1e-12)
         cost = flow.kt * 1000 * RATES[flow.leg] * km
         check("cost", flow.cost_usd - cost, context, USD_TOL)
