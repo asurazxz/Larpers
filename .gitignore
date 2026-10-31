@@ -72,3 +72,6 @@ desktop.ini
 
 # ---------- Claude Code (personal settings) ----------
 .claude/settings.local.json
+
+# ---------- Personal agent briefs ----------
+2-jun-sheng.md
