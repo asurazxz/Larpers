@@ -20,6 +20,8 @@ export function statusLabel(s: Pick<Solution, 'status' | 'gap'> & { n_candidates
             return 'No feasible network';
         case 'heuristic':
             return 'Heuristic baseline';
+        case 'no_solution':
+            return 'Could not find a network within the time limit';
         case 'optimal':
         case 'best_found':
             if (isProvenOptimal(s)) {
