@@ -1,6 +1,6 @@
 // Client for Damien's FastAPI solver (api/main.py).
 // Public: GET /api/health, GET /api/data, POST /api/validate.
-// Signed-in: POST /api/solve, POST /api/baseline, with Authorization: Bearer <Supabase access token>.
+// Signed-in: POST /api/solve, POST /api/baseline, POST /api/explain, with Authorization: Bearer <Supabase access token>.
 import type { AuditReport, Scenario, Solution } from './contract';
 import { getAccessToken, refreshAccessToken } from './supabase';
 
@@ -11,12 +11,32 @@ export const liveEnabled = SOLVER_API_URL.length > 0;
 export const HEALTH_TIMEOUT_MS = 3_000;
 export const SOLVE_TIMEOUT_MS = 150_000;
 export const DEFAULT_TIMEOUT_MS = 30_000;
+export const EXPLAIN_TIMEOUT_MS = 30_000;
 
 // Fixed unless a caller overrides them explicitly.
 export const SCENARIO_DEFAULTS = { depot_retention: 1, time_limit_s: 90 } as const;
 
 export type ScenarioInput = Partial<Scenario>;
 export type { AuditReport };
+
+/** One number-bearing statement computed from the run by the API (api/explain.py). */
+export interface ExplainFact {
+    id: string;
+    label: string;
+    value: string;
+}
+
+export type Explanation =
+    | {
+          available: true;
+          headline: string;
+          points: { text: string; fact_ids: string[] }[];
+          caveat: string;
+          facts: ExplainFact[];
+          model: string;
+          verified: true;
+      }
+    | { available: false; reason: string };
 
 export interface HealthResult {
     ok: boolean;
@@ -79,6 +99,7 @@ export interface ApiClient {
     validate(scenario: ScenarioInput, solution: Solution, opts?: RequestOptions): Promise<AuditReport>;
     solve(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution>;
     baseline(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution>;
+    explain(scenario: ScenarioInput, solution: Solution, baseline: Solution | null, opts?: RequestOptions): Promise<Explanation>;
 }
 
 // Applies depot_retention 1 and time_limit_s 90 when the caller left them out.
@@ -281,6 +302,17 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         baseline(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> {
             return authedPost<Solution>('/api/baseline', buildScenario(scenario), opts);
         },
+
+        explain(scenario: ScenarioInput, solution: Solution, baseline: Solution | null, opts: RequestOptions = {}): Promise<Explanation> {
+            // Strip the UI-attached `scenario`: the API's Solution forbids unknown keys.
+            const { scenario: _attached, ...wire } = solution;
+            const body: Record<string, unknown> = { scenario: buildScenario(scenario), solution: wire };
+            if (baseline) {
+                const { scenario: _baseAttached, ...baseWire } = baseline;
+                body.baseline = baseWire;
+            }
+            return authedPost<Explanation>('/api/explain', body, { ...opts, timeoutMs: opts.timeoutMs ?? EXPLAIN_TIMEOUT_MS });
+        },
     };
 }
 
@@ -294,3 +326,9 @@ export const validate = (scenario: ScenarioInput, solution: Solution, opts?: Req
 export const solve = (scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> => api.solve(scenario, opts);
 export const baseline = (scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> =>
     api.baseline(scenario, opts);
+export const explain = (
+    scenario: ScenarioInput,
+    solution: Solution,
+    baseline: Solution | null,
+    opts?: RequestOptions,
+): Promise<Explanation> => api.explain(scenario, solution, baseline, opts);

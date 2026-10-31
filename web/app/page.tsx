@@ -21,6 +21,7 @@ import Provenance from '../components/Provenance';
 import FailureBand from '../components/FailureBand';
 import Trace from '../components/Trace';
 import Landing from '../components/Landing';
+import Explanation from '../components/Explanation';
 import { reducedMotion } from '../components/motion';
 
 const SafMap = dynamic(() => import('./Map'), {
@@ -137,6 +138,7 @@ function Planner() {
                         </div>
                     </div>
                     <div className="space-y-3">
+                        {liveRun && isLiveDisplayed(solution, liveRun) && <Explanation run={liveRun} />}
                         <Section id="panel-scenario" title="Scenario and run">
                             <ScenarioPanel
                                 solution={solution}
