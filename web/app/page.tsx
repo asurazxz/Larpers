@@ -6,9 +6,19 @@
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
 import type { Flow, Solution } from '../lib/contract';
-import { baseEntry, sites, solutionOf, storedRunCount } from '../lib/bundle';
-import { kt, MISSING, orMissing, seconds, statusLabel, usd } from '../lib/format';
+import { baseEntry, sites, solutionOf } from '../lib/bundle';
 import { DEFAULT_VIEW, flowKey, type View } from '../lib/view';
+import Header from '../components/Header';
+import ScenarioPanel from '../components/ScenarioPanel';
+import { isLiveDisplayed, useSolverHealth, type LiveRun } from '../lib/useLive';
+import SweepPicker from '../components/SweepPicker';
+import Disrupt from '../components/Disrupt';
+import Robustness from '../components/Robustness';
+import { baseSolution, disruptHighlight, robustness, siteBandFn, type RobustKind } from '../lib/robustness';
+import CostPanel, { storedBaselineFor } from '../components/CostPanel';
+import Provenance from '../components/Provenance';
+import FailureBand from '../components/FailureBand';
+import Trace from '../components/Trace';
 
 const SafMap = dynamic(() => import('./Map'), {
     ssr: false,
@@ -24,51 +34,44 @@ function Section({ id, title, children }: { id: string; title: string; children?
     );
 }
 
-function Row({ k, v }: { k: string; v: string }) {
-    return (
-        <div className="flex justify-between gap-3">
-            <span className="text-gray-600">{k}</span>
-            <span className="text-right font-medium">{v}</span>
-        </div>
-    );
-}
-
 export default function Page() {
     const entry = baseEntry();
-    const [view] = useState<View>(DEFAULT_VIEW);
-    const [solution] = useState<Solution | null>(solutionOf(entry) ?? null);
+    const [view, setView] = useState<View>(DEFAULT_VIEW);
+    const [solution, setSolution] = useState<Solution | null>(solutionOf(entry) ?? null);
+    // Live run (Header, ScenarioPanel). The displayed run is live only while `solution` is that exact
+    // object; any other setSolution (stored radio, sweep, disrupt) makes it a stored run again.
+    const solverHealth = useSolverHealth();
+    const [liveRun, setLiveRun] = useState<LiveRun | null>(null);
+    const isLive = isLiveDisplayed(solution, liveRun) || (view.kind === 'disrupt' && !!view.live);
+    /** Greedy baseline for the displayed live run (null for stored runs). */
+    const baselineSolution = isLiveDisplayed(solution, liveRun) ? (liveRun?.baseline ?? null) : null;
+    const [pickedNode, setPickedNode] = useState<{ id: string; seq: number } | null>(null);
     const [selected, setSelected] = useState<{ flow: Flow; index: number } | null>(null);
     const highlight = useMemo(
         () => (selected ? new Set([flowKey(selected.flow), selected.flow.from, selected.flow.to]) : new Set<string>()),
         [selected],
     );
 
-    const runLabel = entry?.label ?? entry?.slug ?? MISSING;
-    const isStored = entry?.precomputed ?? true;
+    // Sweep / disrupt / robustness (components/SweepPicker, Disrupt, Robustness). One View state:
+    // selecting a stored sweep run or a disruption replaces the other.
+    const [robustKind, setRobustKind] = useState<RobustKind>('off');
+    const selectView = (v: View, s: Solution | null) => {
+        setView(v);
+        setSolution(s);
+        setSelected(null);
+    };
+    const viewHighlight = useMemo(
+        () => (view.kind === 'disrupt' && solution ? disruptHighlight(baseSolution(), solution, view.siteIds ?? []) : null),
+        [view, solution],
+    );
+    const bandFor = useMemo(() => siteBandFn(robustKind === 'off' ? null : robustness(robustKind)), [robustKind]);
 
     return (
         <div className="flex h-screen flex-col overflow-hidden" data-view={view.kind}>
-            {/* Header: run label + badge slot + auth slot */}
-            <header id="header" className="flex items-center justify-between gap-4 border-b border-gray-300 px-4 py-2">
-                <div className="min-w-0">
-                    <h1 className="text-xl font-bold">Kalimantan SAF Network Planner</h1>
-                    <div id="run-label" className="truncate text-gray-700">
-                        Run: {runLabel}
-                        {solution && (
-                            <>
-                                {' '}| {statusLabel(solution)} | solve {seconds(solution.solve_seconds)} | run ID {solution.run_id}
-                            </>
-                        )}
-                    </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                    <div id="header-badge" className="rounded border-2 border-gray-800 px-3 py-1 font-bold">
-                        {isStored ? `STORED RUN: ${storedRunCount()} stored, no solver running` : 'LIVE SOLVE'}
-                    </div>
-                    {/* AUTH SLOT: <AuthButton /> from components/AuthButton.tsx goes here. */}
-                    <div id="auth-slot" />
-                </div>
-            </header>
+            {/* Header: run label, badge (#header-badge) and auth (#auth-slot), from components/Header.tsx */}
+            <Header solution={solution} view={view} health={solverHealth} isLive={isLive} />
+            {/* Provenance strip (components/Provenance.tsx): run, stored/live, hashes, trace count. */}
+            <Provenance solution={solution} entry={entry} live={isLive} />
 
             {/* Main: map ~65%, right column ~35% */}
             <main className="flex min-h-0 flex-1">
@@ -76,61 +79,55 @@ export default function Page() {
                     <SafMap
                         solution={solution}
                         sites={sites}
-                        highlight={highlight}
+                        highlight={selected ? highlight : (viewHighlight ?? highlight)}
+                        bandFor={bandFor}
                         onSelectFlow={(flow, index) => setSelected({ flow, index })}
+                        onSelectNode={(id) => setPickedNode((p) => ({ id, seq: (p?.seq ?? 0) + 1 }))}
                     />
                     {/* TRACE SLOT: arc-click trace panel, absolutely positioned over the map. */}
-                    <div id="trace-slot" className="pointer-events-none absolute bottom-2 left-2 z-[1000]" />
+                    <div id="trace-slot" className="pointer-events-none absolute bottom-2 left-2 z-[1000]">
+                        <Trace solution={solution} selected={selected} onClose={() => setSelected(null)} />
+                    </div>
                 </div>
 
                 <aside id="right-column" className="h-full overflow-y-auto border-l border-gray-300" style={{ width: '35%' }}>
                     <Section id="panel-scenario" title="Scenario / Run">
-                        {solution ? (
-                            <>
-                                <Row k="Source" v={`${solution.source}${isStored ? ' (stored)' : ''}`} />
-                                <Row k="Status" v={statusLabel(solution)} />
-                                <Row k="Yield" v={orMissing(solution.scenario?.yield, (y: number) => `${(y * 100).toFixed(2)}%`)} />
-                                <Row k="Road factor" v={orMissing(solution.scenario?.road_factor)} />
-                                <Row k="Horizon" v={orMissing(solution.scenario?.horizon_years, (h: number) => `${h} yr`)} />
-                            </>
-                        ) : (
-                            <div>No stored run in the bundle.</div>
-                        )}
+                        <ScenarioPanel
+                            solution={solution}
+                            health={solverHealth}
+                            isLive={isLive}
+                            setSolution={setSolution}
+                            setView={setView}
+                            onLiveRun={(run) => {
+                                setLiveRun(run);
+                                setSolution(run.solution);
+                            }}
+                            pickedNode={pickedNode}
+                        />
                     </Section>
 
                     <Section id="panel-cost" title="Cost (USD)">
-                        {solution && (
-                            <>
-                                <Row k="CapEx" v={usd(solution.capex_usd)} />
-                                <Row k="Logistics / year" v={usd(solution.logistics_annual_usd)} />
-                                <Row k="OpEx" v="not provided" />
-                                <Row k="Total, horizon" v={usd(solution.total_horizon_usd)} />
-                                <Row
-                                    k="Audit"
-                                    v={solution.validation ? (solution.validation.passed ? 'passed' : `FAILED (${solution.validation.failures.length})`) : MISSING}
-                                />
-                            </>
-                        )}
+                        <CostPanel
+                            solution={solution}
+                            baseline={view.kind === 'disrupt' ? null : (baselineSolution ?? storedBaselineFor(solution))}
+                        />
                     </Section>
 
-                    <Section id="panel-assumptions" title="Assumptions / Sweep" />
-                    <Section id="panel-disrupt" title="Disrupt (at base assumptions)" />
-                    <Section id="panel-robustness" title="Robustness" />
+                    <Section id="panel-assumptions" title="Assumptions / Sweep">
+                        <SweepPicker view={view} onSelect={selectView} />
+                    </Section>
+                    <Section id="panel-disrupt" title="Disrupt (at base assumptions)">
+                        <Disrupt view={view} solution={solution} onSelect={selectView} focusSiteId={pickedNode?.id ?? null} />
+                    </Section>
+                    <Section id="panel-robustness" title="Robustness">
+                        <Robustness kind={robustKind} onKindChange={setRobustKind} />
+                    </Section>
                 </aside>
             </main>
 
             {/* Permanent failure band: never behind a click. */}
             <footer id="failure-band" className="border-t-2 border-gray-800 bg-gray-50 px-4 py-2">
-                <span className="font-bold">Where this fails: </span>
-                {solution ? (
-                    <span>
-                        stranded {kt((solution.stranded ?? []).reduce((a, s) => a + s.kt, 0), 1)}; surplus SAF{' '}
-                        {kt((solution.surplus ?? []).reduce((a, s) => a + s.kt, 0), 1)}; OpEx, seasonality, moisture and the road
-                        network are not modelled.
-                    </span>
-                ) : (
-                    <span>{MISSING}</span>
-                )}
+                <FailureBand solution={solution} onSelectFlow={(flow, index) => setSelected({ flow, index })} />
             </footer>
         </div>
     );
