@@ -1,0 +1,802 @@
+[
+ {
+  "id": "KAL_SUP_01",
+  "label": "KAL_SUP_01, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.9635,
+  "lon": 110.1136,
+  "kt": 90.12,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_02",
+  "label": "KAL_SUP_02, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.1083,
+  "lon": 111.5801,
+  "kt": 96.6,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_03",
+  "label": "KAL_SUP_03, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -2.0515,
+  "lon": 109.9553,
+  "kt": 96.44,
+  "sea": true
+ },
+ {
+  "id": "KAL_SUP_04",
+  "label": "KAL_SUP_04, Paser",
+  "province": "East Kalimantan",
+  "district": "Paser",
+  "lat": -1.6149,
+  "lon": 116.3117,
+  "kt": 99.22,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_05",
+  "label": "KAL_SUP_05, Kotawaringin Timur",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Timur",
+  "lat": -2.085,
+  "lon": 113.235,
+  "kt": 90.46,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_06",
+  "label": "KAL_SUP_06, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.847,
+  "lon": 110.0258,
+  "kt": 87.91,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_07",
+  "label": "KAL_SUP_07, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -2.0294,
+  "lon": 110.3472,
+  "kt": 89.06,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_08",
+  "label": "KAL_SUP_08, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": 0.2911,
+  "lon": 110.6932,
+  "kt": 94,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_09",
+  "label": "KAL_SUP_09, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.264,
+  "lon": 111.7926,
+  "kt": 26.33,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_10",
+  "label": "KAL_SUP_10, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.6682,
+  "lon": 116.8524,
+  "kt": 99.51,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_11",
+  "label": "KAL_SUP_11, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.664,
+  "lon": 117.3125,
+  "kt": 92.16,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_12",
+  "label": "KAL_SUP_12, Kotawaringin Timur",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Timur",
+  "lat": -2.7613,
+  "lon": 112.8714,
+  "kt": 93.8,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_13",
+  "label": "KAL_SUP_13, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.3066,
+  "lon": 116.8705,
+  "kt": 92.81,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_14",
+  "label": "KAL_SUP_14, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -2.1397,
+  "lon": 110.2164,
+  "kt": 29.34,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_15",
+  "label": "KAL_SUP_15, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.682,
+  "lon": 110.4027,
+  "kt": 88.32,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_16",
+  "label": "KAL_SUP_16, Kotawaringin Timur",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Timur",
+  "lat": -2.5858,
+  "lon": 112.7929,
+  "kt": 98.25,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_17",
+  "label": "KAL_SUP_17, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.3747,
+  "lon": 116.804,
+  "kt": 88.27,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_18",
+  "label": "KAL_SUP_18, Bulungan",
+  "province": "North Kalimantan",
+  "district": "Bulungan",
+  "lat": 2.61,
+  "lon": 117.2423,
+  "kt": 92.89,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_19",
+  "label": "KAL_SUP_19, Kotawaringin Timur",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Timur",
+  "lat": -2.5394,
+  "lon": 112.8334,
+  "kt": 99.71,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_20",
+  "label": "KAL_SUP_20, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.9999,
+  "lon": 111.9992,
+  "kt": 34.1,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_21",
+  "label": "KAL_SUP_21, Paser",
+  "province": "East Kalimantan",
+  "district": "Paser",
+  "lat": -2.1934,
+  "lon": 115.7592,
+  "kt": 90.65,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_22",
+  "label": "KAL_SUP_22, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.5194,
+  "lon": 109.602,
+  "kt": 89,
+  "sea": true
+ },
+ {
+  "id": "KAL_SUP_23",
+  "label": "KAL_SUP_23, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": -0.0962,
+  "lon": 110.4256,
+  "kt": 92.52,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_24",
+  "label": "KAL_SUP_24, Paser",
+  "province": "East Kalimantan",
+  "district": "Paser",
+  "lat": -1.8548,
+  "lon": 116.1854,
+  "kt": 96.52,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_25",
+  "label": "KAL_SUP_25, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": 0.3297,
+  "lon": 110.817,
+  "kt": 88,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_26",
+  "label": "KAL_SUP_26, Tanah Laut",
+  "province": "South Kalimantan",
+  "district": "Tanah Laut",
+  "lat": -4.0801,
+  "lon": 114.8675,
+  "kt": 93.86,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_27",
+  "label": "KAL_SUP_27, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -1.9857,
+  "lon": 111.856,
+  "kt": 93.25,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_28",
+  "label": "KAL_SUP_28, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.3295,
+  "lon": 111.9558,
+  "kt": 88.6,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_29",
+  "label": "KAL_SUP_29, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.6332,
+  "lon": 110.1275,
+  "kt": 88.41,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_30",
+  "label": "KAL_SUP_30, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.3435,
+  "lon": 117.0175,
+  "kt": 99.81,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_31",
+  "label": "KAL_SUP_31, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.6977,
+  "lon": 109.6352,
+  "kt": 96.65,
+  "sea": true
+ },
+ {
+  "id": "KAL_SUP_32",
+  "label": "KAL_SUP_32, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.6782,
+  "lon": 109.7887,
+  "kt": 92.04,
+  "sea": true
+ },
+ {
+  "id": "KAL_SUP_33",
+  "label": "KAL_SUP_33, Kotawaringin Timur",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Timur",
+  "lat": -2.6368,
+  "lon": 112.6695,
+  "kt": 96.69,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_34",
+  "label": "KAL_SUP_34, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": 0.2514,
+  "lon": 110.2592,
+  "kt": 87.84,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_35",
+  "label": "KAL_SUP_35, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.6283,
+  "lon": 110.2045,
+  "kt": 99.9,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_36",
+  "label": "KAL_SUP_36, Kotawaringin Timur",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Timur",
+  "lat": -2.5737,
+  "lon": 112.6033,
+  "kt": 91.25,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_37",
+  "label": "KAL_SUP_37, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -2.0081,
+  "lon": 109.8869,
+  "kt": 97.19,
+  "sea": true
+ },
+ {
+  "id": "KAL_SUP_38",
+  "label": "KAL_SUP_38, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.3295,
+  "lon": 117.0183,
+  "kt": 23.62,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_39",
+  "label": "KAL_SUP_39, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": 0.2131,
+  "lon": 110.645,
+  "kt": 95.76,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_40",
+  "label": "KAL_SUP_40, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": -0.2488,
+  "lon": 110.4914,
+  "kt": 22.84,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_41",
+  "label": "KAL_SUP_41, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.7119,
+  "lon": 110.0077,
+  "kt": 91.08,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_42",
+  "label": "KAL_SUP_42, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": 0.133,
+  "lon": 110.3271,
+  "kt": 88.76,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_43",
+  "label": "KAL_SUP_43, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.6746,
+  "lon": 109.7672,
+  "kt": 87.96,
+  "sea": true
+ },
+ {
+  "id": "KAL_SUP_44",
+  "label": "KAL_SUP_44, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.3668,
+  "lon": 116.8975,
+  "kt": 91.87,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_45",
+  "label": "KAL_SUP_45, Kotawaringin Timur",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Timur",
+  "lat": -2.0425,
+  "lon": 113.0427,
+  "kt": 94.55,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_46",
+  "label": "KAL_SUP_46, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": 0.2625,
+  "lon": 110.7212,
+  "kt": 96.19,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_47",
+  "label": "KAL_SUP_47, Kotawaringin Timur",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Timur",
+  "lat": -2.4623,
+  "lon": 113.0832,
+  "kt": 88.6,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_48",
+  "label": "KAL_SUP_48, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.6378,
+  "lon": 110.0902,
+  "kt": 88.95,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_49",
+  "label": "KAL_SUP_49, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.6715,
+  "lon": 111.589,
+  "kt": 94.09,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_50",
+  "label": "KAL_SUP_50, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -2.1621,
+  "lon": 109.9169,
+  "kt": 90.03,
+  "sea": true
+ },
+ {
+  "id": "KAL_SUP_51",
+  "label": "KAL_SUP_51, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.9542,
+  "lon": 110.0706,
+  "kt": 93.01,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_52",
+  "label": "KAL_SUP_52, Paser",
+  "province": "East Kalimantan",
+  "district": "Paser",
+  "lat": -1.5392,
+  "lon": 115.8861,
+  "kt": 90.57,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_53",
+  "label": "KAL_SUP_53, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": 0.2589,
+  "lon": 110.3311,
+  "kt": 91.7,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_54",
+  "label": "KAL_SUP_54, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.712,
+  "lon": 116.982,
+  "kt": 92.83,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_55",
+  "label": "KAL_SUP_55, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.4098,
+  "lon": 116.5264,
+  "kt": 89.76,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_56",
+  "label": "KAL_SUP_56, Paser",
+  "province": "East Kalimantan",
+  "district": "Paser",
+  "lat": -2.2348,
+  "lon": 115.7677,
+  "kt": 89.47,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_57",
+  "label": "KAL_SUP_57, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.0881,
+  "lon": 116.8219,
+  "kt": 25.07,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_58",
+  "label": "KAL_SUP_58, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.8634,
+  "lon": 109.8828,
+  "kt": 96.97,
+  "sea": true
+ },
+ {
+  "id": "KAL_SUP_59",
+  "label": "KAL_SUP_59, Tanah Laut",
+  "province": "South Kalimantan",
+  "district": "Tanah Laut",
+  "lat": -3.9454,
+  "lon": 114.676,
+  "kt": 87.72,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_60",
+  "label": "KAL_SUP_60, Tanah Laut",
+  "province": "South Kalimantan",
+  "district": "Tanah Laut",
+  "lat": -3.5655,
+  "lon": 114.8385,
+  "kt": 93.13,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_61",
+  "label": "KAL_SUP_61, Paser",
+  "province": "East Kalimantan",
+  "district": "Paser",
+  "lat": -2.0292,
+  "lon": 116.2806,
+  "kt": 89.76,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_62",
+  "label": "KAL_SUP_62, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -1.6347,
+  "lon": 109.7354,
+  "kt": 96.05,
+  "sea": true
+ },
+ {
+  "id": "KAL_SUP_63",
+  "label": "KAL_SUP_63, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": 0.4711,
+  "lon": 110.978,
+  "kt": 92.73,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_64",
+  "label": "KAL_SUP_64, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.6729,
+  "lon": 112.0284,
+  "kt": 89.4,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_65",
+  "label": "KAL_SUP_65, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.5395,
+  "lon": 111.7025,
+  "kt": 88.1,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_66",
+  "label": "KAL_SUP_66, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.3758,
+  "lon": 117.121,
+  "kt": 98.64,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_67",
+  "label": "KAL_SUP_67, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.6718,
+  "lon": 111.704,
+  "kt": 89.3,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_68",
+  "label": "KAL_SUP_68, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.7388,
+  "lon": 111.3012,
+  "kt": 35.94,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_69",
+  "label": "KAL_SUP_69, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -2.1443,
+  "lon": 110.0022,
+  "kt": 30.99,
+  "sea": true
+ },
+ {
+  "id": "KAL_SUP_70",
+  "label": "KAL_SUP_70, Bulungan",
+  "province": "North Kalimantan",
+  "district": "Bulungan",
+  "lat": 2.8936,
+  "lon": 117.2919,
+  "kt": 96.08,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_71",
+  "label": "KAL_SUP_71, Kotawaringin Timur",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Timur",
+  "lat": -2.4114,
+  "lon": 112.9518,
+  "kt": 93.87,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_72",
+  "label": "KAL_SUP_72, Kotawaringin Timur",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Timur",
+  "lat": -2.2989,
+  "lon": 113.0191,
+  "kt": 99.42,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_73",
+  "label": "KAL_SUP_73, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": -0.2772,
+  "lon": 110.5956,
+  "kt": 99.03,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_74",
+  "label": "KAL_SUP_74, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": 0.2713,
+  "lon": 111.0006,
+  "kt": 99.61,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_75",
+  "label": "KAL_SUP_75, Sanggau",
+  "province": "West Kalimantan",
+  "district": "Sanggau",
+  "lat": 0.1668,
+  "lon": 110.9547,
+  "kt": 93.87,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_76",
+  "label": "KAL_SUP_76, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.214,
+  "lon": 111.9176,
+  "kt": 27.79,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_77",
+  "label": "KAL_SUP_77, Kutai Kartanegara",
+  "province": "East Kalimantan",
+  "district": "Kutai Kartanegara",
+  "lat": -0.7849,
+  "lon": 117.0677,
+  "kt": 91.32,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_78",
+  "label": "KAL_SUP_78, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.3248,
+  "lon": 111.4876,
+  "kt": 97.14,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_79",
+  "label": "KAL_SUP_79, Kotawaringin Barat",
+  "province": "Central Kalimantan",
+  "district": "Kotawaringin Barat",
+  "lat": -2.5115,
+  "lon": 112.0284,
+  "kt": 32.55,
+  "sea": false
+ },
+ {
+  "id": "KAL_SUP_80",
+  "label": "KAL_SUP_80, Ketapang",
+  "province": "West Kalimantan",
+  "district": "Ketapang",
+  "lat": -2.1498,
+  "lon": 109.7591,
+  "kt": 92.4,
+  "sea": true
+ }
+]

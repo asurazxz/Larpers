@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Designed for 1280x720 in a lit room: light theme, minimum 18px text. */
+html {
+    font-size: 18px;
+}
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    background: #ffffff;
+    color: #111827;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.leaflet-container {
+    font: inherit;
+}
+
+/* DivIcon wrappers: no default white box. */
+.saf-airport,
+.saf-refinery,
+.saf-excluded {
+    background: transparent;
+    border: none;
+}
