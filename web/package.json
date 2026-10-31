@@ -1,0 +1,37 @@
+{
+    "name": "larpers-web",
+    "version": "0.1.0",
+    "private": true,
+    "engines": {
+        "node": ">=22"
+    },
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "build:static": "node scripts/build-static.mjs",
+        "data:sites": "node scripts/make-sites.mjs",
+        "data:land": "node scripts/make-borneo.mjs",
+        "data:fixture": "node scripts/make-fixture.mjs"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "2.118.0",
+        "leaflet": "1.9.4",
+        "next": "16.4.3",
+        "react": "19.3.1",
+        "react-dom": "19.3.1",
+        "react-leaflet": "5.0.0"
+    },
+    "devDependencies": {
+        "@types/leaflet": "1.9.22",
+        "@types/node": "22.20.5",
+        "@types/react": "19.3.0",
+        "@types/react-dom": "19.3.0",
+        "@types/topojson-client": "3.1.5",
+        "autoprefixer": "10.6.2",
+        "postcss": "8.5.32",
+        "tailwindcss": "3.4.19",
+        "topojson-client": "3.1.0",
+        "typescript": "5.9.3",
+        "world-atlas": "2.0.2"
+    }
+}
