@@ -180,7 +180,7 @@ export default function ScenarioPlannerPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
                 {AIRPORTS.map((a) => (
-                    <Field key={a} label={a} tag={sameNum(form.demand[a], OFFICIAL_DEMAND)} hint="Official (12:45 update): 300">
+                    <Field key={a} label={a} tag={form.demand[a].trim() === '' ? undefined : sameNum(form.demand[a], OFFICIAL_DEMAND)} hint="Official (12:45 update): 300">
                         <input
                             className="input num w-full"
                             inputMode="decimal"

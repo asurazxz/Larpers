@@ -192,7 +192,10 @@ function RouteView({ flow, index }: { flow: Flow; index: number }) {
 
 export default function Inspector() {
     const { solution, selectedNode, selectedFlow, selectNode, selectFlow } = useApp();
-    const fac = selectedNode ? solution?.facilities.find((f) => f.site_id === selectedNode) : undefined;
+    // A site can host one depot and one refinery; show a switch rather than silently picking one.
+    const facs = selectedNode ? (solution?.facilities ?? []).filter((f) => f.site_id === selectedNode) : [];
+    const [facType, setFacType] = useState<'refinery' | 'depot'>('refinery');
+    const fac = facs.find((f) => f.type === facType) ?? facs[0];
     const has = !!selectedNode || !!selectedFlow;
     const title = selectedFlow ? 'Route' : fac ? fac.label : selectedNode ?? 'Inspector';
     const refs = (solution?.facilities ?? []).filter((f) => f.type === 'refinery');
@@ -210,7 +213,24 @@ export default function Inspector() {
             {selectedFlow ? (
                 <RouteView flow={selectedFlow.flow} index={selectedFlow.index} />
             ) : fac ? (
-                <FacilityView fac={fac} />
+                <>
+                    {facs.length > 1 && (
+                        <div className="flex gap-2 px-4 pt-3" role="group" aria-label="Facility at this site">
+                            {facs.map((f) => (
+                                <button
+                                    key={f.type}
+                                    type="button"
+                                    aria-pressed={f.type === fac.type}
+                                    onClick={() => setFacType(f.type)}
+                                    className={`chip capitalize ${f.type === fac.type ? 'bg-primary text-white' : 'bg-slate-100 text-muted hover:text-deep'}`}
+                                >
+                                    {f.type} ({f.size})
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <FacilityView key={`${fac.site_id}-${fac.type}`} fac={fac} />
+                </>
             ) : selectedNode ? (
                 <SiteOrAirportView id={selectedNode} />
             ) : (
@@ -220,7 +240,7 @@ export default function Inspector() {
                         <div key={name} className="mb-4">
                             <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">{name} ({list.length})</h3>
                             {list.map((f) => (
-                                <button key={f.site_id} type="button" onClick={() => selectNode(f.site_id)} className="flex w-full items-center justify-between gap-2 border-b border-line/60 py-1.5 text-left text-sm hover:bg-app">
+                                <button key={f.site_id} type="button" onClick={() => { setFacType(f.type); selectNode(f.site_id); }} className="flex w-full items-center justify-between gap-2 border-b border-line/60 py-1.5 text-left text-sm hover:bg-app">
                                     <span className="min-w-0 truncate text-deep">{f.label}</span>
                                     <span className="num shrink-0 text-xs text-muted">{f.size} · {pct(f.utilisation, 0)}</span>
                                 </button>
