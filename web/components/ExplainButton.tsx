@@ -3,7 +3,7 @@
 // One button that says what the numbers beside it mean in everyday words. Gemini words it when it can, and the
 // fixed wording shows otherwise, so a click always gets an answer. The solver made every decision.
 import { useEffect, useRef, useState } from 'react';
-import { AuthRequiredError, liveEnabled, plainEnglish, PLAIN_ENGLISH_TIMEOUT_MS } from '../lib/api';
+import { liveEnabled, plainEnglish, PLAIN_ENGLISH_TIMEOUT_MS } from '../lib/api';
 import type { ExplainInput } from '../lib/explain';
 import type { Explanation } from '../lib/explanations';
 
@@ -15,7 +15,7 @@ interface Shown {
 async function wordingFor(input: ExplainInput, fixedText: string, signal: AbortSignal): Promise<Shown> {
     const fixed = (note: string): Shown => ({ text: fixedText, note });
     if (!liveEnabled) return fixed('Standard wording. Gemini is not available on this page.');
-    // The session lookup runs outside the request timeout, so the click has its own limit.
+    // A backstop in case the request's own timeout never fires, so the click always gets an answer.
     const limit = new Promise<never>((_, reject) => {
         window.setTimeout(() => reject(new Error('timed out')), PLAIN_ENGLISH_TIMEOUT_MS + 2_000);
     });
@@ -23,8 +23,7 @@ async function wordingFor(input: ExplainInput, fixedText: string, signal: AbortS
         const { text, model } = await Promise.race([plainEnglish(input, { signal }), limit]);
         if (text) return { text, note: `Worded by ${model}. The solver made every decision, and every figure comes from this run.` };
         return fixed('Standard wording. Gemini did not answer in time.');
-    } catch (err) {
-        if (err instanceof AuthRequiredError) return fixed('Standard wording. Sign in with Google for the Gemini version.');
+    } catch {
         return fixed('Standard wording. Gemini could not be reached.');
     }
 }

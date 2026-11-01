@@ -12,12 +12,11 @@ from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel, ValidationError
 
-from api.auth import require_user
 from api.plain_english import api_key as gemini_key
 from solver.context import PROJECT_CONTEXT
 from solver.contract import CAPEX_YEARS, FIXED_OPEX_SHARE, VARIABLE_OPEX_USD_T, ContractModel, Scenario, Solution
@@ -33,7 +32,7 @@ GAP_TOL = 1e-9
 AIRPORTS = ("BPN", "PNK", "TRK", "PKN")
 
 log = logging.getLogger(__name__)
-router = APIRouter(prefix="/api", dependencies=[Depends(require_user)])
+router = APIRouter(prefix="/api")
 
 SYSTEM_PROMPT = PROJECT_CONTEXT + """
 

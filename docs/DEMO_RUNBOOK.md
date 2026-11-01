@@ -13,16 +13,15 @@ Pitch at about 15:30 SGT. The words come from `docs/PITCH.md`; this sheet covers
 - [ ] Close heavy apps and stop every build, dev server or other solve. A live solve takes about 83-85 s against a 90 s limit, and it hit that limit once today while a build was running. Plug in the charger and turn notifications off.
 - [ ] Git Bash, from the repo root, once: `.venv/Scripts/python data/prepare.py`
 - [ ] Terminal A (web): `python -m http.server 3000 --bind 127.0.0.1 --directory web/out`
-- [ ] Terminal B (API). This command loads only `SUPABASE_URL` and `GEMINI_API_KEY` from `.env` and prints neither:
-  `SUPABASE_URL="$(.venv/Scripts/python -c "from dotenv import get_key; print(get_key('.env','SUPABASE_URL') or '', end='')")" GEMINI_API_KEY="$(.venv/Scripts/python -c "from dotenv import get_key; print(get_key('.env','GEMINI_API_KEY') or '', end='')")" .venv/Scripts/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000`
+- [ ] Terminal B (API). This command loads only `GEMINI_API_KEY` from `.env` and does not print it:
+  `GEMINI_API_KEY="$(.venv/Scripts/python -c "from dotenv import get_key; print(get_key('.env','GEMINI_API_KEY') or '', end='')")" .venv/Scripts/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000`
 - [ ] `curl -s http://127.0.0.1:8000/api/health` should show `ok: true`. If `source` is `fixture`, the real solver did not load, so restart the API.
-- [ ] Open **http://localhost:3000** in the browser, not 127.0.0.1, because CORS and the Google redirect only allow localhost:3000. Click **Open the planner**.
-- [ ] Click **Sign in with Google** now and finish the passkey prompt off stage. Use one of the four test accounts.
+- [ ] Open **http://localhost:3000** in the browser, not 127.0.0.1, because CORS only allows localhost:3000. Click **Open the planner**.
 - [ ] The header should read **"solver online"** next to the **STORED RUN** badge, and the Scenario panel should show **Run** and "r = 1, limit 90 s".
 - [ ] Prefill the organisers' scenario. With the stored base on screen, click **Reset to displayed run**, then check: PNK, PKN, BPN and TRK at 300 kt each, yield 20%, road factor 1.3, horizon 1, collection optional, capacity basis biomass input, and no excluded sites. Do not press Run yet.
 - [ ] Open a second tab with `fallback/index.html` (double-click the file). It works offline, shows stored runs and needs no login.
-- [ ] A teammate's laptop has https://larpers-three.vercel.app open. It shows stored runs only and says "Login unlocks no solve on this URL".
-- [ ] Optional, only if you finish before 15:22: run one rehearsal solve to prove sign-in, the solver and Gemini end to end. Then reload the page (F5) to get back to the stored base; you stay signed in.
+- [ ] A teammate's laptop has https://larpers-three.vercel.app open. It shows stored runs only.
+- [ ] Optional, only if you finish before 15:22: run one rehearsal solve to prove the solver and Gemini end to end. Then reload the page (F5) to get back to the stored base.
 
 ## On stage: clicks against the PITCH beats
 
@@ -48,9 +47,8 @@ If the result has not landed by 2:20, keep talking. Run allows 150 s in the brow
 |---|---|---|
 | "Could not find a feasible network within 90 s" | "It hit its 90-second limit on this laptop and says so plainly. A time limit proves nothing about feasibility. Here is the same scenario, solved earlier and stored." | Nothing. The stored base stays on screen, labelled stored. Do not re-run on stage; a second attempt costs another 90 s. |
 | Badge reads **SOLVER OFFLINE** | PITCH fallback line: "The laptop solver is not up, so what you see is stored, and the badge says stored. The command-line solve still runs on any input you name." | On stage: nothing; continue on stored runs. Before the pitch: restart Terminal B; the badge returns to "solver online" on the next health check. |
-| Sign-in fails, or the passkey prompt appears on stage | If it clears in about 10 s: nothing, carry on. Otherwise use the PITCH fallback line. | Finish the prompt, then press **Run** again ("Inputs restored after sign-in. Press Run."). Otherwise press Esc and stay on the stored run. |
 | The explanation card shows "unavailable" or "withheld", or Gemini is busy | "The explanation is optional. Every number above comes from the solver and the audit, not the model. When a number can't be verified, the text is held back." | Nothing. This is a muted reason, not an error. |
-| The map doesn't render (stuck on "Loading map…" or blank) | "The cost card and the failure band carry the numbers." | F5 (you stay signed in). If it is still blank, switch to the `fallback/index.html` tab and say "stored". |
+| The map doesn't render (stuck on "Loading map…" or blank) | "The cost card and the failure band carry the numbers." | F5. If it is still blank, switch to the `fallback/index.html` tab and say "stored". |
 | Wifi dies | "We're offline, so this is stored and labelled stored." | The web and the solver both run on this laptop, so Run may still work, but the explanation will not. If anything errors, switch to the `fallback/index.html` tab. |
 | The laptop dies | "The public build shows stored runs only. The solver ran on the laptop that just died." Never say "live". | On the teammate's laptop, open https://larpers-three.vercel.app → **Open the planner**. |
 

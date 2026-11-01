@@ -2,14 +2,11 @@
 
 // Shared application shell: navy sidebar, top bar, and the active workspace page.
 import { useEffect, useRef, useState, type ComponentType } from 'react';
-import AuthButton from '../AuthButton';
-import { getCurrentForm } from '../../lib/useLive';
 import { useApp, type PageKey } from '../../lib/store';
 import { runKind, runLabel, type RunKind } from '../../lib/runs';
 import { useDismiss } from '../../lib/useDismiss';
 import { getEntry, getSolution, slugs, solutionOf } from '../../lib/bundle';
 import { storedSlugOf, viewForEntry } from '../../lib/useLive';
-import { useSession } from '../../lib/auth';
 import { isProvenOptimal, pct, statusLabel } from '../../lib/format';
 import { IconBell, IconBolt, IconChart, IconCheckCircle, IconChevronDown, IconCollapse, IconHelp, IconHome, IconMap, IconShield, IconSliders } from '../common/icons';
 
@@ -218,32 +215,24 @@ function IconPerson() {
 }
 
 function Profile({ open, setOpen }: PopoverProps) {
-    const { status, user } = useSession();
     const wrap = useRef<HTMLDivElement>(null);
     const trigger = useRef<HTMLButtonElement>(null);
     useDismiss(open, () => setOpen(false), [wrap], trigger);
-    const signedIn = status === 'signed_in';
-    const name = user?.name ?? user?.email ?? (status === 'disabled' ? 'Guest' : 'Not signed in');
-    const initials = (user?.name ?? user?.email ?? '').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
-    const role = signedIn ? 'Planner' : status === 'disabled' ? 'Stored runs only' : 'Sign in to solve live';
     return (
         <div className="relative" ref={wrap}>
             <button ref={trigger} type="button" onClick={() => setOpen(!open)} aria-label="Account menu" aria-haspopup="dialog" aria-expanded={open} className="flex items-center gap-2.5 rounded-lg px-2 py-1 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
-                {user?.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={user.avatarUrl} alt="" className="h-9 w-9 rounded-full" />
-                ) : (
-                    <span className={`flex h-9 w-9 items-center justify-center rounded-full text-[13px] font-semibold ${signedIn && initials ? 'bg-primary text-white' : 'bg-slate-100 text-muted'}`}>{signedIn && initials ? initials : <IconPerson />}</span>
-                )}
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[13px] font-semibold text-muted"><IconPerson /></span>
                 <span className="hidden text-left leading-tight md:block">
-                    <span className="block max-w-[10rem] truncate text-[13px] font-semibold text-deep">{name}</span>
-                    <span className="block text-[12px] text-muted">{role}</span>
+                    <span className="block max-w-[10rem] truncate text-[13px] font-semibold text-deep">Guest</span>
+                    <span className="block text-[12px] text-muted">Stored runs only</span>
                 </span>
                 <IconChevronDown className="text-muted" />
             </button>
             {open && (
                 <div role="dialog" aria-label="Account" className="legacy absolute right-0 top-12 z-[1200] w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-white p-4 shadow-lg">
-                    <AuthButton getPendingInputs={getCurrentForm} />
+                    <div className="flex flex-wrap items-center gap-3 text-base text-ink">
+                        <span className="text-base text-ink2">Stored runs only, no login</span>
+                    </div>
                     <a href="#home" className="mt-3 block rounded-lg border border-line px-3 py-2 text-center text-sm font-medium text-deep hover:bg-slate-50">Back to front page</a>
                 </div>
             )}

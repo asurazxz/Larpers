@@ -18,7 +18,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from api.auth import require_user
 from api.explain import router as explain_router
 from api.plain_english import ExplainRequest, ExplainResponse, plain_english
 from solver.audit import audit
@@ -178,7 +177,7 @@ def create_app() -> FastAPI:
         origins.append(frontend_url)
     app.add_middleware(
         CORSMiddleware, allow_origins=origins, allow_credentials=False,
-        allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type"],
+        allow_methods=["GET", "POST"], allow_headers=["Content-Type"],
         expose_headers=["X-Run-ID"],
     )
 
@@ -206,15 +205,14 @@ def create_app() -> FastAPI:
         logging.getLogger(__name__).error("Run %s failed (%s)", run_id, type(exc).__name__)
         return JSONResponse(status_code=500, content={"run_id": run_id, "detail": "Run failed; see server logs using this run_id"}, headers={"X-Run-ID": run_id})
 
-    public = APIRouter(prefix="/api")
-    protected = APIRouter(prefix="/api", dependencies=[Depends(require_user)])
+    routes = APIRouter(prefix="/api")
 
-    @public.get("/health")
+    @routes.get("/health")
     def health(request: Request, inputs: Annotated[Inputs | None, Depends(optional_inputs)]) -> HealthResponse:
         available = SOLVER_AVAILABLE and inputs is not None
         return HealthResponse(run_id=request.state.run_id, ok=available, available=available, solver_available=SOLVER_AVAILABLE, data_available=inputs is not None, solver_version=SOLVER_VERSION, source="live" if SOLVER_AVAILABLE else "fixture")
 
-    @public.get("/data")
+    @routes.get("/data")
     def data(request: Request, inputs: InputsDep) -> dict:
         return {
             "run_id": request.state.run_id, "data_hash": inputs.data_hash,
@@ -224,20 +222,20 @@ def create_app() -> FastAPI:
             "defaults": Scenario().model_dump(mode="json", by_alias=True),
         }
 
-    @public.post("/validate")
+    @routes.post("/validate")
     def validate(body: ValidationRequest, request: Request, inputs: InputsDep) -> ValidationResponse:
         validate_scenario(body.scenario, inputs)
         report = audit(body.scenario, body.solution, inputs=inputs)
         return ValidationResponse(run_id=request.state.run_id, **report.model_dump())
 
-    @protected.post("/solve")
+    @routes.post("/solve")
     def solve(scenario: Scenario, request: Request, inputs: InputsDep) -> Solution:
         validate_scenario(scenario, inputs)
         validate_scenario(scenario, inputs)
         refuse_infeasible(scenario, inputs)
         return finish_run(resolve(scenario), scenario, request.state.run_id, inputs)
 
-    @protected.post("/solve/stream")
+    @routes.post("/solve/stream")
     async def solve_stream(scenario: Scenario, request: Request, inputs: InputsDep) -> StreamingResponse:
         validate_scenario(scenario, inputs)
         refuse_infeasible(scenario, inputs)
@@ -246,7 +244,7 @@ def create_app() -> FastAPI:
         return StreamingResponse(stream_solve(scenario, request.state.run_id, inputs), media_type="application/x-ndjson",
                                  headers={"X-Accel-Buffering": "no"})
 
-    @protected.post("/baseline")
+    @routes.post("/baseline")
     def greedy(scenario: Scenario, request: Request, inputs: InputsDep) -> Solution:
         validate_scenario(scenario, inputs)
         refuse_infeasible(scenario, inputs)
@@ -254,13 +252,12 @@ def create_app() -> FastAPI:
         result.run_id = request.state.run_id
         return result
 
-    @protected.post("/plain-english")
+    @routes.post("/plain-english")
     def plain_english_route(body: ExplainRequest, request: Request) -> ExplainResponse:
         text, model = plain_english(body.kind, body.facts)
         return ExplainResponse(run_id=request.state.run_id, text=text, model=model)
 
-    app.include_router(public)
-    app.include_router(protected)
+    app.include_router(routes)
     app.include_router(explain_router)
     return app
 

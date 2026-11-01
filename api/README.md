@@ -7,36 +7,28 @@ python data/prepare.py
 uvicorn api.main:app --host 127.0.0.1 --port 8000
 ```
 
-Set `SUPABASE_URL` in the process environment to the public project URL. The API
-reads one value from the root `.env`, `GEMINI_API_KEY`, and needs no service key or
-signing secret. HTTPS is
-required except for `localhost`, `127.0.0.1`, and `::1` development projects.
-Bearer tokens must use RS256 or ES256 and have an expiry, subject, audience
-`authenticated`, and the project's `/auth/v1` issuer. Public signing keys are
-cached from `/auth/v1/.well-known/jwks.json`. For legacy HS256 projects, rotate to
-asymmetric keys; this implementation intentionally has no symmetric-key branch.
+The API reads one value from the root `.env`, `GEMINI_API_KEY`. It has no login:
+it is meant to run on the presenter's laptop, bound to `127.0.0.1`.
 
 CORS allows `http://localhost:3000`, `http://127.0.0.1:3000`, and the single origin
-in `FRONTEND_URL`, if set. Send the Supabase access token in `Authorization:
-Bearer ...`; cookies are not used. No wildcard origin or credentialed CORS is
-enabled.
+in `FRONTEND_URL`, if set. Cookies are not used. No wildcard origin or credentialed
+CORS is enabled.
 
-| Endpoint | Access | Body / result |
-| --- | --- | --- |
-| `GET /api/data` | Public | Sites, airports, distance matrices, data hash, scenario defaults |
-| `GET /api/health` | Public | `ok`, `available`, solver/data availability, version and source |
-| `POST /api/solve` | Signed in | Scenario JSON → independently audited Solution |
-| `POST /api/solve/stream` | Signed in | Scenario JSON → NDJSON of the run as it happens, ending in the same audited Solution |
-| `POST /api/baseline` | Signed in | Scenario JSON → audited greedy Solution |
-| `POST /api/validate` | Public | `{ "scenario": ..., "solution": ... }` → flat AuditReport |
-| `POST /api/plain-english` | Signed in | `{ "kind": ..., "facts": ... }` → `{ "text", "model" }`, both null when Gemini gives no clean draft in time or past 30 calls a minute |
+| Endpoint | Body / result |
+| --- | --- |
+| `GET /api/data` | Sites, airports, distance matrices, data hash, scenario defaults |
+| `GET /api/health` | `ok`, `available`, solver/data availability, version and source |
+| `POST /api/solve` | Scenario JSON → independently audited Solution |
+| `POST /api/solve/stream` | Scenario JSON → NDJSON of the run as it happens, ending in the same audited Solution |
+| `POST /api/baseline` | Scenario JSON → audited greedy Solution |
+| `POST /api/validate` | `{ "scenario": ..., "solution": ... }` → flat AuditReport |
+| `POST /api/plain-english` | `{ "kind": ..., "facts": ... }` → `{ "text", "model" }`, both null when Gemini gives no clean draft in time or past 30 calls a minute |
 
 All JSON results and errors include `run_id`; every HTTP response also has an
 `X-Run-ID` header, including CORS preflight responses. Infeasible solve results
 return HTTP 200 with `status: "infeasible"` and no primal value. A numerical audit
 failure stays visible in `validation`; it is never silently changed into a pass.
-Invalid scenarios return 422. Missing or invalid access tokens return 401;
-unconfigured authentication or missing prepared data returns 503.
+Invalid scenarios return 422. Missing prepared data returns 503.
 
 If importing `solver.model` raises `ImportError`, the API uses the partial
 contract fixture. Health then reports `ok: false`, `available: false`, and
@@ -66,13 +58,10 @@ Validation commands:
 
 ```sh
 python -m solver.contract --check
-python -m pytest tests/test_api.py -k auth
 python -m pytest tests/test_audit.py tests/test_baseline.py tests/test_api.py
 ```
 
-Tests generate RSA and EC keys only in memory and substitute the remote JWKS
-client. They do not need Supabase credentials, browser login, or network access.
-The pinned Starlette/HTTPX test stack currently emits an upstream deprecation
+The tests need no network access. The pinned Starlette/HTTPX test stack currently emits an upstream deprecation
 warning; tests continue using the repository's declared dependencies.
 
 ## Organiser values and overrides

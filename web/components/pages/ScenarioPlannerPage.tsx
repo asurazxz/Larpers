@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { liveEnabled } from '../../lib/api';
-import { savePendingInputs, signInWithGoogle, useSession } from '../../lib/auth';
 import { bundle, siteById, slugs } from '../../lib/bundle';
 import { AIRPORTS } from '../../lib/contract';
 import { useApp } from '../../lib/store';
@@ -45,13 +44,11 @@ function Field({ label, hint, tag, error, children }: { label: string; hint?: st
 
 export default function ScenarioPlannerPage() {
     const { solution, selectView, solverHealth, isLive, onLiveRun, pickedNode, setDirty, go, feed } = useApp();
-    const session = useSession();
 
     const displayed = useMemo(() => formFromScenario(solution?.scenario), [solution]);
     const [form, setForm] = useState<ScenarioForm>(() => getCurrentForm() ?? displayed);
     const [step, setStep] = useState(0);
     const [search, setSearch] = useState('');
-    const [signInError, setSignInError] = useState<string | null>(null);
     const [visited, setVisited] = useState<number[]>([0]);
     const [saved, setSaved] = useState<SavedScenario[]>([]);
     useEffect(() => setSaved(listSaved()), []);
@@ -81,11 +78,6 @@ export default function ScenarioPlannerPage() {
         setDirty(dirty);
     }, [form, dirty, setDirty]);
 
-    useEffect(() => {
-        if (st.phase === 'auth') savePendingInputs(form);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [st.phase]);
-
     const lastSeq = useRef<number | null>(pickedNode?.seq ?? null);
     const [picked, setPicked] = useState<string | null>(null);
     useEffect(() => {
@@ -114,7 +106,7 @@ export default function ScenarioPlannerPage() {
 
     const chip: { t: string; c: string; dot?: boolean } = running
         ? { t: 'Solving', c: 'bg-blue-50 text-primary', dot: true }
-        : st.phase === 'error' || st.phase === 'auth'
+        : st.phase === 'error'
           ? { t: 'Failed', c: 'bg-red-50 text-danger' }
           : st.phase === 'infeasible'
             ? { t: 'Infeasible', c: 'bg-amber-50 text-warning' }
@@ -126,20 +118,7 @@ export default function ScenarioPlannerPage() {
 
     const onRun = () => {
         if (!scenario) return;
-        if (session.status === 'signed_out') {
-            savePendingInputs(form);
-            runner.promptSignIn('Sign in with Google to run the solver. Your inputs are kept.');
-            return;
-        }
         void runner.run(scenario);
-    };
-    const startSignIn = async () => {
-        setSignInError(null);
-        try {
-            await signInWithGoogle(form);
-        } catch (err) {
-            setSignInError(err instanceof Error ? err.message : 'Sign-in failed.');
-        }
     };
     const reset = () => {
         if (window.confirm('Discard your edits and reset the inputs to the displayed run?')) {
@@ -277,22 +256,11 @@ export default function ScenarioPlannerPage() {
             {st.phase === 'done' && <div className="rounded-xl bg-green-50 px-3 py-2 text-sm text-deep">New run ID <span className="num font-semibold">{st.runId}</span> in {st.elapsedS.toFixed(1)} s.{st.message && <div className="text-danger">{st.message}</div>}</div>}
             {st.phase === 'infeasible' && <div className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-deep">The solver could not find a feasible network for these inputs (run ID <span className="num">{st.runId}</span>). This is a solver result, not an error.</div>}
             {st.phase === 'error' && <div role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-danger">{st.message}</div>}
-            {st.phase === 'auth' && (
-                <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl bg-blue-50 px-3 py-2 text-sm text-deep">
-                    <span className="font-medium">{st.message}</span>
-                    {session.status === 'disabled' ? (
-                        <span className="text-muted">Sign-in is not configured on this URL.</span>
-                    ) : (
-                        <button type="button" className="btn-primary" onClick={() => void startSignIn()}>Sign in with Google</button>
-                    )}
-                    {signInError && <span className="text-danger">{signInError}</span>}
-                </div>
-            )}
             {liveMode ? (
                 <div className="flex flex-wrap items-center gap-3">
                     {!running ? (
                         <button type="button" className="btn-primary" disabled={!scenario} onClick={onRun}>
-                            {session.status === 'signed_out' ? 'Sign in to run' : 'Run solver'}
+                            Run solver
                         </button>
                     ) : (
                         <button type="button" className="btn-secondary" onClick={runner.cancel}>Cancel</button>

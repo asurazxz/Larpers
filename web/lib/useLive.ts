@@ -2,7 +2,7 @@
 // The page keeps `solution` as the single source of truth; a live result is displayed by
 // passing it to setSolution, exactly as a stored run is.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, AuthRequiredError, baseline, health, liveEnabled, solveStream } from './api';
+import { ApiError, baseline, health, liveEnabled, solveStream } from './api';
 import { bundle, getEntry, siteById, sites, slugs, solutionOf } from './bundle';
 import {
     AIRPORTS,
@@ -167,24 +167,6 @@ export function formFromScenario(sc: Scenario | undefined | null): ScenarioForm 
     };
 }
 
-/** Accepts a value restored from sessionStorage only if it has the form's shape. */
-export function asScenarioForm(v: unknown): ScenarioForm | null {
-    if (!v || typeof v !== 'object') return null;
-    const f = v as Partial<ScenarioForm>;
-    if (!f.demand || typeof f.yieldValue !== 'string' || typeof f.roadFactor !== 'string' || !Array.isArray(f.excluded)) {
-        return null;
-    }
-    return {
-        demand: { ...BLANK_DEMAND, ...f.demand },
-        yieldValue: f.yieldValue,
-        roadFactor: f.roadFactor,
-        horizon: typeof f.horizon === 'string' ? f.horizon : String(DEFAULT_SCENARIO.horizon_years),
-        collection: f.collection === 'optional' ? 'optional' : 'all',
-        capacityBasis: f.capacityBasis === 'biomass_input' ? 'biomass_input' : 'saf_output',
-        excluded: f.excluded.filter((id): id is string => typeof id === 'string'),
-    };
-}
-
 export type FormErrors = Partial<Record<'demand' | 'yield' | 'road' | 'horizon' | 'excluded', string>>;
 
 /** Validates like solver/contract.py Scenario and builds the request. Errors are typed, never silent defaults. */
@@ -237,7 +219,7 @@ export function buildScenarioFromForm(form: ScenarioForm): { scenario: Scenario 
     };
 }
 
-// The current form, readable by the header's AuthButton (getPendingInputs) without lifting state.
+// The current form, readable by other pages without lifting state.
 let currentForm: ScenarioForm | null = null;
 export const setCurrentForm = (f: ScenarioForm | null): void => {
     currentForm = f;
@@ -246,7 +228,7 @@ export const getCurrentForm = (): ScenarioForm | null => currentForm;
 
 // ---------- Run ----------
 
-export type RunPhase = 'idle' | 'running' | 'done' | 'infeasible' | 'error' | 'auth';
+export type RunPhase = 'idle' | 'running' | 'done' | 'infeasible' | 'error';
 
 export interface RunState {
     phase: RunPhase;
@@ -321,11 +303,7 @@ export function useLiveRunner(onResult: (run: LiveRun) => void, feed: SolveFeed,
         if (sol.status === 'rejected') {
             const err = sol.reason;
             feedRef.current.end();
-            if (err instanceof AuthRequiredError) {
-                setState({ phase: 'auth', startedAt: null, elapsedS, message: err.message, runId: null });
-            } else {
-                setState({ phase: 'error', startedAt: null, elapsedS, message: describeError(err), runId: null });
-            }
+            setState({ phase: 'error', startedAt: null, elapsedS, message: describeError(err), runId: null });
             failureRef.current?.();
             return;
         }
@@ -369,11 +347,7 @@ export function useLiveRunner(onResult: (run: LiveRun) => void, feed: SolveFeed,
 
     const cancel = useCallback(() => controller.current?.abort(), []);
 
-    const promptSignIn = useCallback((message?: string) => {
-        setState({ phase: 'auth', startedAt: null, elapsedS: 0, message: message ?? 'Sign in with Google to run the solver.', runId: null });
-    }, []);
-
     const clear = useCallback(() => setState({ phase: 'idle', startedAt: null, elapsedS: 0, message: null, runId: null }), []);
 
-    return { state, run, cancel, promptSignIn, clear };
+    return { state, run, cancel, clear };
 }

@@ -122,7 +122,7 @@ py -3 -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt &
 | Local solver API | `uvicorn api.main:app --port 8000` |
 | Web app | `cd web && npm install && npm run dev` |
 
-The web app works without the API and shows the stored runs, clearly labelled. For live solves, set `NEXT_PUBLIC_SOLVER_API_URL=http://localhost:8000` in `web/.env.local` (see [`web/.env.example`](web/.env.example)) and see [`api/README.md`](api/README.md) for endpoints and sign-in.
+The web app works without the API and shows the stored runs, clearly labelled. For live solves, set `NEXT_PUBLIC_SOLVER_API_URL=http://localhost:8000` in `web/.env.local` (see [`web/.env.example`](web/.env.example)) and see [`api/README.md`](api/README.md) for endpoints.
 
 **3. Offline fallback**
 
@@ -130,12 +130,18 @@ The web app works without the API and shows the stored runs, clearly labelled. F
 
 A rerun reuses a stored run only when its data hash, full scenario and solver version all match. `python -m solver.scenarios --stub --out /tmp/stub.json` checks the pipeline without a solver and refuses to write inside `web/`.
 
+## Hosting and maintenance
+
+Denzel will maintain the Vercel hosting in the **denz** team (`denz6`). As of **2 November 2026**, the transfer from the existing host is **pending**; the destination team has been verified, but ownership has not moved yet.
+
+The published demo remains [larpers-three.vercel.app](https://larpers-three.vercel.app/). See [the hosting handover guide](docs/HOSTING.md) for the transfer steps and verification checklist. This handover requires no application code changes. The public demo shows stored runs; the local solver API is documented separately in [api/README.md](api/README.md).
+
 ## Repository layout
 
 ```
 data/        raw organiser data (read-only), prepare.py, reference road tables
 solver/      MIP model, candidate shortlist, audit, greedy baseline, scenarios, sensitivity
-api/         FastAPI solver API, sign-in checks, Gemini explanations
+api/         FastAPI solver API, Gemini explanations
 web/         Next.js app; web/data/bundle.json holds the stored runs
 fallback/    static double-click build of the web app
 tests/       pytest suite for data, model, audit, baseline, API and explanations
@@ -178,8 +184,7 @@ resource/    the organisers' challenge PDFs
 | [DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md) | How to run the live demo |
 | [PITCH.md](docs/PITCH.md) | The three-minute pitch script |
 | [NEXT.md](docs/NEXT.md) | Ideas for after the hackathon |
-| [AUTH.md](docs/AUTH.md) · [RLS.md](docs/RLS.md) | Google sign-in and row-level security |
-| [TEAM_SETUP.md](docs/TEAM_SETUP.md) | Supabase setup for team members |
+| [HOSTING.md](docs/HOSTING.md) | Vercel ownership handover, maintenance and verification |
 
 ## Team
 

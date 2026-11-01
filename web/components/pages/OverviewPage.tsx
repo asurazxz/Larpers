@@ -9,7 +9,6 @@ import { HeroArt, IconArrow, IconBuilding, IconDepot, IconFlame, IconNetwork, Ic
 import Legend from '../overview/Legend';
 import { demandOf } from '../../lib/demand';
 import { useApp } from '../../lib/store';
-import { useSession } from '../../lib/auth';
 import { sites as allSites } from '../../lib/bundle';
 import { runKind, runLabel } from '../../lib/runs';
 import { AIRPORTS, type Leg, type Solution } from '../../lib/contract';
@@ -72,10 +71,8 @@ function vsText(basePct: number, against: string): { text: string; cls: string }
 
 export default function OverviewPage() {
     const { solution, baseline, baselineKind, runSlug, isLive, go } = useApp();
-    const { user } = useSession();
     // The workspace is client-only, so the clock can seed the state directly.
     const [hello] = useState(greeting);
-    const first = user?.name?.split(/\s+/)[0] ?? null;
 
     if (!solution) {
         return (
@@ -147,7 +144,7 @@ export default function OverviewPage() {
             <section className={`relative min-h-[140px] overflow-hidden ${card}`}>
                 <HeroArt />
                 <div className="relative z-10 px-8 py-8">
-                    <h1 suppressHydrationWarning className="text-[28px] font-bold tracking-tight text-deep">{first ? `${hello}, ${first}.` : `${hello}.`}</h1>
+                    <h1 suppressHydrationWarning className="text-[28px] font-bold tracking-tight text-deep">{`${hello}.`}</h1>
                     <p className="mt-1 text-[15px] text-muted">{heroLine}</p>
                 </div>
             </section>

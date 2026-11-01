@@ -6,7 +6,7 @@ import pytest
 from api import plain_english as explain
 from api.plain_english import GeminiUnavailable, ask_gemini, plain_english, problems
 from solver.context import PROJECT_CONTEXT
-from test_api import api_client, signer  # noqa: F401
+from test_api import api_client  # noqa: F401
 
 FACTS = {
     "total_annual_cost": "$894.5M",
@@ -218,17 +218,10 @@ def test_the_key_is_read_from_the_env_file_when_the_process_has_none(monkeypatch
     assert explain.api_key() == SECRET
 
 
-def test_route_needs_a_signed_in_user(api_client):
-    client, _ = api_client
-    response = client.post("/api/plain-english", json={"kind": "network", "facts": FACTS})
-    assert response.status_code == 401
-
-
-def test_route_returns_the_filled_text(api_client, signer, monkeypatch):
+def test_route_returns_the_filled_text(api_client, monkeypatch):
     client, _ = api_client
     monkeypatch.setattr(explain, "ask_gemini", scripted(GOOD))
-    response = client.post("/api/plain-english", json={"kind": "network", "facts": FACTS},
-                           headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/plain-english", json={"kind": "network", "facts": FACTS})
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["text"].startswith("This plan costs $894.5M")
@@ -236,32 +229,29 @@ def test_route_returns_the_filled_text(api_client, signer, monkeypatch):
     assert body["run_id"] == response.headers["X-Run-ID"]
 
 
-def test_route_explains_a_trace(api_client, signer, monkeypatch):
+def test_route_explains_a_trace(api_client, monkeypatch):
     client, _ = api_client
     monkeypatch.setattr(explain, "ask_gemini", scripted(TRACE_DRAFT))
-    response = client.post("/api/plain-english", json={"kind": "trace", "facts": TRACE_FACTS},
-                           headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/plain-english", json={"kind": "trace", "facts": TRACE_FACTS})
     assert response.status_code == 200, response.text
     assert response.json()["text"].endswith(TRACE_FACTS["check_result"])
 
 
-def test_route_answers_200_with_no_text_when_gemini_is_down(api_client, signer, monkeypatch):
+def test_route_answers_200_with_no_text_when_gemini_is_down(api_client, monkeypatch):
     client, _ = api_client
     monkeypatch.setattr(explain, "ask_gemini", scripted(*[GeminiUnavailable("HTTP 503")] * len(explain.MODELS)))
-    response = client.post("/api/plain-english", json={"kind": "network", "facts": FACTS},
-                           headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/plain-english", json={"kind": "network", "facts": FACTS})
     assert response.status_code == 200, response.text
     assert response.json()["text"] is None
     assert response.json()["model"] is None
 
 
-def test_route_stops_calling_gemini_past_the_shared_cap(api_client, signer, monkeypatch):
+def test_route_stops_calling_gemini_past_the_shared_cap(api_client, monkeypatch):
     client, _ = api_client
     monkeypatch.setattr(explain, "MAX_CALLS_PER_MINUTE", 1)
     ask = scripted(GOOD)
     monkeypatch.setattr(explain, "ask_gemini", ask)
-    headers = {"Authorization": "Bearer "+signer()}
-    bodies = [client.post("/api/plain-english", json={"kind": "network", "facts": FACTS}, headers=headers) for _ in range(2)]
+    bodies = [client.post("/api/plain-english", json={"kind": "network", "facts": FACTS}) for _ in range(2)]
     assert [b.status_code for b in bodies] == [200, 200]
     assert bodies[0].json()["text"] is not None
     assert bodies[1].json()["text"] is None
@@ -275,10 +265,9 @@ def test_the_cap_counts_each_gemini_call_not_each_click(monkeypatch):
     assert len(ask.calls) == 1
 
 
-def test_an_unknown_name_is_not_repeated_back(api_client, signer):
+def test_an_unknown_name_is_not_repeated_back(api_client):
     client, _ = api_client
-    response = client.post("/api/plain-english", json={"kind": "network", "facts": {**FACTS, "ignore_your_rules": "x"}},
-                           headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/plain-english", json={"kind": "network", "facts": {**FACTS, "ignore_your_rules": "x"}})
     assert response.status_code == 422
     assert "ignore_your_rules" not in response.text
 
@@ -296,9 +285,9 @@ def test_an_unknown_name_is_not_repeated_back(api_client, signer):
     {"kind": "network", "facts": {**FACTS, **{f"extra_{chr(97 + i)}": "x" for i in range(26)}}},
 ], ids=["no-total", "no-status", "no-reason", "no-check", "bad-kind", "bad-name", "unknown-name", "wrong-kind-name",
         "long-value", "too-many"])
-def test_route_refuses_malformed_facts(api_client, signer, monkeypatch, body):
+def test_route_refuses_malformed_facts(api_client, monkeypatch, body):
     client, _ = api_client
     assert explain.MAX_FACTS == max(len(names) for names in explain.ALLOWED.values())
     monkeypatch.setattr(explain, "ask_gemini", scripted())
-    response = client.post("/api/plain-english", json=body, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/plain-english", json=body)
     assert response.status_code == 422

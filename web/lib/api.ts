@@ -1,11 +1,9 @@
 // Client for Damien's FastAPI solver (api/main.py).
-// Public: GET /api/health, GET /api/data, POST /api/validate.
-// Signed-in: POST /api/solve, POST /api/solve/stream, POST /api/baseline, POST /api/explain, POST /api/plain-english,
-// with Authorization: Bearer <Supabase access token>.
+// GET /api/health, GET /api/data, POST /api/validate, POST /api/solve, POST /api/solve/stream, POST /api/baseline,
+// POST /api/explain, POST /api/plain-english. No login: the API runs on the presenter's laptop.
 import type { AuditReport, Scenario, Solution } from './contract';
 import type { ExplainInput } from './explain';
 import type { SolveEvent } from './solveProgress';
-import { getAccessToken, refreshAccessToken } from './supabase';
 
 export const SOLVER_API_URL = (process.env.NEXT_PUBLIC_SOLVER_API_URL ?? '').trim().replace(/\/+$/, '');
 
@@ -73,25 +71,8 @@ export class ApiError extends Error {
     }
 }
 
-// Solve or baseline was refused for lack of a valid session, even after one refresh.
-// The UI should prompt sign-in and keep the scenario inputs (see savePendingInputs).
-export class AuthRequiredError extends Error {
-    readonly status = 401;
-
-    constructor(message = 'Sign in with Google to run the solver.') {
-        super(message);
-        this.name = 'AuthRequiredError';
-    }
-}
-
-export interface TokenSource {
-    getAccessToken(): Promise<string | null>;
-    refreshAccessToken(): Promise<string | null>;
-}
-
 export interface ApiClientOptions {
     baseUrl?: string;
-    tokens?: TokenSource;
     fetch?: typeof fetch;
     healthTimeoutMs?: number;
     solveTimeoutMs?: number;
@@ -175,7 +156,6 @@ async function readBody(res: Response): Promise<unknown> {
 export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     const baseUrl = (options.baseUrl ?? SOLVER_API_URL).trim().replace(/\/+$/, '');
     const enabled = baseUrl.length > 0;
-    const tokens: TokenSource = options.tokens ?? { getAccessToken, refreshAccessToken };
     const doFetch: typeof fetch =
         options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init));
     const healthTimeoutMs = options.healthTimeoutMs ?? HEALTH_TIMEOUT_MS;
@@ -186,7 +166,6 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         method: 'GET' | 'POST',
         path: string,
         body: unknown,
-        token: string | null,
         timeoutMs: number,
         signal?: AbortSignal,
     ): Promise<Response> {
@@ -210,9 +189,6 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         const headers: Record<string, string> = { Accept: 'application/json' };
         if (body !== undefined) {
             headers['Content-Type'] = 'application/json';
-        }
-        if (token) {
-            headers.Authorization = `Bearer ${token}`;
         }
         try {
             return await doFetch(baseUrl + path, {
@@ -250,26 +226,13 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         return body as T;
     }
 
-    // POST with the session token; on 401 refresh once and retry once, else AuthRequiredError.
-    async function authedResponse(path: string, body: unknown, opts: RequestOptions = {}): Promise<Response> {
-        const timeoutMs = opts.timeoutMs ?? solveTimeoutMs;
-        const token = await tokens.getAccessToken();
-        let res = await send('POST', path, body, token, timeoutMs, opts.signal);
-        if (res.status === 401) {
-            const fresh = await tokens.refreshAccessToken();
-            if (!fresh) {
-                throw new AuthRequiredError();
-            }
-            res = await send('POST', path, body, fresh, timeoutMs, opts.signal);
-            if (res.status === 401) {
-                throw new AuthRequiredError('Your session expired. Sign in with Google again to run the solver.');
-            }
-        }
-        return res;
+    // POST with the solve timeout unless the caller set one.
+    function postResponse(path: string, body: unknown, opts: RequestOptions = {}): Promise<Response> {
+        return send('POST', path, body, opts.timeoutMs ?? solveTimeoutMs, opts.signal);
     }
 
-    async function authedPost<T>(path: string, body: unknown, opts: RequestOptions = {}): Promise<T> {
-        return parseOk<T>(await authedResponse(path, body, opts));
+    async function post<T>(path: string, body: unknown, opts: RequestOptions = {}): Promise<T> {
+        return parseOk<T>(await postResponse(path, body, opts));
     }
 
     // Reads NDJSON until the result line. Cancelling closes the connection, which ends the solve on the server.
@@ -363,7 +326,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
                 return { ok: false, status: 0, info: null, error: 'not configured' };
             }
             try {
-                const res = await send('GET', '/api/health', undefined, null, healthTimeoutMs);
+                const res = await send('GET', '/api/health', undefined, healthTimeoutMs);
                 const info = await readBody(res).catch(() => null);
                 const flagged =
                     info && typeof info === 'object'
@@ -381,7 +344,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         },
 
         async getData<T = unknown>(opts: RequestOptions = {}): Promise<T> {
-            const res = await send('GET', '/api/data', undefined, null, opts.timeoutMs ?? defaultTimeoutMs, opts.signal);
+            const res = await send('GET', '/api/data', undefined, opts.timeoutMs ?? defaultTimeoutMs, opts.signal);
             return parseOk<T>(res);
         },
 
@@ -392,7 +355,6 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
                 'POST',
                 '/api/validate',
                 { scenario: buildScenario(scenario), solution: wire },
-                null,
                 opts.timeoutMs ?? defaultTimeoutMs,
                 opts.signal,
             );
@@ -400,20 +362,20 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         },
 
         solve(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> {
-            return authedPost<Solution>('/api/solve', buildScenario(scenario), opts);
+            return post<Solution>('/api/solve', buildScenario(scenario), opts);
         },
 
         // Falls back to the plain endpoint when the API predates streaming: the run still finishes, unseen.
         async solveStream(scenario: ScenarioInput, opts: StreamOptions): Promise<Solution> {
-            const res = await authedResponse('/api/solve/stream', buildScenario(scenario), opts);
+            const res = await postResponse('/api/solve/stream', buildScenario(scenario), opts);
             if (res.status === 404 || res.status === 405) {
-                return authedPost<Solution>('/api/solve', buildScenario(scenario), opts);
+                return post<Solution>('/api/solve', buildScenario(scenario), opts);
             }
             return readStream(res, opts);
         },
 
         baseline(scenario: ScenarioInput, opts?: RequestOptions): Promise<Solution> {
-            return authedPost<Solution>('/api/baseline', buildScenario(scenario), opts);
+            return post<Solution>('/api/baseline', buildScenario(scenario), opts);
         },
 
         explain(scenario: ScenarioInput, solution: Solution, baseline: Solution | null, opts: RequestOptions = {}): Promise<Explanation> {
@@ -424,16 +386,16 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
                 const { scenario: _baseAttached, ...baseWire } = baseline;
                 body.baseline = baseWire;
             }
-            return authedPost<Explanation>('/api/explain', body, { ...opts, timeoutMs: opts.timeoutMs ?? EXPLAIN_TIMEOUT_MS });
+            return post<Explanation>('/api/explain', body, { ...opts, timeoutMs: opts.timeoutMs ?? EXPLAIN_TIMEOUT_MS });
         },
 
         plainEnglish(input: ExplainInput, opts?: RequestOptions): Promise<PlainEnglishResult> {
-            return authedPost<PlainEnglishResult>('/api/plain-english', input, { timeoutMs: PLAIN_ENGLISH_TIMEOUT_MS, ...opts });
+            return post<PlainEnglishResult>('/api/plain-english', input, { timeoutMs: PLAIN_ENGLISH_TIMEOUT_MS, ...opts });
         },
     };
 }
 
-// Default client from NEXT_PUBLIC_SOLVER_API_URL and the Supabase session.
+// Default client from NEXT_PUBLIC_SOLVER_API_URL.
 export const api: ApiClient = createApiClient();
 
 export const health = (): Promise<HealthResult> => api.health();

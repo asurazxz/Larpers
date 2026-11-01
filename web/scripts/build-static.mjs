@@ -1,4 +1,4 @@
-// Double-click fallback (Level 4): build with Supabase and solver variables blank, then copy out/ to ../fallback/.
+// Double-click fallback (Level 4): build with the solver URL blank, then copy out/ to ../fallback/.
 // Stored runs only, no login, no live solve. Cross-platform: no shell-specific syntax. Run: npm run build:static
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, rmSync } from 'node:fs';
@@ -10,11 +10,9 @@ const web = join(here, '..');
 const out = join(web, 'out');
 const fallback = join(web, '..', 'fallback');
 
-// Empty strings in process.env take precedence over web/.env.local, so the bundle carries no URLs or keys.
+// An empty string in process.env takes precedence over web/.env.local, so the bundle carries no solver URL.
 const env = {
     ...process.env,
-    NEXT_PUBLIC_SUPABASE_URL: '',
-    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '',
     NEXT_PUBLIC_SOLVER_API_URL: '',
 };
 

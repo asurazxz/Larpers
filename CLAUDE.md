@@ -68,7 +68,7 @@ data/raw → data/prepare.py → data/processed/ → solver/ → solver/audit.py
 - `solver/model.py` holds the MILP and `resolve(scenario) -> Solution`. `solver/contract.py` defines both types, and that JSON is the only contract between solver and frontend.
 - `solver/audit.py` checks every result independently and must not import from `solver/model.py`.
 - Live solve through FastAPI (`api/main.py`) on the presenter's laptop is P0. Stored runs in `web/data/bundle.json` are the labelled fallback and are never called live.
-- Supabase provides Google login only. Solution data stays in the committed bundle.
+- There is no login. Solution data stays in the committed bundle.
 - The static double-click fallback must exist by 14:30 regardless.
 
 ## Rules
@@ -78,6 +78,6 @@ data/raw → data/prepare.py → data/processed/ → solver/ → solver/audit.py
 - A solver decides everything. Any LLM layer only explains a finished solution.
 - Every displayed number must trace to the cost table and a recomputable distance. Say "optimal" only when the MIP gap is 0, and "could not find" rather than "does not exist".
 - Use 4-space indentation in Python and TypeScript.
-- `.env` holds Supabase secrets (`SUPABASE_SECRET_KEY`, `DATABASE_URL`, `SUPABASE_DB_PASSWORD`) and must never be committed or printed. Only the publishable key may reach `web/`, exposed under a `NEXT_PUBLIC_` name.
+- `.env` holds `GEMINI_API_KEY` and must never be committed or printed. Nothing secret may reach `web/`; only public values, under a `NEXT_PUBLIC_` name.
 - After 14:00, new ideas go in `docs/NEXT.md`, not the build. Record every expert conflict in `docs/DECISIONS.md` with a one-line reason.
 - Commit messages and PR descriptions carry no AI attribution: no AI `Co-Authored-By` trailer and no "Generated with" line. `.claude/settings.json` turns this off for every member's Claude Code.

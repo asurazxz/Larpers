@@ -1,29 +1,21 @@
-"""API boundary checks using real signatures and a local JWKS-client substitute."""
+"""API boundary checks."""
 
 import importlib
 import json
-import ssl
 import threading
-import time
-from types import SimpleNamespace
 
-import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from fastapi.testclient import TestClient
 
 from solver.baseline import baseline
 from solver.contract import Scenario
 from test_audit import tiny_case
 
-SUPABASE_URL = "https://unit-test.supabase.co"
-
 
 @pytest.fixture
 def api_client(monkeypatch):
     from api import main
     inputs, _, _ = tiny_case()
-    monkeypatch.setenv("SUPABASE_URL", SUPABASE_URL)
     monkeypatch.setattr(main, "resolve", lambda scenario: baseline(scenario, inputs=inputs))
     monkeypatch.setattr(main, "precheck", lambda scenario, inputs: None)
     main.app.dependency_overrides[main.get_inputs] = lambda: inputs
@@ -32,82 +24,14 @@ def api_client(monkeypatch):
     main.app.dependency_overrides.clear()
 
 
-@pytest.fixture(params=["RS256", "ES256"])
-def signer(request, monkeypatch):
-    from api import auth
-    algorithm = request.param
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048) if algorithm == "RS256" else ec.generate_private_key(ec.SECP256R1())
-
-    class LocalJwksClient:
-        def get_signing_key_from_jwt(self, token):
-            return SimpleNamespace(key=private_key.public_key())
-
-    monkeypatch.setattr(auth, "get_jwks_client", lambda url: LocalJwksClient())
-
-    def token(**changes):
-        claims = {"sub": "unit-test-user", "exp": int(time.time())+120, "aud": "authenticated", "iss": SUPABASE_URL+"/auth/v1"}
-        claims.update(changes)
-        claims = {key: value for key, value in claims.items() if value is not None}
-        return jwt.encode(claims, private_key, algorithm=algorithm, headers={"kid": "unit-key"})
-
-    return token
-
-
 @pytest.mark.parametrize("endpoint", ["solve", "baseline"])
-def test_auth_valid_asymmetric_token(api_client, signer, endpoint):
+def test_solve_and_baseline_need_no_login(api_client, endpoint):
     client, _ = api_client
     fits_tiny_supply = {"demand_kt": {"BPN": 5, "PNK": 3, "TRK": 2, "PKN": 1}}
-    response = client.post(f"/api/{endpoint}", json=fits_tiny_supply, headers={"Authorization": "Bearer "+signer()})
+    response = client.post(f"/api/{endpoint}", json=fits_tiny_supply)
     assert response.status_code == 200, response.text
     assert response.json()["validation"]["passed"]
     assert response.json()["run_id"] == response.headers["X-Run-ID"]
-
-
-@pytest.mark.parametrize("endpoint", ["solve", "baseline"])
-def test_auth_missing_token(api_client, endpoint):
-    client, _ = api_client
-    response = client.post(f"/api/{endpoint}", json={})
-    assert response.status_code == 401
-    assert response.headers["WWW-Authenticate"] == "Bearer"
-    assert response.json()["run_id"]
-
-
-@pytest.mark.parametrize("kind", ["expired", "tampered", "no_exp", "wrong_aud", "no_aud", "wrong_issuer", "no_subject"])
-def test_auth_rejects_invalid_token(api_client, signer, kind):
-    client, _ = api_client
-    changes = {"expired": {"exp": int(time.time())-60}, "no_exp": {"exp": None}, "wrong_aud": {"aud": "anon"}, "no_aud": {"aud": None}, "wrong_issuer": {"iss": "https://other.supabase.co/auth/v1"}, "no_subject": {"sub": None}}
-    token = signer(**changes.get(kind, {}))
-    if kind == "tampered":
-        head, payload, signature = token.split(".")
-        signature = ("A" if signature[0] != "A" else "B") + signature[1:]
-        token = ".".join((head, payload, signature))
-    response = client.post("/api/solve", json={}, headers={"Authorization": "Bearer "+token})
-    assert response.status_code == 401
-    assert token not in response.text
-    assert response.json()["run_id"]
-
-
-@pytest.mark.parametrize("algorithm", ["HS256", "none"])
-def test_auth_rejects_algorithm_confusion(api_client, algorithm):
-    client, _ = api_client
-    token = jwt.encode({"sub": "user", "aud": "authenticated", "exp": int(time.time())+60}, "test-only-secret-longer-than-32-bytes" if algorithm == "HS256" else None, algorithm=algorithm)
-    response = client.post("/api/solve", json={}, headers={"Authorization": "Bearer "+token})
-    assert response.status_code == 401
-
-
-def test_auth_jwks_client_caches_by_url():
-    from api.auth import get_jwks_client
-    first = get_jwks_client(SUPABASE_URL)
-    assert first is get_jwks_client(SUPABASE_URL)
-    assert first.uri == SUPABASE_URL+"/auth/v1/.well-known/jwks.json"
-
-
-def test_auth_jwks_client_verifies_tls_against_a_ca_bundle():
-    from api.auth import get_jwks_client
-    context = get_jwks_client(SUPABASE_URL).ssl_context
-    assert context.verify_mode == ssl.CERT_REQUIRED
-    assert context.check_hostname
-    assert context.get_ca_certs()
 
 
 def test_public_endpoints(api_client):
@@ -133,21 +57,21 @@ def test_public_endpoints(api_client):
     assert validation.json()["run_id"]
 
 
-def test_solve_audits_corrupted_result(api_client, signer, monkeypatch):
+def test_solve_audits_corrupted_result(api_client, monkeypatch):
     from api import main
     client, _ = api_client
     _, _, solution = tiny_case()
     solution.flows[0].kt = -1
     monkeypatch.setattr(main, "resolve", lambda scenario: solution)
-    response = client.post("/api/solve", json={}, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve", json={})
     assert response.status_code == 200
     assert not response.json()["validation"]["passed"]
     assert any(f.startswith("flow_nonnegative:") for f in response.json()["validation"]["failures"])
 
 
-def test_infeasible_is_200(api_client, signer):
+def test_infeasible_is_200(api_client):
     client, _ = api_client
-    response = client.post("/api/solve", json={"demand_kt": {"BPN": 1000, "PNK": 0, "TRK": 0, "PKN": 0}}, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve", json={"demand_kt": {"BPN": 1000, "PNK": 0, "TRK": 0, "PKN": 0}})
     assert response.status_code == 200
     assert response.json()["status"] == "infeasible"
     assert response.json()["primal"] is None
@@ -178,18 +102,17 @@ def test_import_error_uses_labelled_fixture(monkeypatch):
     {"demand_kt": {"BPN": -1, "PNK": 0, "TRK": 0, "PKN": 0}},
     {"demand_kt": {"BPN": 10}}, {"surprise": True},
 ])
-def test_bad_scenario_is_422(api_client, signer, payload):
+def test_bad_scenario_is_422(api_client, payload):
     client, _ = api_client
-    response = client.post("/api/solve", json=payload, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve", json=payload)
     assert response.status_code == 422, response.text
     assert response.json()["run_id"]
 
 
-def test_repeated_scenario_is_deterministic(api_client, signer):
+def test_repeated_scenario_is_deterministic(api_client):
     client, _ = api_client
-    headers = {"Authorization": "Bearer "+signer()}
-    first = client.post("/api/solve", json={}, headers=headers).json()
-    second = client.post("/api/solve", json={}, headers=headers).json()
+    first = client.post("/api/solve", json={}).json()
+    second = client.post("/api/solve", json={}).json()
     assert first["run_id"] != second["run_id"]
     assert first["scenario_hash"] == second["scenario_hash"]
     assert first["primal"] == pytest.approx(second["primal"], abs=.01)
@@ -201,7 +124,7 @@ def test_cors_allows_only_configured_frontend(api_client, monkeypatch):
     monkeypatch.setenv("FRONTEND_URL", "https://planner.example")
     with TestClient(main.create_app()) as client:
         for origin in ("http://localhost:3000", "http://127.0.0.1:3000", "https://planner.example"):
-            response = client.options("/api/solve", headers={"Origin": origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "authorization,content-type"})
+            response = client.options("/api/solve", headers={"Origin": origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type"})
             assert response.status_code == 200
             assert response.headers["Access-Control-Allow-Origin"] == origin
             assert response.headers["X-Run-ID"]
@@ -217,7 +140,7 @@ def test_unknown_route_has_run_id(api_client):
     assert response.json()["run_id"] == response.headers["X-Run-ID"]
 
 
-def test_unexpected_error_has_safe_detail_and_run_id(api_client, signer, monkeypatch):
+def test_unexpected_error_has_safe_detail_and_run_id(api_client, monkeypatch):
     from api import main
 
     def fail(scenario):
@@ -225,27 +148,13 @@ def test_unexpected_error_has_safe_detail_and_run_id(api_client, signer, monkeyp
 
     monkeypatch.setattr(main, "resolve", fail)
     with TestClient(main.app, raise_server_exceptions=False) as client:
-        response = client.post("/api/solve", json={}, headers={"Authorization": "Bearer "+signer()})
+        response = client.post("/api/solve", json={})
     assert response.status_code == 500
     assert "internal-only" not in response.text
     assert response.json()["run_id"] == response.headers["X-Run-ID"]
 
 
-def test_auth_jwks_failure_is_401(api_client, monkeypatch, signer):
-    from api import auth
-
-    class UnavailableJwksClient:
-        def get_signing_key_from_jwt(self, token):
-            raise jwt.PyJWKClientConnectionError("unavailable")
-
-    monkeypatch.setattr(auth, "get_jwks_client", lambda url: UnavailableJwksClient())
-    client, _ = api_client
-    response = client.post("/api/solve", json={}, headers={"Authorization": "Bearer "+signer()})
-    assert response.status_code == 401
-    assert "unavailable" not in response.text
-
-
-def test_actual_stub_response_stays_labelled_fixture(api_client, signer, monkeypatch):
+def test_actual_stub_response_stays_labelled_fixture(api_client, monkeypatch):
     from api import main, stub_resolve
     monkeypatch.setattr(main, "resolve", stub_resolve.resolve)
     monkeypatch.setattr(main, "SOLVER_AVAILABLE", False)
@@ -254,7 +163,7 @@ def test_actual_stub_response_stays_labelled_fixture(api_client, signer, monkeyp
     health = client.get("/api/health").json()
     assert not health["ok"] and not health["available"]
     assert health["source"] == "fixture"
-    response = client.post("/api/solve", json={}, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve", json={})
     assert response.status_code == 200
     assert response.json()["source"] == "fixture"
     assert not response.json()["validation"]["passed"]
@@ -273,23 +182,6 @@ def test_missing_prepared_data_is_explained(monkeypatch):
         assert response.json()["run_id"]
         health = client.get("/api/health").json()
         assert not health["ok"] and not health["data_available"]
-
-
-@pytest.mark.parametrize("configured_url", ["http://remote.supabase.co", "https://user:password@remote.supabase.co", "https://remote.supabase.co?redirect=elsewhere"])
-def test_auth_rejects_insecure_project_configuration(api_client, signer, monkeypatch, configured_url):
-    client, _ = api_client
-    monkeypatch.setenv("SUPABASE_URL", configured_url)
-    response = client.post("/api/solve", json={}, headers={"Authorization": "Bearer "+signer(iss=configured_url+"/auth/v1")})
-    assert response.status_code == 503
-    assert configured_url not in response.text
-
-
-@pytest.mark.parametrize("project_url", ["http://localhost:54321", "http://127.0.0.1:54321", "http://[::1]:54321"])
-def test_auth_allows_loopback_development(api_client, signer, monkeypatch, project_url):
-    client, _ = api_client
-    monkeypatch.setenv("SUPABASE_URL", project_url)
-    response = client.post("/api/solve", json={}, headers={"Authorization": "Bearer "+signer(iss=project_url+"/auth/v1")})
-    assert response.status_code == 200
 
 
 def test_resolver_can_omit_validation_before_audit():
@@ -321,7 +213,7 @@ def test_proof_reason_and_portfolio_capex_survive_solution_round_trip():
 
 
 @pytest.mark.parametrize("endpoint, target", [("solve", "resolve"), ("baseline", "baseline")])
-def test_infeasible_input_is_refused_with_its_reason_before_any_solve(api_client, signer, monkeypatch, endpoint, target):
+def test_infeasible_input_is_refused_with_its_reason_before_any_solve(api_client, monkeypatch, endpoint, target):
     from api import main
     from solver import model
 
@@ -332,27 +224,17 @@ def test_infeasible_input_is_refused_with_its_reason_before_any_solve(api_client
     monkeypatch.setattr(main, "precheck", model.precheck)
     monkeypatch.setattr(main, target, must_not_run)
     demand = {"BPN": 5000, "PNK": 0, "TRK": 0, "PKN": 0}
-    response = client.post(f"/api/{endpoint}", json={"demand_kt": demand}, headers={"Authorization": "Bearer "+signer()})
+    response = client.post(f"/api/{endpoint}", json={"demand_kt": demand})
     assert response.status_code == 422
     assert "exceeds" in response.json()["detail"]
     assert response.json()["run_id"]
 
 
-def test_refusal_still_needs_a_signed_in_user(api_client, monkeypatch):
-    from api import main
-    from solver import model
-    client, _ = api_client
-    monkeypatch.setattr(main, "precheck", model.precheck)
-    response = client.post("/api/solve", json={"demand_kt": {"BPN": 5000, "PNK": 0, "TRK": 0, "PKN": 0}})
-    assert response.status_code == 401
-
-
-def test_a_scenario_that_passes_the_precheck_still_solves(api_client, signer, monkeypatch):
+def test_a_scenario_that_passes_the_precheck_still_solves(api_client, monkeypatch):
     from api import main
     client, _ = api_client
     monkeypatch.setattr(main, "precheck", lambda scenario, inputs: None)
-    response = client.post("/api/solve", json={"demand_kt": {"BPN": 5, "PNK": 3, "TRK": 2, "PKN": 1}},
-                           headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve", json={"demand_kt": {"BPN": 5, "PNK": 3, "TRK": 2, "PKN": 1}})
     assert response.status_code == 200
 
 
@@ -372,18 +254,13 @@ def stream_lines(response):
     return [json.loads(line) for line in response.text.splitlines()]
 
 
-def test_stream_requires_a_session(api_client):
+def test_stream_rejects_a_bad_scenario_before_streaming(api_client):
     client, _ = api_client
-    assert client.post("/api/solve/stream", json={}).status_code == 401
-
-
-def test_stream_rejects_a_bad_scenario_before_streaming(api_client, signer):
-    client, _ = api_client
-    response = client.post("/api/solve/stream", json={"yield": 0}, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve/stream", json={"yield": 0})
     assert response.status_code == 422
 
 
-def test_stream_refuses_infeasible_input_before_any_solve(api_client, signer, monkeypatch):
+def test_stream_refuses_infeasible_input_before_any_solve(api_client, monkeypatch):
     from api import main
 
     def must_not_run(*args, **kwargs):
@@ -392,12 +269,12 @@ def test_stream_refuses_infeasible_input_before_any_solve(api_client, signer, mo
     monkeypatch.setattr(main, "resolve", must_not_run)
     monkeypatch.setattr(main, "precheck", lambda scenario, inputs: "Demand exceeds supply")
     client, _ = api_client
-    response = client.post("/api/solve/stream", json={}, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve/stream", json={})
     assert response.status_code == 422
     assert response.json()["detail"] == "Demand exceeds supply"
 
 
-def test_stream_refuses_a_run_when_the_solver_is_full(api_client, signer, monkeypatch):
+def test_stream_refuses_a_run_when_the_solver_is_full(api_client, monkeypatch):
     from api import main
 
     def must_not_run(*args, **kwargs):
@@ -407,13 +284,13 @@ def test_stream_refuses_a_run_when_the_solver_is_full(api_client, signer, monkey
     monkeypatch.setattr(main, "live_solves", threading.BoundedSemaphore(1))
     assert main.live_solves.acquire(blocking=False)
     client, _ = api_client
-    response = client.post("/api/solve/stream", json={}, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve/stream", json={})
     assert response.status_code == 429
     assert response.json()["run_id"]
 
 
 @pytest.mark.parametrize("outcome", ["finishes", "fails", "cancelled"])
-def test_stream_gives_its_slot_back_however_the_run_ends(api_client, signer, monkeypatch, outcome):
+def test_stream_gives_its_slot_back_however_the_run_ends(api_client, monkeypatch, outcome):
     from api import main
     client, inputs = api_client
 
@@ -426,12 +303,11 @@ def test_stream_gives_its_slot_back_however_the_run_ends(api_client, signer, mon
 
     monkeypatch.setattr(main, "resolve", run)
     monkeypatch.setattr(main, "live_solves", threading.BoundedSemaphore(1))
-    headers = {"Authorization": "Bearer "+signer()}
     for _ in range(3):
-        assert client.post("/api/solve/stream", json={}, headers=headers).status_code == 200
+        assert client.post("/api/solve/stream", json={}).status_code == 200
 
 
-def test_stream_ends_in_the_same_audited_result_as_solve(api_client, signer, monkeypatch):
+def test_stream_ends_in_the_same_audited_result_as_solve(api_client, monkeypatch):
     from api import main
     client, inputs = api_client
 
@@ -441,8 +317,7 @@ def test_stream_ends_in_the_same_audited_result_as_solve(api_client, signer, mon
         return baseline(scenario, inputs=inputs)
 
     monkeypatch.setattr(main, "resolve", fake)
-    headers = {"Authorization": "Bearer "+signer()}
-    response = client.post("/api/solve/stream", json={}, headers=headers)
+    response = client.post("/api/solve/stream", json={})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/x-ndjson")
     events = stream_lines(response)
@@ -453,7 +328,7 @@ def test_stream_ends_in_the_same_audited_result_as_solve(api_client, signer, mon
     assert solution["validation"]["failures"] != ["Not audited"]
 
 
-def test_stream_reports_failure_without_the_diagnostic(api_client, signer, monkeypatch):
+def test_stream_reports_failure_without_the_diagnostic(api_client, monkeypatch):
     from api import main
 
     def fail(scenario, on_event, stop):
@@ -461,7 +336,7 @@ def test_stream_reports_failure_without_the_diagnostic(api_client, signer, monke
 
     monkeypatch.setattr(main, "resolve", fail)
     client, _ = api_client
-    response = client.post("/api/solve/stream", json={}, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve/stream", json={})
     assert response.status_code == 200
     assert "internal-only" not in response.text
     last = stream_lines(response)[-1]
@@ -469,7 +344,7 @@ def test_stream_reports_failure_without_the_diagnostic(api_client, signer, monke
     assert last["run_id"] == response.headers["X-Run-ID"]
 
 
-def test_stream_stays_quiet_when_a_run_is_cancelled(api_client, signer, monkeypatch):
+def test_stream_stays_quiet_when_a_run_is_cancelled(api_client, monkeypatch):
     from api import main
 
     def cancelled(scenario, on_event, stop):
@@ -477,15 +352,15 @@ def test_stream_stays_quiet_when_a_run_is_cancelled(api_client, signer, monkeypa
 
     monkeypatch.setattr(main, "resolve", cancelled)
     client, _ = api_client
-    response = client.post("/api/solve/stream", json={}, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve/stream", json={})
     assert response.status_code == 200
     assert response.text == ""
 
 
-def test_stream_uses_the_labelled_fixture_when_the_solver_is_missing(api_client, signer, monkeypatch):
+def test_stream_uses_the_labelled_fixture_when_the_solver_is_missing(api_client, monkeypatch):
     from api import main, stub_resolve
     monkeypatch.setattr(main, "resolve", stub_resolve.resolve)
     monkeypatch.setattr(main, "SOLVER_AVAILABLE", False)
     client, _ = api_client
-    response = client.post("/api/solve/stream", json={}, headers={"Authorization": "Bearer "+signer()})
+    response = client.post("/api/solve/stream", json={})
     assert stream_lines(response)[-1]["solution"]["source"] == "fixture"

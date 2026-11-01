@@ -8,7 +8,7 @@ import pytest
 
 from api import explain, plain_english
 from solver.contract import Scenario, Solution
-from test_api import api_client, signer  # noqa: F401  (pytest fixtures)
+from test_api import api_client  # noqa: F401  (pytest fixtures)
 
 FIXTURE = Path(__file__).resolve().parents[1] / "contracts" / "fixture_solution.json"
 
@@ -107,11 +107,11 @@ def test_grounding_rejects_invented_number():
     assert explain.verify(explain.Explanation.model_validate(payload), facts) is None  # headline fails
 
 
-def test_explain_success_and_withheld(api_client, signer, monkeypatch):  # noqa: F811
+def test_explain_success_and_withheld(api_client, monkeypatch):  # noqa: F811
     client, _ = api_client
     facts = explain.build_facts(Scenario(), fixture_solution())
     models = use_fake_gemini(monkeypatch, grounded_payload(facts))
-    response = client.post("/api/explain", json=body(), headers={"Authorization": "Bearer " + signer()})
+    response = client.post("/api/explain", json=body())
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["available"] and data["verified"] and data["model"] == explain.DEFAULT_MODEL
@@ -122,22 +122,22 @@ def test_explain_success_and_withheld(api_client, signer, monkeypatch):  # noqa:
     bad = grounded_payload(facts)
     bad["headline"] = "This network saves $12.3B."
     use_fake_gemini(monkeypatch, bad)
-    response = client.post("/api/explain", json=body(), headers={"Authorization": "Bearer " + signer()})
+    response = client.post("/api/explain", json=body())
     assert response.status_code == 200
     assert response.json() == {"available": False, "reason": explain.WITHHELD}
 
 
-def test_explain_without_key_is_503(api_client, signer, monkeypatch):  # noqa: F811
+def test_explain_without_key_is_503(api_client, monkeypatch):  # noqa: F811
     client, _ = api_client
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setattr(plain_english, "ENV_FILE", plain_english.ROOT / "no-such-env-file")
     monkeypatch.setattr(explain.genai, "Client", lambda **kwargs: pytest.fail("no client without a key"))
-    response = client.post("/api/explain", json=body(baseline=True), headers={"Authorization": "Bearer " + signer()})
+    response = client.post("/api/explain", json=body(baseline=True))
     assert response.status_code == 503
     assert response.json()["detail"] == explain.NO_KEY
 
 
-def test_explain_reads_the_key_from_the_env_file(api_client, signer, monkeypatch, tmp_path):  # noqa: F811
+def test_explain_reads_the_key_from_the_env_file(api_client, monkeypatch, tmp_path):  # noqa: F811
     client, _ = api_client
     facts = explain.build_facts(Scenario(), fixture_solution())
     env_file = tmp_path / ".env"
@@ -152,13 +152,13 @@ def test_explain_reads_the_key_from_the_env_file(api_client, signer, monkeypatch
         return SimpleNamespace(models=FakeModels(grounded_payload(facts)))
 
     monkeypatch.setattr(explain.genai, "Client", fake_client)
-    response = client.post("/api/explain", json=body(), headers={"Authorization": "Bearer " + signer()})
+    response = client.post("/api/explain", json=body())
     assert response.status_code == 200, response.text
     assert keys == ["key-from-env-file"]
     assert "key-from-env-file" not in response.text
 
 
-def test_explain_api_error_is_502(api_client, signer, monkeypatch):  # noqa: F811
+def test_explain_api_error_is_502(api_client, monkeypatch):  # noqa: F811
     client, _ = api_client
     facts = explain.build_facts(Scenario(), fixture_solution())
     asked = []
@@ -178,16 +178,9 @@ def test_explain_api_error_is_502(api_client, signer, monkeypatch):  # noqa: F81
         asked.clear()
         monkeypatch.setattr(explain, "_client", None)
         monkeypatch.setattr(explain.genai, "Client", lambda **kwargs: SimpleNamespace(models=Busy(fallback_ok)))
-        response = client.post("/api/explain", json=body(), headers={"Authorization": "Bearer " + signer()})
+        response = client.post("/api/explain", json=body())
         assert response.status_code == status, response.text
         assert asked == [explain.DEFAULT_MODEL, explain.FALLBACK_MODEL]
         assert "unit-test-key" not in response.text
         if status == 200:
             assert response.json()["model"] == explain.FALLBACK_MODEL
-
-
-def test_explain_requires_auth(api_client):  # noqa: F811
-    client, _ = api_client
-    response = client.post("/api/explain", json=body())
-    assert response.status_code == 401
-    assert response.headers["WWW-Authenticate"] == "Bearer"

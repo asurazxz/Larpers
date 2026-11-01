@@ -6,12 +6,6 @@
 *.key
 service-account*.json
 
-# ---------- Supabase CLI ----------
-supabase/.branches/
-supabase/.temp/
-supabase/.env
-supabase/.env.*
-
 # ---------- Node / JS ----------
 node_modules/
 .pnpm-store/

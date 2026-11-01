@@ -20,7 +20,6 @@ PATHS = ["api", "solver", "contracts", "requirements.txt", "data/prepare.py", "d
          "prototype/osrm_table_84.json"]
 VARIABLES = {
     "FRONTEND_URL": os.environ.get("FRONTEND_URL", "https://larpers-three.vercel.app"),
-    "SUPABASE_URL": os.environ.get("SUPABASE_URL", "https://cpfymmjjpdmidhtlzgbt.supabase.co"),
 }
 
 

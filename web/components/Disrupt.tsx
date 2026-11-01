@@ -7,9 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Facility, Scenario, Solution } from '../lib/contract';
 import { DEFAULT_SCENARIO } from '../lib/contract';
 import { getSolution } from '../lib/bundle';
-import { AuthRequiredError, health, liveEnabled, solveStream } from '../lib/api';
-import { signInWithGoogle, useSession } from '../lib/auth';
-import { getCurrentForm } from '../lib/useLive';
+import { health, liveEnabled, solveStream } from '../lib/api';
 import { pct, statusLabel, usd } from '../lib/format';
 import { annualCost } from '../lib/annual';
 import { baseSolution, compareToBase, runIndex } from '../lib/robustness';
@@ -50,8 +48,6 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId, feed }:
     const [liveOk, setLiveOk] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [authNeeded, setAuthNeeded] = useState(false);
-    const session = useSession();
     const abortRef = useRef<AbortController | null>(null);
     const rowRefs = useRef(new Map<string, HTMLLIElement>());
     const [moreOpen, setMoreOpen] = useState(false);
@@ -107,14 +103,8 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId, feed }:
 
     const resolveLive = async (siteId: string) => {
         if (!base) return;
-        if (session.status === 'signed_out') {
-            setAuthNeeded(true);
-            setError('Sign in with Google to re-solve. The current run stays on screen.');
-            return;
-        }
         setBusy(siteId);
         setError(null);
-        setAuthNeeded(false);
         const ctrl = new AbortController();
         abortRef.current = ctrl;
         const baseScenario: Scenario = { ...DEFAULT_SCENARIO, ...(base.scenario ?? {}) };
@@ -127,12 +117,7 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId, feed }:
             onSelect(disruptView(liveDisruptSlug([siteId], s.run_id), [siteId], true), s.scenario ? s : { ...s, scenario });
         } catch (e) {
             feed.end();
-            if (e instanceof AuthRequiredError) {
-                setAuthNeeded(true);
-                setError(e.message);
-            } else {
-                setError(`Re-solve failed: ${e instanceof Error ? e.message : String(e)} Staying on the current run.`);
-            }
+            setError(`Re-solve failed: ${e instanceof Error ? e.message : String(e)} Staying on the current run.`);
         } finally {
             setBusy(null);
             abortRef.current = null;
@@ -336,19 +321,6 @@ export default function Disrupt({ view, solution, onSelect, focusSiteId, feed }:
             {error && (
                 <div role="alert" className="mt-2.5 rounded-xl bg-orange-50 px-3 py-2 text-sm text-orange-900" data-testid="disrupt-error">
                     {error}
-                    {authNeeded && (
-                        <button
-                            type="button"
-                            onClick={() =>
-                                void signInWithGoogle(getCurrentForm() ?? undefined).catch((e) =>
-                                    setError(e instanceof Error ? e.message : 'Sign-in failed.'),
-                                )
-                            }
-                            className="pill-primary ml-2 py-0.5 text-sm"
-                        >
-                            Sign in with Google
-                        </button>
-                    )}
                 </div>
             )}
             {!base ? (

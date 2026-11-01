@@ -5,7 +5,6 @@
 // same path stored runs use. Stored mode: radio buttons over the stored bundle, no Run.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { liveEnabled } from '../lib/api';
-import { restorePendingInputs, savePendingInputs, signInWithGoogle, useSession } from '../lib/auth';
 import { bundle, getSolution, siteById, slugs } from '../lib/bundle';
 import {
     AIRPORTS,
@@ -21,7 +20,6 @@ import { MISSING, orMissing, statusLabel } from '../lib/format';
 import Select from './Select';
 import InfoTip, { INPUT_HELP } from './InfoTip';
 import {
-    asScenarioForm,
     buildScenarioFromForm,
     CANDIDATE_IDS,
     formFromScenario,
@@ -161,26 +159,14 @@ function runningLabel(feed: SolveFeed): string {
 }
 
 export default function ScenarioPanel({ solution, health, isLive, setSolution, setView, onLiveRun, pickedNode, feed }: ScenarioPanelProps) {
-    const session = useSession();
     const [form, setForm] = useState<ScenarioForm>(() => seedForm(solution, isLive));
     const yieldOptions = useMemo(storedYields, []);
-    const [note, setNote] = useState<string | null>(null);
     const [pickMode, setPickMode] = useState(false);
-    const [signInError, setSignInError] = useState<string | null>(null);
     const syncedRunId = useRef<string | null>(solution?.run_id ?? null);
 
     const runner = useLiveRunner(onLiveRun, feed);
     const running = runner.state.phase === 'running';
     const liveMode = liveEnabled && (health.state === 'up' || running);
-
-    // Inputs kept across the Google round trip.
-    useEffect(() => {
-        const pending = asScenarioForm(restorePendingInputs<unknown>());
-        if (pending) {
-            setForm(pending);
-            setNote('Inputs restored after sign-in. Press Run.');
-        }
-    }, []);
 
     // Re-seed the inputs whenever the displayed run changes: the live run's scenario, else the organisers' basis.
     useEffect(() => {
@@ -217,37 +203,16 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
         runner.clear();
     };
 
-    const startSignIn = async () => {
-        setSignInError(null);
-        try {
-            await signInWithGoogle(form);
-        } catch (err) {
-            setSignInError(err instanceof Error ? err.message : 'Sign-in failed.');
-        }
-    };
-
     const onRun = () => {
-        setNote(null);
         if (!scenario) return;
-        if (session.status === 'signed_out') {
-            savePendingInputs(form);
-            runner.promptSignIn('Sign in with Google to run the solver. Your inputs are kept.');
-            return;
-        }
         void runner.run(scenario);
     };
-
-    // Keep inputs if the API refused the session.
-    useEffect(() => {
-        if (runner.state.phase === 'auth') savePendingInputs(form);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [runner.state.phase]);
 
     const setDemand = (a: (typeof AIRPORTS)[number], v: string) => setForm((f) => ({ ...f, demand: { ...f.demand, [a]: v } }));
     const candidatesLeft = CANDIDATE_IDS.filter((id) => !form.excluded.includes(id));
     const st = runner.state;
 
-    // Run status, including the sign-in prompt. In live mode it sits right under the Run button.
+    // Run status. In live mode it sits right under the Run button.
     const statusBlock = (
         <div id="run-status-block" aria-live="polite" data-testid="run-status" className="empty:hidden">
             {running && (
@@ -276,20 +241,6 @@ export default function ScenarioPanel({ solution, health, isLive, setSolution, s
                     {st.message?.replace(/^Solver API error 422: /, 'Solver refused: ')}
                 </div>
             )}
-            {st.phase === 'auth' && (
-                <div role="alert" data-testid="signin-prompt" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-blue-50 px-3 py-1.5 text-blue-900">
-                    <div className="font-medium">{st.message}</div>
-                    {session.status === 'disabled' ? (
-                        <div className="text-ink3">Sign-in is not configured on this URL.</div>
-                    ) : (
-                        <button type="button" className="pill-primary py-0.5" onClick={() => void startSignIn()}>
-                            Sign in with Google
-                        </button>
-                    )}
-                    {signInError && <div className="text-red-700">{signInError}</div>}
-                </div>
-            )}
-            {note && st.phase === 'idle' && <div className="text-ink3">{note}</div>}
         </div>
     );
 

@@ -1,2 +1,0 @@
--- Demo/dev data loaded by `supabase db reset` (local only; never runs against the cloud project).
--- Keep it small: big datasets go through an import script, not this file.

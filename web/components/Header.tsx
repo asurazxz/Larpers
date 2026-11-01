@@ -1,14 +1,13 @@
 'use client';
 
-// Title, run label, solver badge and sign-in. /api/health decides the badge; a stored run is
+// Title, run label and solver badge. /api/health decides the badge; a stored run is
 // always labelled stored, even when the solver is up.
 import { ArrowLeft } from 'lucide-react';
-import AuthButton from './AuthButton';
 import Logo from './Logo';
 import { getEntry, storedRunCount } from '../lib/bundle';
 import type { Solution } from '../lib/contract';
 import { MISSING, seconds, statusLabel } from '../lib/format';
-import { getCurrentForm, storedSlugOf, type SolverHealth } from '../lib/useLive';
+import { storedSlugOf, type SolverHealth } from '../lib/useLive';
 import { viewLabel, type View } from '../lib/view';
 
 export interface HeaderProps {
@@ -114,7 +113,9 @@ export default function Header({ solution, view, health, isLive }: HeaderProps) 
                     </div>
                 </div>
                 <div id="auth-slot">
-                    <AuthButton getPendingInputs={getCurrentForm} />
+                    <div className="flex flex-wrap items-center gap-3 text-base text-ink">
+                        <span className="text-base text-ink2">Stored runs only, no login</span>
+                    </div>
                 </div>
             </div>
         </header>

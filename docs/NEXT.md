@@ -28,4 +28,3 @@ None of these are in the build. One line each, with the reason.
 
 - Hosted solve on a public URL, after ten consecutive successful runs on the laptop.
 - Per-run PDF export of the assumptions ledger.
-- Return 503, not 401, when the API cannot fetch Supabase's signing keys. Today a network or certificate failure tells a signed-in user their session expired.

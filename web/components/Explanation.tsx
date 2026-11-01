@@ -3,7 +3,7 @@
 // Plain-language explanation of a finished live run (POST /api/explain). The API builds the facts
 // from the run, Gemini writes text citing them, and the API withholds any number it cannot verify.
 import { useEffect, useState } from 'react';
-import { ApiError, AuthRequiredError, explain, type Explanation as Result, type ExplainFact } from '../lib/api';
+import { ApiError, explain, type Explanation as Result, type ExplainFact } from '../lib/api';
 import type { LiveRun } from '../lib/useLive';
 
 const FOOTER =
@@ -18,7 +18,6 @@ type State =
 const requests = new Map<string, Promise<State>>();
 
 function reasonFor(err: unknown): string {
-    if (err instanceof AuthRequiredError) return 'Explanation unavailable: sign in again to explain this run.';
     if (err instanceof ApiError) {
         if (err.kind === 'timeout') return 'Explanation unavailable: no answer within 30 s.';
         if (err.status === 404) return 'Explanations unavailable on this solver API.';
